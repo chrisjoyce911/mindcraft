@@ -58,6 +58,26 @@ const settings = {
   
     "log_all_prompts": false, // log ALL prompts to file
 
+    // Laya decision models: small local models that answer typed questions in milliseconds.
+    // Servers speak the decisions API (golaya serve from laya-go, or MLX-Serve). Each task
+    // names the server and model that answer one kind of decision; swapping models is a
+    // settings change. Check with: npm run laya:check
+    "decision_models": {
+        "servers": {
+            "golaya": { "url": "http://127.0.0.1:11235" }, // laya-go: golaya serve -dir data/laya-go
+            "mlx": { "url": "http://127.0.0.1:11234" }     // MLX-Serve, e.g. aac6fef/laya-mlx (share the model for LAN use)
+        },
+        "tasks": {
+            "follow": {
+                "enabled": false,      // off: !followPlayer uses the pathfinder as before
+                "server": "golaya",
+                "model": "follow-a",   // "" uses the server's only decision model
+                "timeout_ms": 300,
+                "min_confidence": 0.4
+            }
+        }
+    },
+
 }
 
 export default settings;
