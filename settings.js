@@ -108,6 +108,17 @@ const settings = {
                 "min_confidence": 0.3, // a step less sure than this stops the run
                 "max_steps": 40,       // most steps one !layaCraft takes
                 "log_steps": true      // bots/<name>/logs/laya-craft.jsonl
+            },
+            "command": {
+                "enabled": false,      // off: every player message goes to the LLM as before
+                "server": "golaya",
+                "model": "command-a",
+                "timeout_ms": 500,
+                "min_confidence": 0.6, // Command's top probability needed to act without the LLM
+                "addressed_min": 0.5,  // less sure the message is for me: the LLM decides
+                "ignore_below": 0.15,  // surely for someone else: ignored
+                "no_llm": false,       // true: chat and unsure messages get a short canned reply, no LLM
+                "log_decisions": true  // bots/<name>/logs/laya-command.jsonl
             }
         }
     },
