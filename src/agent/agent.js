@@ -3,7 +3,7 @@ import { Coder } from './coder.js';
 import { VisionInterpreter } from './vision/vision_interpreter.js';
 import { Prompter } from '../models/prompter.js';
 import { initModes } from './modes.js';
-import { initBot } from '../utils/mcdata.js';
+import { initBot, isHostile } from '../utils/mcdata.js';
 import { containsCommand, commandExists, executeCommand, truncCommandMessage, isAction, blacklistCommands } from './commands/index.js';
 import { ActionManager } from './action_manager.js';
 import { NPCContoller } from './npc/controller.js';
@@ -16,6 +16,9 @@ import { serverProxy, sendOutputToServer } from './mindserver_proxy.js';
 import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
+import { laya, taskSettings } from '../models/laya.js';
+import { handleCommand } from './laya/command.js';
+import { getNearestEntityWhere } from './library/world.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
 
 export class Agent {
@@ -285,6 +288,26 @@ export class Agent {
                 let execute_res = await executeCommand(this, message);
                 if (execute_res) 
                     this.routeResponse(source, execute_res);
+                return true;
+            }
+        }
+
+        if (!self_prompt && !from_other_bot && taskSettings('command')) {
+            // The Laya command model turns plain chat into a command; chat and
+            // unsure answers fall through to the LLM below.
+            const handled = await handleCommand(message, {
+                client: laya,
+                task: taskSettings('command'),
+                bot: this.bot,
+                speaker: source,
+                has: name => commandExists(name),
+                nearestHostile: () => getNearestEntityWhere(this.bot, e => isHostile(e), 16)?.name ?? null,
+                execute: line => executeCommand(this, line),
+                say: text => this.routeResponse(source, text),
+                logPath: `./bots/${this.name}/logs/laya-command.jsonl`,
+            });
+            if (handled) {
+                this.history.add(source, message);
                 return true;
             }
         }

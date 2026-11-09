@@ -119,6 +119,17 @@ const settings = {
                 "max_failures": 4,     // failed steps in a row before giving up
                 "torch_batch": 4,      // torches crafted when they run out
                 "log_steps": true      // bots/<name>/logs/laya-mine.jsonl
+            },
+            "command": {
+                "enabled": false,      // off: every player message goes to the LLM as before
+                "server": "golaya",
+                "model": "command-a",
+                "timeout_ms": 500,
+                "min_confidence": 0.6, // Command's top probability needed to act without the LLM
+                "addressed_min": 0.5,  // less sure the message is for me: the LLM decides
+                "ignore_below": 0.15,  // surely for someone else: ignored
+                "no_llm": false,       // true: chat and unsure messages get a short canned reply, no LLM
+                "log_decisions": true  // bots/<name>/logs/laya-command.jsonl
             }
         }
     },
