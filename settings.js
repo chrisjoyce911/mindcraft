@@ -77,6 +77,16 @@ const settings = {
                 "step_ms": 250,        // a decision every quarter second
                 "fallback_ms": 4000,   // how long to use the pathfinder after a fallback
                 "log_steps": true      // bots/<name>/logs/laya-follow.jsonl: each step's state, answer and outcome
+            },
+            "eat": {
+                "enabled": false,      // off: mineflayer-auto-eat eats as before
+                "server": "golaya",
+                "model": "eat-a",
+                "timeout_ms": 300,
+                "min_confidence": 0.5,
+                "check_ms": 2000,      // how often to ask
+                "fallback_ms": 10000,  // auto-eat runs this long after a fallback
+                "log_steps": true      // bots/<name>/logs/laya-eat.jsonl
             }
         }
     },

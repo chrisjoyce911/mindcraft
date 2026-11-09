@@ -3,6 +3,8 @@ import * as world from './library/world.js';
 import * as mc from '../utils/mcdata.js';
 import settings from './settings.js'
 import convoManager from './conversation.js';
+import { laya, taskSettings } from '../models/laya.js';
+import { LayaEater, summary as eatSummary } from './laya/eat.js';
 
 async function say(agent, message) {
     agent.bot.modes.behavior_log += message + '\n';
@@ -166,6 +168,57 @@ const modes_list = [
                 execute(this, agent, async () => {
                     await skills.defendSelf(agent.bot, 8);
                 });
+            }
+        }
+    },
+    {
+        name: 'laya_eating',
+        description: 'Decide when and what to eat with the Laya eat model, when the eat decision task is on. Does not interrupt actions.',
+        interrupts: [],
+        on: true,
+        active: false,
+        eater: null,
+        summaryAt: 0,
+        update: async function (agent) {
+            const task = taskSettings('eat');
+            if (!task) {
+                if (this.eater) { this.eater.stop(); this.eater = null; }
+                return;
+            }
+            const bot = agent.bot;
+            if (!this.eater) {
+                this.eater = new LayaEater(bot, {
+                    client: laya,
+                    task,
+                    danger: () => !!world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), 8)
+                        || !!bot.findBlock({ matching: block => block.name === 'lava', maxDistance: 2 }),
+                    eat: async food => {
+                        const item = bot.inventory.items().find(i => i.name === food);
+                        if (!item) return false;
+                        const previous = bot.heldItem;
+                        try {
+                            await bot.equip(item, 'hand');
+                            await bot.consume();
+                            return true;
+                        } catch (err) {
+                            return false;
+                        } finally {
+                            if (previous && previous.name !== food) {
+                                try { await bot.equip(previous, 'hand'); } catch (err) { /* nothing to re-equip */ }
+                            }
+                        }
+                    },
+                    autoEat: { enable: () => bot.autoEat.enable(), disable: () => bot.autoEat.disable() },
+                    now: () => Date.now(),
+                    stepLog: `./bots/${agent.name}/logs/laya-eat.jsonl`,
+                });
+                this.summaryAt = Date.now() + 10 * 60_000;
+            }
+            // not awaited: a decision never blocks the mode loop
+            this.eater.tick().catch(err => console.warn('[laya] eat:', err.message));
+            if (Date.now() > this.summaryAt) {
+                this.summaryAt = Date.now() + 10 * 60_000;
+                if (this.eater.counters.asked) console.log(eatSummary(this.eater.counters));
             }
         }
     },
