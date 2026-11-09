@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCraft, check } from '../src/agent/laya/craft.js';
+import { runCraft, check, plan } from '../src/agent/laya/craft.js';
 import { situation } from '../src/agent/laya/craft_state.js';
 
 const answer = (action, item, count, p = 0.9) => ({
@@ -40,21 +40,22 @@ test('crafts, then stops when the model says done with the goal carried', async 
     assert.match(w.states[1], /\nHave stick x4\n/);
 });
 
-test('a step the bot cannot do stops the run without acting', async () => {
+test('a step the bot cannot do is replaced by the recipe rules', async () => {
     const w = fakeWorld({ wooden_pickaxe: 1 }, { script: [answer('gather', 'raw_iron', 3)] });
     const r = await runCraft('raw_iron', 3, w.deps);
-    assert.equal(r.ok, false);
-    assert.match(r.reason, /needs-pickaxe/);
-    assert.deepEqual(w.calls, []);
+    assert.equal(r.reason, 'no-answer'); // the fake model has nothing more to say
+    assert.deepEqual(w.calls, [['gather', 'cobblestone', 3]]); // for a stone pickaxe first
 });
 
-test('no answer, low confidence, early done and too many steps stop', async () => {
+test('low confidence and early done follow the recipe rules; no answer and too many steps stop', async () => {
     let w = fakeWorld({}, { script: [] });
     assert.equal((await runCraft('stick', 4, w.deps)).reason, 'no-answer');
     w = fakeWorld({}, { script: [answer('gather', 'log', 1, 0.1)] });
-    assert.equal((await runCraft('stick', 4, w.deps)).reason, 'low-confidence');
-    w = fakeWorld({}, { script: [answer('done', 'none', 1)] });
-    assert.match((await runCraft('stick', 4, w.deps)).reason, /goal-not-carried/);
+    await runCraft('stick', 4, w.deps);
+    assert.deepEqual(w.calls, [['gather', 'log', 1]]);
+    w = fakeWorld({ oak_planks: 2 }, { script: [answer('done', 'none', 1), answer('done', 'none', 1)] });
+    assert.deepEqual(await runCraft('stick', 4, w.deps), { ok: true, reason: 'done', steps: 1 });
+    assert.deepEqual(w.calls, [['craft', 'stick', 1]]);
     w = fakeWorld({}, { script: Array.from({ length: 5 }, () => answer('gather', 'log', 1)) });
     w.deps.task.max_steps = 3;
     assert.deepEqual(await runCraft('log', 64, w.deps), { ok: false, reason: 'max-steps', steps: 3 });
@@ -89,4 +90,17 @@ test('check: tools, stations, fuel and storage rules', () => {
     assert.equal(check(s({ bread: 5 }, { chest: true }), { action: 'store', item: 'bread', count: 6 }), 'bad-item');
     assert.equal(check(s({ oak_planks: 4 }), { action: 'place', item: 'stick', count: 1 }), 'not-placeable');
     assert.equal(check(s({}), { action: 'craft', item: 'cake', count: 1 }), 'bad-item');
+});
+
+test('plan: the recipe rules pick the next step', () => {
+    const s = (inv, goal, count = 1, near = {}, chest = {}) => situation(Object.entries(inv).map(([name, c]) => ({ name, count: c })), goal, count, near, chest);
+    assert.deepEqual(plan(s({}, 'wooden_pickaxe')), { action: 'gather', item: 'log', count: 1 });
+    assert.deepEqual(plan(s({ oak_planks: 7 }, 'wooden_pickaxe')), { action: 'craft', item: 'stick', count: 1 });
+    assert.deepEqual(plan(s({ oak_planks: 3, stick: 2 }, 'wooden_pickaxe')), { action: 'gather', item: 'log', count: 1 }); // for a table
+    assert.deepEqual(plan(s({ oak_planks: 3, stick: 2 }, 'wooden_pickaxe', 1, { table: true })), { action: 'craft', item: 'wooden_pickaxe', count: 1 });
+    assert.deepEqual(plan(s({ stick: 1 }, 'wooden_hoe', 1, { table: true, chest: true }, { planks: 18, stick: 7 })), { action: 'take', item: 'planks', count: 2 });
+    assert.deepEqual(plan(s({ oak_planks: 2, stick: 1 }, 'wooden_hoe', 1, { table: true, chest: true }, { planks: 18, stick: 7 })), { action: 'take', item: 'stick', count: 1 });
+    assert.deepEqual(plan(s({ wooden_pickaxe: 1 }, 'iron_ingot', 2)), { action: 'gather', item: 'cobblestone', count: 3 });
+    assert.deepEqual(plan(s({ oak_log: 3 }, 'log', 13)), { action: 'gather', item: 'log', count: 10 });
+    assert.equal(plan(s({ oak_log: 13 }, 'log', 13)), null);
 });

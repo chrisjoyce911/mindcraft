@@ -65,6 +65,52 @@ export function check(s, step) {
     // count is checked by the actions themselves (they do at most what's possible)
 }
 
+// plan returns the next step toward the goal by the recipe rules (the oracle
+// laya-go trains the model on, simplified): take it from the chest, gather
+// it (making the pickaxe first), craft it (its ingredients and a table
+// first) or smelt it (source, fuel and furnace first). runCraft uses it when
+// the model's step is refused, unsure, or "done" before the goal is
+// carried. It returns null when the goal is carried, or when it can't help.
+export function plan(s) {
+    const have = { ...s.have };
+    const seen = new Set();
+    const next = (item, need) => {
+        if ((have[item] || 0) >= need) return null;
+        if (seen.has(item)) return undefined; // a loop: give up
+        seen.add(item);
+        try {
+            const missing = need - (have[item] || 0);
+            if (s.chestNear && (s.chest[item] || 0) > 0) return { action: "take", item, count: Math.min(missing, s.chest[item]) };
+            const it = ITEMS[item];
+            if (!it) return undefined;
+            if (it.kind === "gathered") {
+                const tier = it.tier || 0;
+                if (tier > tierCarried(have)) return next(PICKAXES[tier - 1], 1);
+                return { action: "gather", item, count: Math.min(64, missing) };
+            }
+            if (it.kind === "crafted") {
+                const times = Math.ceil(missing / it.result);
+                for (const [n, c] of it.needs) {
+                    const name = item === "torch" && n === "coal" && (have.charcoal || 0) > 0 ? "charcoal" : n;
+                    const sub = next(name, c * times);
+                    if (sub !== null) return sub;
+                }
+                if (it.table && !s.tableNear && !(have.crafting_table > 0)) return next("crafting_table", 1);
+                return { action: "craft", item, count: times };
+            }
+            if (it.kind === "smelted") {
+                const sub = next(it.source, missing);
+                if (sub !== null) return sub;
+                if (!FUELS.some(f => (have[f] || 0) > 0)) return next("coal", 1);
+                if (!s.furnaceNear && !(have.furnace > 0)) return next("furnace", 1);
+                return { action: "smelt", item, count: missing };
+            }
+            return undefined;
+        } finally { seen.delete(item); }
+    };
+    return next(s.goal, s.count) || null;
+}
+
 // runCraft makes count of item (a laya-go generic name: "log" for any wood).
 // deps:
 //   client      laya-client ({decide})
@@ -86,7 +132,7 @@ export async function runCraft(item, count, deps) {
     };
     if (!ITEMS[item]) return { ok: false, reason: `unknown-item ${item}`, steps: 0 };
     let chest = null;
-    let steps = 0;
+    let steps = 0, fallbacks = 0;
     while (steps < opts.max_steps) {
         if (deps.interrupted?.()) return { ok: false, reason: 'interrupted', steps };
         const near = deps.near();
@@ -99,9 +145,19 @@ export async function runCraft(item, count, deps) {
         const step = { action: r.answers.Action.top, item: r.answers.Item.top, count: Number(r.answers.Count.top) };
         const p = Math.min(r.answers.Action.topProbability, r.answers.Item.topProbability);
         const entry = { state: text, ...step, p, ms: r.ms };
-        if (p < opts.min_confidence) { logStep({ ...entry, outcome: 'stop', reason: 'low-confidence' }); return { ok: false, reason: 'low-confidence', steps }; }
-        const why = check(s, step);
-        if (why) { logStep({ ...entry, outcome: 'stop', reason: why }); return { ok: false, reason: `${step.action} ${step.item}: ${why}`, steps }; }
+        let why = p < opts.min_confidence ? 'low-confidence' : check(s, step);
+        if (why) {
+            // the recipe rules take over for this step (as the follow veto does)
+            const ruled = plan(s);
+            if (!ruled) {
+                const done = (s.have[s.goal] || 0) >= s.count;
+                logStep({ ...entry, outcome: done ? 'done' : 'stop', reason: why });
+                return done ? { ok: true, reason: 'done', steps } : { ok: false, reason: `${step.action} ${step.item}: ${why}`, steps };
+            }
+            logStep({ ...entry, outcome: 'fallback', reason: why, rule: ruled });
+            Object.assign(step, ruled);
+            fallbacks++;
+        }
         if (step.action === 'done') { logStep({ ...entry, outcome: 'done' }); return { ok: true, reason: 'done', steps }; }
         steps++;
         let n = step.count;

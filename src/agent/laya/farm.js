@@ -103,6 +103,9 @@ export async function farmWithLaya(bot, ms, deps) {
         if ((need.any || [need.item]).some(i => has(s, i))) continue;
         if (!await getItem(need.item, need.count)) {
             deps.log?.(`I couldn't get a ${need.item} to farm with.`);
+            // without a hoe there's nothing to till or plant: stop rather
+            // than wait out the whole time
+            if (need.item === 'hoe' && !bot.interrupt_code) { deps.log?.(summary(counters)); return counters; }
         }
     }
 

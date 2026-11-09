@@ -25,6 +25,23 @@ function runAsAction (actionFn, resume = false, timeout = -1) {
     return wrappedAction;
 }
 
+// runLayaAction runs a Laya skill as a resumable action: when a mode (a fight,
+// eating) interrupts it, it carries on once the bot is idle again. start(agent,
+// ...args) is called once per command and returns the work, so goals fixed at
+// the command (have N more logs) aren't counted again on resume. The resume
+// ends when the work finishes by itself or a new command or !stop replaces it.
+function runLayaAction(label, start, timeout = -1) {
+    return async function (agent, ...args) {
+        const work = start(agent, ...args);
+        const r = await agent.actions.runAction(`action:${label}`, async () => {
+            await work();
+            if (!agent.bot.interrupt_code) agent.actions.cancelResume();
+        }, { timeout, resume: true });
+        if (r.interrupted && !r.timedout) return;
+        return r.message;
+    };
+}
+
 export const actionsList = [
     {
         name: '!newAction',
@@ -117,9 +134,7 @@ export const actionsList = [
             'ore': {type: 'string', description: 'The ore: coal, copper, iron, lapis, gold, redstone or diamond.'},
             'count': {type: 'int', description: 'How many of the ore to collect.', domain: [1, 64]}
         },
-        perform: runAsAction(async (agent, ore, count) => {
-            await skills.mineOre(agent.bot, ore, count);
-        })
+        perform: runLayaAction('layaMine', (agent, ore, count) => () => skills.mineOre(agent.bot, ore, count))
     },
     {
         name: '!layaFarm',
@@ -127,8 +142,9 @@ export const actionsList = [
         params: {
             'minutes': {type: 'float', description: 'How long to farm.', domain: [0.5, 60]}
         },
-        perform: runAsAction(async (agent, minutes) => {
-            await skills.farmWithLayaModel(agent.bot, minutes);
+        perform: runLayaAction('layaFarm', (agent, minutes) => {
+            const end = Date.now() + minutes * 60000;
+            return () => skills.farmWithLayaModel(agent.bot, Math.max(0.1, (end - Date.now()) / 60000));
         })
     },
     {
@@ -291,9 +307,10 @@ export const actionsList = [
             'item_name': { type: 'string', description: 'The item to make, e.g. iron_pickaxe, torch, chest, bread.' },
             'num': { type: 'int', description: 'How many items to have made.', domain: [1, 64] }
         },
-        perform: runAsAction(async (agent, item_name, num) => {
-            await skills.layaMake(agent.bot, item_name, num);
-        }, false, 20)
+        perform: runLayaAction('layaCraft', (agent, item_name, num) => {
+            const target = skills.layaTarget(agent.bot, item_name, num);
+            return () => skills.layaMake(agent.bot, item_name, num, target);
+        }, 20)
     },
     {
         name: '!layaGather',
@@ -302,9 +319,10 @@ export const actionsList = [
             'item_name': { type: 'string', description: 'What to gather: log, cobblestone, coal, raw_iron (iron ore), diamond, sand, wheat, wheat_seeds.' },
             'num': { type: 'int', description: 'How many to gather.', domain: [1, 64] }
         },
-        perform: runAsAction(async (agent, item_name, num) => {
-            await skills.layaMake(agent.bot, item_name, num);
-        }, false, 20)
+        perform: runLayaAction('layaGather', (agent, item_name, num) => {
+            const target = skills.layaTarget(agent.bot, item_name, num);
+            return () => skills.layaMake(agent.bot, item_name, num, target);
+        }, 20)
     },
     {
         name: '!craftRecipe',
