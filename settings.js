@@ -88,6 +88,17 @@ const settings = {
                 "check_ms": 2000,      // how often to ask
                 "fallback_ms": 10000,  // auto-eat runs this long after a fallback
                 "log_steps": true      // bots/<name>/logs/laya-eat.jsonl
+            },
+            "mine": {
+                "enabled": false,      // off: !layaMine collects the nearest ore blocks
+                "server": "golaya",
+                "model": "mine-a",
+                "timeout_ms": 300,
+                "min_confidence": 0.4,
+                "max_steps": 300,      // steps before giving up
+                "max_failures": 4,     // failed steps in a row before giving up
+                "torch_batch": 4,      // torches crafted when they run out
+                "log_steps": true      // bots/<name>/logs/laya-mine.jsonl
             }
         }
     },

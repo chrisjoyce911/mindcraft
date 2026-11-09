@@ -15,6 +15,7 @@ import { createLayaClient } from './laya.js';
 export const SAMPLES = {
     follow: new URL('../../test/fixtures/laya-follow-v1/request.json', import.meta.url),
     'follow:v2': new URL('../../test/fixtures/laya-follow-v2/request.json', import.meta.url),
+    mine: new URL('../../test/fixtures/laya-mine-v1/request.json', import.meta.url),
 };
 
 // loadSample returns a task's sample request, matching its prompt version.
