@@ -1337,7 +1337,9 @@ async function followPlayerWithLaya(bot, username, distance, task) {
     const move = new pf.Movements(bot);
     move.digCost = 10;
     bot.pathfinder.setMovements(move);
-    const paused = ['item_collecting', 'hunting', 'torch_placing'];
+    // unstuck and elbow_room move the bot on their own (randomly, or away from the
+    // player): the Laya loop has its own stuck fallback, so they stay off.
+    const paused = ['item_collecting', 'hunting', 'torch_placing', 'unstuck', 'elbow_room'];
     paused.forEach(m => bot.modes.pause(m));
     log(bot, `You are now actively following player ${username}, stepping with the Laya follow model.`);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -1350,7 +1352,7 @@ async function followPlayerWithLaya(bot, username, distance, task) {
                 .filter(e => e !== bot.entity && e.name && e.position)
                 .map(e => ({ kind: e.name, x: Math.floor(e.position.x), z: Math.floor(e.position.z) })),
             stepTo: async (x, y, z, ms) => {
-                bot.pathfinder.setGoal(new pf.goals.GoalBlock(x, y, z));
+                bot.pathfinder.setGoal(new pf.goals.GoalXZ(x, z)); // x and z only: a misread height must not make the step unreachable
                 const end = Date.now() + ms;
                 while (Date.now() < end && !bot.interrupt_code) {
                     await sleep(50);
