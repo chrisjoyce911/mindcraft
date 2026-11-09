@@ -88,6 +88,15 @@ const settings = {
                 "check_ms": 2000,      // how often to ask
                 "fallback_ms": 10000,  // auto-eat runs this long after a fallback
                 "log_steps": true      // bots/<name>/logs/laya-eat.jsonl
+            },
+            "craft": {
+                "enabled": false,      // off: !layaCraft and !layaGather say the task is off
+                "server": "golaya",
+                "model": "craft-b",    // a craft prompt v2 model
+                "timeout_ms": 2000,
+                "min_confidence": 0.3, // a step less sure than this stops the run
+                "max_steps": 40,       // most steps one !layaCraft takes
+                "log_steps": true      // bots/<name>/logs/laya-craft.jsonl
             }
         }
     },
