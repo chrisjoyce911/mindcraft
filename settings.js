@@ -73,7 +73,10 @@ const settings = {
                 "server": "golaya",
                 "model": "follow-a",   // "" uses the server's only decision model
                 "timeout_ms": 300,
-                "min_confidence": 0.4
+                "min_confidence": 0.4,
+                "step_ms": 250,        // a decision every quarter second
+                "fallback_ms": 4000,   // how long to use the pathfinder after a fallback
+                "log_steps": true      // bots/<name>/logs/laya-follow.jsonl: each step's state, answer and outcome
             }
         }
     },

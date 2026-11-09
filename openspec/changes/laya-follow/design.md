@@ -42,7 +42,7 @@
 For each of the 81 columns (bot at the centre, X east, Z south, north first), with `base` the Y of the block under the bot's feet:
 
 1. **Unloaded:** if `bot.blockAt` returns null anywhere it is needed, the cell is unknown (`?`).
-2. **Find the stand block:** scan Y from `base + 8` down to `base − 8`. The stand block is the first block `B` that is **standable** with **two passable blocks** above it.
+2. **Find the stand block:** between `base − 8` and `base + 8`, find every block `B` that is **standable** with **two passable blocks** above it, and take the one **nearest the bot's level** (the lower on a tie). A floor then wins over a roof, a tree canopy or a cave ceiling above it, while stairs up to +8 still read as exact heights.
    - **Standable:** a solid block (its bounding box is a block), water, or lava.
    - **Passable:** an empty bounding box (air, grass, flowers, open doors) that isn't water or lava.
 3. **Surface:**
@@ -61,7 +61,7 @@ Partial blocks (slabs, snow layers, carpet, farmland) count as their block's Y. 
 ### State text
 Exactly laya-go `v1`:
 - `Follow.\nPlayer E12 N3\n` and nine rows of nine characters, joined by single newlines, with no other whitespace.
-- **Player offset:** `round(player.x) − botX`, `round(player.z) − botZ`.
+- **Player offset:** the player's column minus the bot's: `floor(player.x) − floor(bot.x)`, and likewise for Z.
 - **Alphabet tables** are copied from laya-go's `prompt.go`, and the golden test pins them. The golden request is the one `laya-client` already copied into `test/fixtures/laya-follow-v1/`.
 
 ### The loop

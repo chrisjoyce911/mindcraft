@@ -3,6 +3,8 @@ import * as world from "./world.js";
 import pf from 'mineflayer-pathfinder';
 import Vec3 from 'vec3';
 import settings from "../../../settings.js";
+import { laya, taskSettings } from "../../models/laya.js";
+import { followWithLaya } from "../laya/follow.js";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -1328,6 +1330,49 @@ export async function goToPlayer(bot, username, distance=3) {
 }
 
 
+// followPlayerWithLaya follows with the Laya "follow" decision model (see
+// src/agent/laya/follow.js), falling back to the pathfinder follow below
+// whenever the model can't help.
+async function followPlayerWithLaya(bot, username, distance, task) {
+    const move = new pf.Movements(bot);
+    move.digCost = 10;
+    bot.pathfinder.setMovements(move);
+    const paused = ['item_collecting', 'hunting', 'torch_placing'];
+    paused.forEach(m => bot.modes.pause(m));
+    log(bot, `You are now actively following player ${username}, stepping with the Laya follow model.`);
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        const { found, counters } = await followWithLaya(bot, username, distance, {
+            client: laya,
+            task,
+            blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
+            stepTo: async (x, y, z, ms) => {
+                bot.pathfinder.setGoal(new pf.goals.GoalBlock(x, y, z));
+                const end = Date.now() + ms;
+                while (Date.now() < end && !bot.interrupt_code) {
+                    await sleep(50);
+                    const p = bot.entity.position;
+                    if (Math.floor(p.x) === x && Math.floor(p.z) === z) return true;
+                }
+                bot.pathfinder.setGoal(null);
+                return false;
+            },
+            fallback: async (entity, dist, ms) => {
+                bot.pathfinder.setGoal(new pf.goals.GoalFollow(entity, dist), true);
+                const end = Date.now() + ms;
+                while (Date.now() < end && !bot.interrupt_code) await sleep(100);
+            },
+            sleep,
+            log: msg => log(bot, msg),
+            stepLog: `./bots/${bot.username}/logs/laya-follow.jsonl`,
+        });
+        return found;
+    } finally {
+        paused.forEach(m => bot.modes.unpause(m));
+    }
+}
+
+
 export async function followPlayer(bot, username, distance=4) {
     /**
      * Follow the given player endlessly. Will not return until the code is manually stopped.
@@ -1340,6 +1385,10 @@ export async function followPlayer(bot, username, distance=4) {
     let player = bot.players[username].entity
     if (!player)
         return false;
+
+    const layaTask = taskSettings('follow');
+    if (layaTask)
+        return await followPlayerWithLaya(bot, username, distance, layaTask);
 
     const move = new pf.Movements(bot);
     move.digCost = 10;

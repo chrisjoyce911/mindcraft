@@ -203,3 +203,9 @@ export function createLayaClient(getConfig = () => agentSettings.decision_models
 
 // laya is the client Mindcraft uses, reading the agent's settings.
 export const laya = createLayaClient();
+
+// taskSettings returns a task's settings when it is enabled, or null.
+export function taskSettings(task) {
+    const t = agentSettings.decision_models?.tasks?.[task];
+    return t?.enabled ? t : null;
+}

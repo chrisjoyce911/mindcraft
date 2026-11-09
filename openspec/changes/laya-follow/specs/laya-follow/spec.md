@@ -32,11 +32,15 @@ The follow state SHALL be laya-go prompt `v1`'s text: `Follow.`, the player line
 - **THEN** its cell is `8`
 
 ### Requirement: Columns from the world
-Each column SHALL be read as the first standable block (solid, water or lava) with two passable blocks above, scanning from 8 above the bot's base down to 8 below, with its height relative to the bot's base.
+Each column SHALL be read as the standable block (solid, water or lava) with two passable blocks above that is nearest the bot's level, between 8 below and 8 above, with its height relative to the bot's base.
 
 #### Scenario: Step up
-- **WHEN** a column's first standable block with headroom is one above the bot's base
+- **WHEN** a column's standable block with headroom is one above the bot's base
 - **THEN** its cell is `1`
+
+#### Scenario: Roof above a floor
+- **WHEN** a column has a floor at the bot's level and a roof five blocks above
+- **THEN** its cell is `0`
 
 ### Requirement: Harmful blocks
 A column SHALL be harmful (`!`) when its stand block or headroom is lava, fire, magma, campfire, cactus, sweet berry bush, powder snow or wither rose.
