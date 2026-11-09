@@ -2267,15 +2267,24 @@ function layaCraftDeps(bot) {
     };
 }
 
+// layaTarget is the count of item to have after making count more of it
+// (null for an item the craft model doesn't know), fixed when a command
+// starts so a resumed one doesn't make more.
+export function layaTarget(bot, item, count = 1) {
+    const g = layaItem(item);
+    return g ? countOf(bot, g) + count : null;
+}
+
 // layaMake makes (or gathers) count of item with the Laya craft model, and
 // returns {ok, reason, steps}. Other skills call it to make what they lack.
 // item may be a Minecraft name ("oak_planks", "iron_ore") or laya-go's
 // generic one ("planks", "raw_iron").
-export async function layaMake(bot, item, count = 1) {
+export async function layaMake(bot, item, count = 1, target = null) {
     const g = layaItem(item);
     if (!g) return { ok: false, reason: `the craft model doesn't know ${item}`, steps: 0 };
     if (!taskSettings('craft')) return { ok: false, reason: 'the craft task is off (settings.decision_models.tasks.craft)', steps: 0 };
-    const target = countOf(bot, g) + count;
+    target ??= countOf(bot, g) + count;
+    if (countOf(bot, g) >= target) return { ok: true, reason: 'carried', steps: 0 };
     const r = await runCraft(g, target, layaCraftDeps(bot));
     log(bot, r.ok ? `Laya craft: made ${item} in ${r.steps} steps.` : `Laya craft stopped after ${r.steps} steps: ${r.reason}.`);
     return r;

@@ -161,3 +161,11 @@ test('farm task is off by default', () => {
     assert.equal(rootSettings.decision_models.tasks.farm.enabled, false);
     assert.equal(taskSettings('farm'), null);
 });
+
+test('loop: no hoe to be had stops farming instead of waiting', async () => {
+    const bare = { ...sample(), carry: [] };
+    const { deps, calls, bot } = setup(Array(20).fill(reply('wait', 'none', 'none')), { situation: bare, craftOk: false });
+    await farmWithLaya(bot, 60000, deps);
+    assert.deepEqual(calls.craft, [['hoe', 1]]);
+    assert.equal(calls.asked, 0);
+});
