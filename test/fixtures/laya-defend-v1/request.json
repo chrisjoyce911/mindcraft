@@ -1,0 +1,40 @@
+{
+  "questions": {
+    "Action": {
+      "criteria": [
+        "fight",
+        "flee",
+        "shield",
+        "backoff",
+        "eat",
+        "ignore"
+      ],
+      "instructions": "What should I do about the mobs?",
+      "type": "choice"
+    },
+    "Danger": {
+      "criteria": null,
+      "instructions": "I am in danger.",
+      "type": "noul"
+    },
+    "Target": {
+      "criteria": [
+        "zombie 1",
+        "skeleton 2",
+        "none"
+      ],
+      "instructions": "Which mob is it about?",
+      "type": "choice"
+    },
+    "Weapon": {
+      "criteria": [
+        "iron_sword",
+        "bow",
+        "none"
+      ],
+      "instructions": "Which weapon should I hold?",
+      "type": "choice"
+    }
+  },
+  "state": "Defend.\nHealth 14 Food 12 Armor 8 Night yes Player no\nWeapons iron_sword bow\nArrows 12 Shield yes Apples 1\nMobs zombie E2 N2 H20 skeleton W12 S4 H20"
+}
