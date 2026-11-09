@@ -5,6 +5,16 @@ import settings from './settings.js'
 import convoManager from './conversation.js';
 import { laya, taskSettings } from '../models/laya.js';
 import { LayaEater, summary as eatSummary } from './laya/eat.js';
+import { LayaDefender, summary as defendSummary } from './laya/defend.js';
+import { defendActions } from './laya/defend_actions.js';
+import { situation as defendSituation, PLAYER_NEAR, MOB_RANGE } from './laya/defend_state.js';
+
+// layaDefender is the laya_defending mode's defender while the defend task
+// is on; the ordinary defence modes stand aside while it is in control.
+let layaDefender = null;
+function layaDefendInControl() {
+    return !!taskSettings('defend') && !!layaDefender && layaDefender.inControl();
+}
 
 async function say(agent, message) {
     agent.bot.modes.behavior_log += message + '\n';
@@ -78,7 +88,7 @@ const modes_list = [
                     });
                 }
             }
-            else if (Date.now() - bot.lastDamageTime < 3000 && (bot.health < 5 || bot.lastDamageTaken >= bot.health)) {
+            else if (Date.now() - bot.lastDamageTime < 3000 && (bot.health < 5 || bot.lastDamageTaken >= bot.health) && !layaDefendInControl()) {
                 say(agent, 'I\'m dying!');
                 execute(this, agent, async () => {
                     await skills.moveAway(bot, 20);
@@ -140,12 +150,61 @@ const modes_list = [
         }
     },
     {
+        name: 'laya_defending',
+        description: 'Fight, flee or hold off hostile mobs with the Laya defend model, when the defend decision task is on. Interrupts all actions.',
+        interrupts: ['all'],
+        on: true,
+        active: false,
+        summaryAt: 0,
+        update: async function (agent) {
+            const task = taskSettings('defend');
+            if (!task) {
+                layaDefender = null;
+                return;
+            }
+            const bot = agent.bot;
+            if (!layaDefender) {
+                const read = () => {
+                    const hostile = Object.values(bot.entities).filter(e => e !== bot.entity && mc.isHostile(e) && e.position
+                        && bot.entity.position.distanceTo(e.position) <= MOB_RANGE + 2);
+                    const mobs = hostile.map(e => ({ kind: e.name, x: Math.floor(e.position.x), z: Math.floor(e.position.z), health: e.health, entity: e }));
+                    const playerNear = Object.values(bot.entities).some(e => e.type === 'player' && e !== bot.entity
+                        && bot.entity.position.distanceTo(e.position) <= PLAYER_NEAR);
+                    const s = defendSituation(bot, mobs, playerNear);
+                    return { situation: s, entities: s.mobs.map(m => m.entity) };
+                };
+                layaDefender = new LayaDefender({
+                    client: laya,
+                    task,
+                    read,
+                    act: defendActions(bot),
+                    interrupted: () => !!bot.interrupt_code,
+                    sleep: ms => new Promise(r => setTimeout(r, ms)),
+                    now: () => Date.now(),
+                    stepLog: `./bots/${agent.name}/logs/laya-defend.jsonl`,
+                });
+                this.summaryAt = Date.now() + 10 * 60_000;
+            }
+            if (Date.now() > this.summaryAt) {
+                this.summaryAt = Date.now() + 10 * 60_000;
+                if (layaDefender.counters.asked) console.log(defendSummary(layaDefender.counters));
+            }
+            if (!layaDefender.wantsToEngage()) return;
+            say(agent, 'Defending myself!');
+            const defender = layaDefender;
+            execute(this, agent, async () => {
+                await defender.engage();
+            });
+        }
+    },
+    {
         name: 'cowardice',
         description: 'Run away from enemies. Interrupts all actions.',
         interrupts: ['all'],
         on: true,
         active: false,
         update: async function (agent) {
+            if (layaDefendInControl()) return; // the Laya defend model decides
             const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 16);
             if (enemy && await world.isClearPath(agent.bot, enemy)) {
                 say(agent, `Aaa! A ${enemy.name.replace("_", " ")}!`);
@@ -162,6 +221,7 @@ const modes_list = [
         on: true,
         active: false,
         update: async function (agent) {
+            if (layaDefendInControl()) return; // the Laya defend model decides
             const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 8);
             if (enemy && await world.isClearPath(agent.bot, enemy)) {
                 say(agent, `Fighting ${enemy.name}!`);

@@ -88,6 +88,17 @@ const settings = {
                 "check_ms": 2000,      // how often to ask
                 "fallback_ms": 10000,  // auto-eat runs this long after a fallback
                 "log_steps": true      // bots/<name>/logs/laya-eat.jsonl
+            },
+            "defend": {
+                "enabled": false,      // off: the self_defense, cowardice and self_preservation modes fight as before
+                "server": "golaya",
+                "model": "defend-a",
+                "timeout_ms": 300,
+                "min_confidence": 0.4,
+                "step_ms": 400,        // pause between decisions while mobs are active
+                "fallback_ms": 8000,   // the ordinary modes defend this long after a fallback
+                "quiet_ms": 3000,      // after "ignore", wait this long before engaging again
+                "log_steps": true      // bots/<name>/logs/laya-defend.jsonl
             }
         }
     },
