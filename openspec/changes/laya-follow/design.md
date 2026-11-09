@@ -25,23 +25,18 @@
 
 ## Decisions
 
-### Settings
+### Settings (the `follow` task, from `laya-client`)
 ```js
-"laya": {
-    "enabled": false,                       // when on, !followPlayer steps with Laya
-    "url": "http://127.0.0.1:11235",        // golaya serve
-    "model": "follow-a",                    // served model id
-    "step_ms": 250,                         // a decision every quarter second
-    "timeout_ms": 300,                      // a decision slower than this counts as no answer
-    "min_confidence": 0.4,                  // the top Move probability needed to act on it
-    "fallback_ms": 4000,                    // how long to use the pathfinder after a fallback
-    "log_steps": true                       // bots/<name>/logs/laya-follow.jsonl
+"follow": {
+    "enabled": false,           // laya-client: when on, !followPlayer steps with Laya
+    "server": "golaya", "model": "follow-a", "timeout_ms": 300, "min_confidence": 0.4,
+    "step_ms": 250,             // a decision every quarter second
+    "fallback_ms": 4000,        // how long to use the pathfinder after a fallback
+    "log_steps": true           // bots/<name>/logs/laya-follow.jsonl
 }
 ```
-Off by default, so the fork behaves exactly as upstream until it is turned on.
-
-### Client
-`decide(state, questions)` posts `{model, state, questions}` with an `AbortController` timeout. It returns the parsed answers, or `null` on any error, timeout or malformed reply. The loop treats `null` as "fall back". There's no retry inside a step; the next step asks again.
+- **Asking:** the loop asks with `decide("follow", state, questions)` and treats `null` as "fall back", with laya-client's reason.
+- **Low confidence:** comes from the answer's `confident` flag.
 
 ### Reading a column from the world
 For each of the 81 columns (bot at the centre, X east, Z south, north first), with `base` the Y of the block under the bot's feet:
@@ -67,7 +62,7 @@ Partial blocks (slabs, snow layers, carpet, farmland) count as their block's Y. 
 Exactly laya-go `v1`:
 - `Follow.\nPlayer E12 N3\n` and nine rows of nine characters, joined by single newlines, with no other whitespace.
 - **Player offset:** `round(player.x) − botX`, `round(player.z) − botZ`.
-- **Alphabet tables** are copied from laya-go's `prompt.go`, and the golden test pins them.
+- **Alphabet tables** are copied from laya-go's `prompt.go`, and the golden test pins them. The golden request is the one `laya-client` already copied into `test/fixtures/laya-follow-v1/`.
 
 ### The loop
 Each `step_ms`:

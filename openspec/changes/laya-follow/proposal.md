@@ -10,12 +10,7 @@ This change connects that model to the bot: build what the model reads from the 
 
 ## What Changes
 
-- **Settings:** a new `laya` block in `settings.js`:
-  - `enabled`, **off by default**, so nothing changes unless it's turned on;
-  - the `golaya serve` URL and the model id;
-  - the step interval;
-  - the confidence threshold for the model's top move.
-- **A Laya client** (`src/models/laya.js`): asks `POST /v1/decisions` with a short timeout, and treats any failure as "no answer".
+- **Depends on `laya-client`:** the model is reached through the `follow` task in `decision_models`, which is **off by default**. Which server and model answer it (untrained, pretrained trial or trained) is a settings change. Follow adds its own options to that task: the step interval, how long to fall back, and whether to log steps.
 - **The follow state** (`src/agent/laya/follow_state.js`): reads the 9×9 columns around the bot from the world and writes laya-go's prompt `v1` state text exactly.
   - `Follow.`, then the player's offset, then nine rows of one character per cell.
   - Each cell gives its surface and its height relative to the bot, from −8 to +8: ground `H`–`A` / `0` / `1`–`8`, water `P`–`I` / `W` / `Q`–`Y`, harmful `!`, unknown `?`.
@@ -48,20 +43,18 @@ This change connects that model to the bot: build what the model reads from the 
 ## Capabilities
 
 ### New Capabilities
-- `laya-follow`: following a player with a Laya decision model: the settings, the client, the follow state built from the world, the safety veto, the fallback rules, the session measurements and step log, and the contract with laya-go's prompt `v1`.
+- `laya-follow`: following a player with a Laya decision model through the `follow` task: the follow state built from the world, the contract with laya-go's prompt `v1`, the safety veto, the fallback rules, and the session measurements and step log.
 
 ### Modified Capabilities
 
 ## Impact
 
 - **New code:**
-  - `src/models/laya.js`;
   - `src/agent/laya/` (`follow_state.js`, `follow.js`);
-  - `test/` (node:test) with `test/fixtures/laya-follow-v1/`.
+  - tests under `test/`, reusing `laya-client`'s copy of the golden request.
 - **Changed:**
-  - `settings.js` gains the `laya` block (off by default);
-  - `skills.followPlayer` hands over to the Laya loop when it's on;
-  - `package.json` gains a `test` script.
+  - the `follow` task in `settings.js` gains `step_ms`, `fallback_ms` and `log_steps`;
+  - `skills.followPlayer` hands over to the Laya loop when the task is on.
 - **Runtime:** a `golaya serve` process with a follow model. Until a trained model exists, an untrained one exercises the plumbing, and the veto and fallback keep the bot safe.
 - **Untouched:** the LLM, its prompts and commands, and every other behaviour while `laya.enabled` is off.
 - **Testing in the game** happens on the Mac mini, or between training runs: the Mac Studio's cores belong to the training comparison while it runs.

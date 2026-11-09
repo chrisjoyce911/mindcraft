@@ -2,27 +2,23 @@
 
 ## Purpose
 
-Defines following a player with a Laya decision model: settings, the decisions client, the follow state built from the world (laya-go prompt `v1`), the safety veto, the fallback rules, and the session measurements and step log.
+Defines following a player with a Laya decision model through `laya-client`'s `follow` task: the follow state built from the world (laya-go prompt `v1`), the safety veto, the fallback rules, and the session measurements and step log.
 
 ## ADDED Requirements
 
 ### Requirement: Off by default
-The `laya` settings block SHALL default to `enabled: false`, and with it off `!followPlayer` SHALL behave exactly as before this change.
+With the `follow` task off (its default in `laya-client`), `!followPlayer` SHALL behave exactly as before this change.
 
 #### Scenario: Default settings
 - **WHEN** the bot follows a player with default settings
-- **THEN** no request is sent to a Laya server and the existing pathfinder follow runs
+- **THEN** no decision request is sent and the existing pathfinder follow runs
 
-### Requirement: Decisions client
-The client SHALL post the state, both follow questions and the configured model to the configured URL, and SHALL return the answers, or nothing when the request fails, times out after `timeout_ms`, or returns a malformed reply.
+### Requirement: Asking through the follow task
+The loop SHALL ask the `follow` task through `laya-client` with the state and laya-go `v1`'s two questions, and SHALL treat no answer as a fallback with the client's reason.
 
-#### Scenario: Timeout
-- **WHEN** the server takes longer than `timeout_ms` to answer
-- **THEN** the client returns nothing and the follow loop falls back
-
-#### Scenario: Questions match laya-go
-- **WHEN** the client sends a request
-- **THEN** its questions deep-equal those in laya-go's `v1` golden request
+#### Scenario: Server down
+- **WHEN** the follow task's server is unreachable
+- **THEN** the loop falls back with reason "no answer" and the bot keeps following with the pathfinder
 
 ### Requirement: Follow state matches laya-go v1
 The follow state SHALL be laya-go prompt `v1`'s text: `Follow.`, the player line, and nine rows of nine cell characters, with each cell's surface and height relative to the bot clamped to ±8 in laya-go's alphabet, and the bot's cell `0`, or `W` in water.
@@ -36,21 +32,25 @@ The follow state SHALL be laya-go prompt `v1`'s text: `Follow.`, the player line
 - **THEN** its cell is `8`
 
 ### Requirement: Columns from the world
-Each column SHALL be read as follows:
-- the first standable block (solid, water or lava) with two passable blocks above, scanning from 8 above the bot's base down to 8 below;
-- harmful (`!`) when that block or its headroom is lava, fire, magma, campfire, cactus, sweet berry bush, powder snow or wither rose;
-- a wall when a fence, wall, fence gate or closed door blocks the scan;
-- ground at −8 when there is nothing to stand on within 8 below;
-- ground at +8 when it is solid throughout;
-- unknown (`?`) when any block needed is unloaded.
+Each column SHALL be read as the first standable block (solid, water or lava) with two passable blocks above, scanning from 8 above the bot's base down to 8 below, with its height relative to the bot's base.
 
-#### Scenario: Fence
-- **WHEN** a column at the bot's level holds a fence
-- **THEN** its cell reads as two or more above the bot
+#### Scenario: Step up
+- **WHEN** a column's first standable block with headroom is one above the bot's base
+- **THEN** its cell is `1`
+
+### Requirement: Harmful blocks
+A column SHALL be harmful (`!`) when its stand block or headroom is lava, fire, magma, campfire, cactus, sweet berry bush, powder snow or wither rose.
 
 #### Scenario: Magma
 - **WHEN** a column's stand block is magma at the bot's level
 - **THEN** its cell is `!`
+
+### Requirement: Walls, drops and unknown columns
+A fence, wall, fence gate or closed door blocking the scan SHALL make the column a wall. Nothing to stand on within 8 below SHALL make it ground at −8, and solid throughout SHALL make it ground at +8. A column with any needed block unloaded SHALL be unknown (`?`).
+
+#### Scenario: Fence
+- **WHEN** a column at the bot's level holds a fence
+- **THEN** its cell reads as two or more above the bot
 
 #### Scenario: Deep drop
 - **WHEN** a column is air from 8 above the bot down to 8 below
@@ -76,7 +76,7 @@ Before stepping, the loop SHALL refuse a move that laya-go's rules call harmful 
 - **THEN** the move is not vetoed
 
 ### Requirement: Falling back
-The loop SHALL use the existing pathfinder follow for `fallback_ms` and then return to the model when: there is no answer; the top `Move` probability is below `min_confidence`; the top move is `wait` for more than two steps in a row while the bot hasn't arrived; the move is vetoed; or a step doesn't move the bot within 1.5 seconds. Each fallback SHALL be counted by its reason.
+The loop SHALL use the existing pathfinder follow for `fallback_ms` and then return to the model when: there is no answer; the `Move` answer isn't confident (below the task's `min_confidence`); the top move is `wait` for more than two steps in a row while the bot hasn't arrived; the move is vetoed; or a step doesn't move the bot within 1.5 seconds. Each fallback SHALL be counted by its reason.
 
 #### Scenario: Low confidence
 - **WHEN** the model's top move has probability 0.2 and `min_confidence` is 0.4
