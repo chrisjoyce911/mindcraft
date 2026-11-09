@@ -1,0 +1,32 @@
+{
+  "questions": {
+    "Action": {
+      "criteria": [
+        "collect",
+        "tunnel N",
+        "tunnel E",
+        "tunnel S",
+        "tunnel W",
+        "down N",
+        "down E",
+        "down S",
+        "down W",
+        "up N",
+        "up E",
+        "up S",
+        "up W",
+        "torch",
+        "block",
+        "stop"
+      ],
+      "instructions": "Which step should I take?",
+      "type": "choice"
+    },
+    "Hazard": {
+      "criteria": null,
+      "instructions": "Lava or water is next to me.",
+      "type": "noul"
+    }
+  },
+  "state": "Mine.\nOre iron Y 41 Pick stone Torches 6 Blocks 20 Dark 7 Heading E\nSeen none\nASSSS AASSS SSSSS SSSSS SSSSS\nSSSSS SSSSS SSSSS SSSSS SSSSS\nSSSSS AAASS AAASL SSSSL SSSSS\nSSSSS SSSSS SSSSS SSSSS SSSSS\nSSSSS SSSSS SSSSS SSSSS SSSSS"
+}

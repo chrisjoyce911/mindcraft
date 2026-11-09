@@ -7,6 +7,8 @@ import { laya, taskSettings } from "../../models/laya.js";
 import { followWithLaya } from "../laya/follow.js";
 import { runCraft } from "../laya/craft.js";
 import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
+import { mineWithLaya } from "../laya/mine.js";
+import { ORES as MINE_ORES } from "../laya/mine_state.js";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -2275,4 +2277,81 @@ export async function layaMake(bot, item, count = 1) {
     const r = await runCraft(g, target, layaCraftDeps(bot));
     log(bot, r.ok ? `Laya craft: made ${item} in ${r.steps} steps.` : `Laya craft stopped after ${r.steps} steps: ${r.reason}.`);
     return r;
+}
+
+// craftForTask crafts an item a Laya task needs: with the Laya craft task's
+// runCraft when that is available (laya-craft), otherwise craftRecipe.
+export async function craftForTask(bot, item, count) {
+    // layaMake asks the Laya craft model (gathering and smelting what's
+    // missing); with the craft task off or the item unknown to it, craftRecipe.
+    if (taskSettings('craft')) {
+        const r = await layaMake(bot, item, count);
+        if (r?.ok) return true;
+    }
+    return !!(await craftRecipe(bot, item, count));
+}
+
+export async function mineOre(bot, ore, count=1) {
+    /**
+     * Mine until count more of an ore's drop is collected, finding the ore
+     * underground with the Laya mine task (stairs down to the ore's height,
+     * branch tunnels, torches, blocking lava) and crafting the pickaxe and
+     * torches it needs. Without the task it collects the nearest ore blocks.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {string} ore, one of coal, copper, iron, lapis, gold, redstone, diamond.
+     * @param {number} count, how many of the ore's drop to collect.
+     * @returns {Promise<boolean>} true if it collected them.
+     **/
+    const info = MINE_ORES[ore];
+    if (!info) {
+        log(bot, `Unknown ore ${ore}: one of ${Object.keys(MINE_ORES).join(', ')}.`);
+        return false;
+    }
+    const task = taskSettings('mine');
+    if (!task) return await collectBlock(bot, info.blocks[0], count);
+    // unstuck moves the bot randomly; torch_placing would place its own torches.
+    const paused = ['unstuck', 'torch_placing', 'elbow_room'];
+    paused.forEach(m => bot.modes.pause(m));
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        const r = await mineWithLaya(bot, ore, count, {
+            client: laya,
+            task,
+            blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
+            inventory: () => world.getInventoryCounts(bot),
+            nearestOre: (blocks, range) => {
+                const b = world.getNearestBlocks(bot, blocks, range, 1)[0];
+                return b ? b.position : null;
+            },
+            craft: (item, n) => craftForTask(bot, item, n),
+            collect: async (blocks, n) => {
+                const near = world.getNearestBlocks(bot, blocks, 16, 1)[0];
+                return near ? await collectBlock(bot, near.name, n) : false;
+            },
+            dig: async (x, y, z) => {
+                const b = bot.blockAt(new Vec3(x, y, z));
+                if (!b || b.boundingBox === 'empty') return true;
+                return await breakBlockAt(bot, x, y, z);
+            },
+            moveTo: async (x, y, z) => {
+                const goal = new pf.goals.GoalBlock(x, y, z);
+                const timeout = sleep(4000).then(() => { throw new Error('timeout'); });
+                try {
+                    await Promise.race([bot.pathfinder.goto(goal), timeout]);
+                } catch {
+                    bot.pathfinder.setGoal(null);
+                }
+                const p = bot.entity.position;
+                return Math.floor(p.x) === x && Math.floor(p.z) === z && Math.abs(Math.floor(p.y) - y) <= 1;
+            },
+            place: (item, x, y, z) => placeBlock(bot, item, x, y, z, 'bottom', true),
+            sleep,
+            log: msg => log(bot, msg),
+            stepLog: `./bots/${bot.username}/logs/laya-mine.jsonl`,
+        });
+        log(bot, r.ok ? `Mined ${r.collected} ${info.drop}.` : `Stopped mining ${ore}: ${r.reason}.`);
+        return r.ok;
+    } finally {
+        paused.forEach(m => bot.modes.unpause(m));
+    }
 }

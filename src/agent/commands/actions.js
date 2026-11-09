@@ -111,6 +111,17 @@ export const actionsList = [
         }, true)
     },
     {
+        name: '!layaMine',
+        description: 'Mine underground until you have the given number of an ore (coal, copper, iron, lapis, gold, redstone or diamond), digging down to its height, tunnelling, placing torches, blocking lava, and crafting the pickaxe and torches it needs.',
+        params: {
+            'ore': {type: 'string', description: 'The ore: coal, copper, iron, lapis, gold, redstone or diamond.'},
+            'count': {type: 'int', description: 'How many of the ore to collect.', domain: [1, 64]}
+        },
+        perform: runAsAction(async (agent, ore, count) => {
+            await skills.mineOre(agent.bot, ore, count);
+        })
+    },
+    {
         name: '!goToCoordinates',
         description: 'Go to the given x, y, z location.',
         params: {
