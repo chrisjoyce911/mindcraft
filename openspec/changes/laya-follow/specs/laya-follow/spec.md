@@ -96,3 +96,14 @@ Each follow session SHALL count steps asked and taken, fallbacks by reason, veto
 #### Scenario: Step logged
 - **WHEN** the loop takes a step with `log_steps` on
 - **THEN** one line with the state, the top move and the outcome "stepped" is appended to the step log
+
+### Requirement: Prompt v2 with mobs
+With the follow task's `prompt` set to `v2`, the follow state SHALL add laya-go prompt v2's `Mobs` line: up to 4 hostile mobs of laya-go's kinds within 16 blocks of the bot, nearest first (ties by kind, then position), each as its kind and offset; and the veto SHALL refuse a step within a listed mob's harm radius.
+
+#### Scenario: Golden v2 state
+- **WHEN** the state is built for laya-go's v2 golden terrain with a zombie, a skeleton and a cow
+- **THEN** it equals laya-go's v2 golden state byte for byte, without the cow
+
+#### Scenario: Mob veto
+- **WHEN** the model's move steps next to a zombie
+- **THEN** the move is vetoed with reason `mob`

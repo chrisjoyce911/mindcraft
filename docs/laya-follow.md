@@ -33,12 +33,28 @@ When the `follow` decision task is on, `!followPlayer` steps with a small Laya m
 - the **veto** refuses the move;
 - a step doesn't move the bot within 1.5 s (**stuck**).
 
+## Prompt versions and mobs
+
+The `prompt` setting must match the model:
+
+| Model | `prompt` | State |
+|---|---|---|
+| `follow-a` (or later v1 cycles, `follow-best`) | `v1` | terrain only |
+| `follow-m` (or later v2 cycles, `follow-mobs-best`) | `v2` | terrain plus a `Mobs` line |
+
+With `v2`, the bot lists up to 4 hostile mobs from `bot.entities` within 16 blocks, nearest first, as kind and offset (`Mobs zombie E4 N2 skeleton E8 S6`). The model has learned to route around them.
+
+**Mob kinds:** zombie, husk, spider, cave spider, creeper, skeleton, stray, witch. Others, such as cows, are left out.
+
+**The veto also refuses mobs,** with either version: any step a listed mob could hit is refused (reason `mob`). The harm radius is 1.5, or 2.5 for a creeper.
+
 ## Settings (the `follow` task)
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | off: `!followPlayer` is exactly as before |
 | `server`, `model` | `golaya`, `follow-a` | who answers (see `docs/laya-client.md`) |
+| `prompt` | `v1` | the prompt version the model was trained on (`v2` adds mobs) |
 | `timeout_ms` | 300 | slower answers count as none |
 | `min_confidence` | 0.4 | below this, fall back |
 | `step_ms` | 250 | time between decisions while arrived or waiting |

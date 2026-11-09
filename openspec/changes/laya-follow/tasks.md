@@ -13,6 +13,11 @@ Depends on `laya-client`.
 - [x] 2.3 Add the session counters (on top of `laya-client`'s) and the step log; verify the "Step logged" scenario
 - [x] 2.4 Add `step_ms`, `fallback_ms` and `log_steps` to the `follow` task's settings, and route `skills.followPlayer` to the Laya loop when the task is on; verify the "Default settings" scenario
 
+## 2b. Mobs (laya-go follow-mobs, prompt v2)
+
+- [x] 2b.1 Add the `prompt` setting (`v1`/`v2`), the v2 `Mobs` line from `bot.entities` (laya-go's kinds, nearest 4 within 16, its sort order), and mob harm in the veto; verify the v2 golden contract test and the mob veto tests
+- [x] 2b.2 Make `npm run laya:check` send the sample for the task's prompt version
+
 ## 3. Try it and document
 
 - [x] 3.1 Document using it (serve a follow model, turn the `follow` task on) and what the measurements mean, in `docs/laya-follow.md`

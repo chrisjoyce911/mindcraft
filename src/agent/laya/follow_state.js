@@ -13,7 +13,37 @@
 
 export const WINDOW = 9;
 export const MAX_HEIGHT = 8;
-export const VERSION = 'v1';
+export const VERSIONS = ['v1', 'v2']; // v2 adds the Mobs line (laya-go follow-mobs)
+
+// Hostile mobs the follow model knows (laya-go world.MobKinds): harm is the
+// radius it can hit (stepping there is harmful), as in laya-go.
+export const MOB_KINDS = {
+    zombie: { harm: 1.5 }, husk: { harm: 1.5 },
+    spider: { harm: 1.5 }, cave_spider: { harm: 1.5 },
+    creeper: { harm: 2.5 },
+    skeleton: { harm: 1.5 }, stray: { harm: 1.5 },
+    witch: { harm: 1.5 },
+};
+export const MAX_MOBS = 4;
+export const MOB_RANGE = 16;
+
+// nearMobs returns the mobs ({kind, x, z} block columns) within MOB_RANGE of
+// the bot's column, nearest first (ties by kind, then z, then x, as laya-go's
+// world.Near), at most MAX_MOBS, as offsets from the bot.
+export function nearMobs(mobs, bx, bz) {
+    const d = m => Math.hypot(m.x - bx, m.z - bz);
+    return mobs
+        .filter(m => MOB_KINDS[m.kind] && d(m) <= MOB_RANGE)
+        .sort((a, b) => d(a) - d(b) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0) || a.z - b.z || a.x - b.x)
+        .slice(0, MAX_MOBS)
+        .map(m => ({ kind: m.kind, dx: m.x - bx, dz: m.z - bz }));
+}
+
+// mobsLine writes the v2 mobs line.
+export function mobsLine(rel) {
+    if (!rel.length) return 'Mobs none';
+    return 'Mobs ' + rel.map(m => `${m.kind} ${playerLine(m.dx, m.dz).slice('Player '.length)}`).join(' ');
+}
 
 const GROUND = 'HGFEDCBA012345678';
 const WATER = 'PONMLKJIWQRSTUVXY';
@@ -115,7 +145,7 @@ export function playerLine(dx, dz) {
 // at Y feetY, and the player's column offset. It returns the state text, the
 // columns (rows north to south, each west to east, absolute heights) and the
 // bot's base height.
-export function readWindow(blockAt, bx, feetY, bz, playerDx, playerDz) {
+export function readWindow(blockAt, bx, feetY, bz, playerDx, playerDz, mobs = null) {
     const half = (WINDOW - 1) / 2;
     const scanBase = feetY - 1;
     const centre = readColumn(blockAt, bx, bz, scanBase);
@@ -133,16 +163,21 @@ export function readWindow(blockAt, bx, feetY, bz, playerDx, playerDz) {
         columns.push(row);
         rows.push(text);
     }
-    const state = ['Follow.', playerLine(playerDx, playerDz), ...rows].join('\n');
-    return { state, columns, base };
+    // mobs === null writes prompt v1 (no Mobs line); a list writes v2.
+    const rel = mobs === null ? null : nearMobs(mobs, bx, bz);
+    const head = ['Follow.', playerLine(playerDx, playerDz)];
+    if (rel) head.push(mobsLine(rel));
+    const state = [...head, ...rows].join('\n');
+    return { state, columns, base, mobs: rel || [] };
 }
 
 // parseGrid reads a state's nine rows back to cells relative to the bot.
 export function parseGrid(state) {
     const lines = state.split('\n');
-    if (lines.length !== 2 + WINDOW || lines[0] !== 'Follow.') return null;
+    const skip = lines[2]?.startsWith('Mobs ') ? 3 : 2;
+    if (lines.length !== skip + WINDOW || lines[0] !== 'Follow.') return null;
     const grid = [];
-    for (const row of lines.slice(2)) {
+    for (const row of lines.slice(skip)) {
         if (row.length !== WINDOW) return null;
         const cells = [...row].map(parseCell);
         if (cells.includes(null)) return null;

@@ -1346,6 +1346,9 @@ async function followPlayerWithLaya(bot, username, distance, task) {
             client: laya,
             task,
             blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
+            mobs: () => Object.values(bot.entities)
+                .filter(e => e !== bot.entity && e.name && e.position)
+                .map(e => ({ kind: e.name, x: Math.floor(e.position.x), z: Math.floor(e.position.z) })),
             stepTo: async (x, y, z, ms) => {
                 bot.pathfinder.setGoal(new pf.goals.GoalBlock(x, y, z));
                 const end = Date.now() + ms;

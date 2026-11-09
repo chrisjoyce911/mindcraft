@@ -138,3 +138,22 @@ test('veto agrees with the golden window', () => {
     assert.deepEqual(check(g, 'W'), { ok: true });
     assert.deepEqual(check(g, 'N'), { ok: true }, 'north is the pond (water, level)');
 });
+
+const goldenV2 = JSON.parse(readFileSync(new URL('./fixtures/laya-follow-v2/request.json', import.meta.url), 'utf8'));
+
+test('golden v2 state with mobs: matches laya-go byte for byte', () => {
+    const blockAt = worldFromRows(SAMPLE);
+    const mobs = [{ kind: 'skeleton', x: 9, z: 9 }, { kind: 'zombie', x: 5, z: 1 }, { kind: 'cow', x: 2, z: 2 }];
+    const { state } = readWindow(blockAt, 1, Y0 + 1, 3, 13 - 1, 0 - 3, mobs);
+    assert.equal(state, goldenV2.state);
+    assert.deepEqual(JSON.parse(JSON.stringify(QUESTIONS)), goldenV2.questions);
+    assert.deepEqual(parseGrid(state), parseGrid(golden.state), 'the grid reads the same with a Mobs line');
+});
+
+test('veto refuses steps a mob can hit', () => {
+    const g = grid(flatRows());
+    assert.deepEqual(check(g, 'E', [{ kind: 'zombie', dx: 2, dz: 0 }]), { ok: false, reason: 'mob' });
+    assert.deepEqual(check(g, 'W', [{ kind: 'zombie', dx: 2, dz: 0 }]), { ok: true });
+    assert.deepEqual(check(g, 'E', [{ kind: 'creeper', dx: 3, dz: 1 }]), { ok: false, reason: 'mob' });
+    assert.deepEqual(check(g, 'E', [{ kind: 'skeleton', dx: 4, dz: 0 }]), { ok: true });
+});

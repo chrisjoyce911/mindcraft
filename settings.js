@@ -72,6 +72,7 @@ const settings = {
                 "enabled": false,      // off: !followPlayer uses the pathfinder as before
                 "server": "golaya",
                 "model": "follow-a",   // "" uses the server's only decision model
+                "prompt": "v1",        // the follow prompt the model was trained on: v1 (follow-a), v2 with mobs (follow-m)
                 "timeout_ms": 300,
                 "min_confidence": 0.4,
                 "step_ms": 250,        // a decision every quarter second

@@ -40,6 +40,7 @@ export function summary(c) {
 //   task       the follow task's settings (step_ms, fallback_ms, log_steps)
 //   stepTo(x, y, z, ms)       → moved? : walk to the block, giving up after ms
 //   fallback(entity, dist, ms): pathfinder follow for ms
+//   mobs()     → [{kind, x, z}] hostile mobs' block columns (for prompt v2)
 //   sleep(ms), log(msg), stepLog (file path, or null)
 export async function followWithLaya(bot, username, distance, deps) {
     const opts = { ...DEFAULTS, ...(deps.task || {}) };
@@ -73,7 +74,8 @@ export async function followWithLaya(bot, username, distance, deps) {
             continue;
         }
         const bx = Math.floor(pos.x), bz = Math.floor(pos.z), feetY = Math.floor(pos.y);
-        const win = readWindow(deps.blockAt, bx, feetY, bz, Math.floor(pp.x) - bx, Math.floor(pp.z) - bz);
+        const v2 = (opts.prompt || 'v1') === 'v2';
+        const win = readWindow(deps.blockAt, bx, feetY, bz, Math.floor(pp.x) - bx, Math.floor(pp.z) - bz, v2 ? (deps.mobs?.() ?? []) : null);
         counters.asked++;
         const r = await deps.client.decide('follow', win.state, QUESTIONS);
         const entry = { state: win.state };
@@ -88,7 +90,7 @@ export async function followWithLaya(bot, username, distance, deps) {
             continue;
         }
         waits = 0;
-        const verdict = check(parseGrid(win.state), move);
+        const verdict = check(parseGrid(win.state), move, win.mobs);
         if (!verdict.ok) {
             counters.vetoes[verdict.reason] = (counters.vetoes[verdict.reason] || 0) + 1;
             await fallback('veto', { ...entry, veto: verdict.reason });

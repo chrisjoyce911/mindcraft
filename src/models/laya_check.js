@@ -14,10 +14,12 @@ import { createLayaClient } from './laya.js';
 // SAMPLES are known requests per task, used to ask a real question.
 export const SAMPLES = {
     follow: new URL('../../test/fixtures/laya-follow-v1/request.json', import.meta.url),
+    'follow:v2': new URL('../../test/fixtures/laya-follow-v2/request.json', import.meta.url),
 };
 
-export function loadSample(task) {
-    const path = SAMPLES[task];
+// loadSample returns a task's sample request, matching its prompt version.
+export function loadSample(task, prompt = 'v1') {
+    const path = SAMPLES[prompt === 'v1' ? task : `${task}:${prompt}`] ?? SAMPLES[task];
     if (!path) return null;
     const { state, questions } = JSON.parse(readFileSync(path, 'utf8'));
     return { state, questions };
@@ -49,7 +51,7 @@ export async function run(args, config = settings.decision_models, out = console
     }
     let status = 0;
     for (const task of tasks) {
-        const r = await client.check(task, loadSample(task));
+        const r = await client.check(task, loadSample(task, config?.tasks?.[task]?.prompt));
         out(formatReport(r));
         if (r.enabled && (r.error || !r.reachable)) status = 1;
         if (!config?.tasks?.[task]) status = 1;
