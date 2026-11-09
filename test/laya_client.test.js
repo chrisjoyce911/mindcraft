@@ -184,5 +184,11 @@ test('laya:check reports the follow sample', async () => {
     const lines = [];
     assert.equal(await runCheck(['follow'], config('http://127.0.0.1:9'), l => lines.push(l)), 1);
     assert.match(lines.join('\n'), /NOT reachable/);
+    const srv2 = await fakeServer({ models: [{ id: 'eat', capabilities: ['decisions'] }] });
+    try {
+        const missing = [];
+        assert.equal(await runCheck(['farm'], { servers: { golaya: { url: srv2.url } }, tasks: { farm: { enabled: true, server: 'golaya', model: 'farm' } } }, l => missing.push(l)), 1);
+        assert.match(missing.join('\n'), /model "farm" is not served here/);
+    } finally { await srv2.close(); }
     assert.equal(await runCheck(['follow'], { ...config('http://127.0.0.1:9'), tasks: { follow: { ...config('x').tasks.follow, enabled: false, server: 'golaya' } } }, () => {}), 0);
 });
