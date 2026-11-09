@@ -130,6 +130,16 @@ const settings = {
                 "ignore_below": 0.15,  // surely for someone else: ignored
                 "no_llm": false,       // true: chat and unsure messages get a short canned reply, no LLM
                 "log_decisions": true  // bots/<name>/logs/laya-command.jsonl
+            },
+            "farm": {
+                "enabled": false,      // off: !layaFarm says so and does nothing
+                "server": "golaya",
+                "model": "farm-a",
+                "timeout_ms": 300,
+                "min_confidence": 0.5,
+                "step_ms": 500,        // pause between steps that do nothing
+                "max_steps": 400,
+                "log_steps": true      // bots/<name>/logs/laya-farm.jsonl
             }
         }
     },

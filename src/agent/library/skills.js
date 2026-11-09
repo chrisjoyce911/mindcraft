@@ -9,6 +9,8 @@ import { runCraft } from "../laya/craft.js";
 import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
 import { mineWithLaya } from "../laya/mine.js";
 import { ORES as MINE_ORES } from "../laya/mine_state.js";
+import { farmWithLaya } from "../laya/farm.js";
+import { farmDeps } from "../laya/farm_actions.js";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -2351,6 +2353,36 @@ export async function mineOre(bot, ore, count=1) {
         });
         log(bot, r.ok ? `Mined ${r.collected} ${info.drop}.` : `Stopped mining ${ore}: ${r.reason}.`);
         return r.ok;
+    } finally {
+        paused.forEach(m => bot.modes.unpause(m));
+    }
+}
+
+export async function farmWithLayaModel(bot, minutes=5) {
+    /**
+     * Farm nearby with the Laya "farm" decision model (src/agent/laya/farm.js):
+     * harvest, replant, till, water, bone meal and breed, making a hoe, seeds
+     * or a water bucket when needed. Needs the farm task in
+     * settings.decision_models.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} minutes, how long to farm.
+     * @returns {Promise<boolean>} true if farming ran.
+     **/
+    const task = taskSettings('farm');
+    if (!task) {
+        log(bot, 'The Laya farm task is off (settings.decision_models.tasks.farm).');
+        return false;
+    }
+    const paused = ['item_collecting', 'hunting', 'torch_placing', 'unstuck', 'elbow_room'];
+    paused.forEach(m => bot.modes.pause(m));
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        await farmWithLaya(bot, minutes * 60000, {
+            client: laya, task, ...farmDeps(bot),
+            now: () => Date.now(), sleep, log: msg => log(bot, msg),
+            stepLog: `./bots/${bot.username}/logs/laya-farm.jsonl`,
+        });
+        return true;
     } finally {
         paused.forEach(m => bot.modes.unpause(m));
     }
