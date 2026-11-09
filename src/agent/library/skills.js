@@ -5,6 +5,8 @@ import Vec3 from 'vec3';
 import settings from "../../../settings.js";
 import { laya, taskSettings } from "../../models/laya.js";
 import { followWithLaya } from "../laya/follow.js";
+import { runCraft } from "../laya/craft.js";
+import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -2145,3 +2147,132 @@ export async function useToolOn(bot, toolName, targetName) {
     log(bot, `Used ${toolName} on ${block.name}.`);
     return true;
  }
+
+
+// ---- Laya craft (crafting, gathering, storage): see src/agent/laya/craft.js ----
+
+// Names people and the LLM use for things to gather, as laya-go's craft items.
+const LAYA_ALIASES = { iron_ore: 'raw_iron', deepslate_iron_ore: 'raw_iron', coal_ore: 'coal', deepslate_coal_ore: 'coal',
+    diamond_ore: 'diamond', deepslate_diamond_ore: 'diamond', stone: 'cobblestone', seeds: 'wheat_seeds', wood: 'log', logs: 'log' };
+
+// layaItem maps a Minecraft or everyday item name to laya-go's craft item,
+// or null if the craft model doesn't know it.
+export function layaItem(name) {
+    const n = LAYA_ALIASES[name] ?? layaGeneric(name);
+    return LAYA_ITEMS[n] ? n : null;
+}
+
+const countOf = (bot, g) => bot.inventory.items().filter(i => layaGeneric(i.name) === g).reduce((n, i) => n + i.count, 0);
+
+// realName picks a Minecraft name for a generic one from what's carried (or,
+// for logs, the most carried wood): "planks" from the logs carried.
+function realName(bot, g) {
+    const carried = bot.inventory.items().filter(i => layaGeneric(i.name) === g).sort((a, b) => b.count - a.count);
+    if (carried.length) return carried[0].name;
+    if (g === 'planks') {
+        const log = bot.inventory.items().filter(i => layaGeneric(i.name) === 'log').sort((a, b) => b.count - a.count)[0];
+        if (log) return log.name.replace(/_(log|stem)$/, '_planks').replace('_stem_planks', '_planks');
+        return 'oak_planks';
+    }
+    return g;
+}
+
+async function layaGatherBlocks(bot, g, n) {
+    const before = countOf(bot, g);
+    if (g === 'log') {
+        const block = bot.findBlock({ matching: b => b.name.endsWith('_log'), maxDistance: 64 });
+        if (!block) { log(bot, 'No trees nearby.'); return false; }
+        await collectBlock(bot, block.name, n);
+    } else if (g === 'wheat') {
+        const unripe = world.getNearestBlocksWhere(bot, b => b.name === 'wheat' && b.getProperties?.().age !== 7, 64).map(b => b.position);
+        await collectBlock(bot, 'wheat', n, unripe);
+    } else if (g === 'wheat_seeds') {
+        for (let i = 0; i < 10 * n && countOf(bot, g) - before < n && !bot.interrupt_code; i++)
+            if (!await collectBlock(bot, 'short_grass', 1) && !await collectBlock(bot, 'tall_grass', 1)) break;
+    } else if (g === 'bone') {
+        log(bot, 'Bones come from skeletons: I cannot gather them by mining.');
+        return false;
+    } else {
+        const block = { raw_iron: 'iron_ore', coal: 'coal', diamond: 'diamond' }[g] ?? g;
+        await collectBlock(bot, block, n);
+    }
+    await pickupNearbyItems(bot);
+    return countOf(bot, g) > before;
+}
+
+function layaCraftDeps(bot) {
+    return {
+        client: laya,
+        task: taskSettings('craft'),
+        items: () => bot.inventory.items(),
+        near: () => ({
+            table: !!world.getNearestBlock(bot, 'crafting_table', 16),
+            furnace: !!world.getNearestBlock(bot, 'furnace', 16),
+            chest: !!world.getNearestBlock(bot, 'chest', 32),
+        }),
+        readChest: async () => {
+            const chest = world.getNearestBlock(bot, 'chest', 32);
+            if (!chest) return null;
+            try {
+                await goToPosition(bot, chest.position.x, chest.position.y, chest.position.z, 2);
+                const c = await bot.openContainer(chest);
+                const out = {};
+                for (const it of c.containerItems()) out[layaGeneric(it.name)] = (out[layaGeneric(it.name)] || 0) + it.count;
+                await c.close();
+                return out;
+            } catch { return null; }
+        },
+        act: {
+            gather: (g, n) => layaGatherBlocks(bot, g, n),
+            craft: async (g, times) => {
+                const before = countOf(bot, g);
+                await craftRecipe(bot, realName(bot, g), times);
+                return countOf(bot, g) > before;
+            },
+            smelt: async (g, n) => {
+                const before = countOf(bot, g);
+                await smeltItem(bot, realName(bot, LAYA_ITEMS[g].source), n);
+                return countOf(bot, g) > before;
+            },
+            place: async g => {
+                const pos = world.getNearestFreeSpace(bot, 1, 8);
+                if (!pos) return false;
+                return await placeBlock(bot, g, pos.x, pos.y, pos.z);
+            },
+            take: async (g, n) => {
+                const chest = world.getNearestBlock(bot, 'chest', 32);
+                if (!chest) return false;
+                let name = g;
+                if (g === 'log' || g === 'planks') {
+                    await goToPosition(bot, chest.position.x, chest.position.y, chest.position.z, 2);
+                    const c = await bot.openContainer(chest);
+                    name = c.containerItems().find(i => layaGeneric(i.name) === g)?.name ?? g;
+                    await c.close();
+                }
+                return await takeFromChest(bot, name, n);
+            },
+            store: async (name, n) => {
+                const total = bot.inventory.items().filter(i => i.name === name).reduce((s, i) => s + i.count, 0);
+                if (!total) return false;
+                return await putInChest(bot, name, n === -1 ? total : Math.min(n, total));
+            },
+        },
+        log: msg => log(bot, msg),
+        stepLog: `./bots/${bot.username}/logs/laya-craft.jsonl`,
+        interrupted: () => !!bot.interrupt_code,
+    };
+}
+
+// layaMake makes (or gathers) count of item with the Laya craft model, and
+// returns {ok, reason, steps}. Other skills call it to make what they lack.
+// item may be a Minecraft name ("oak_planks", "iron_ore") or laya-go's
+// generic one ("planks", "raw_iron").
+export async function layaMake(bot, item, count = 1) {
+    const g = layaItem(item);
+    if (!g) return { ok: false, reason: `the craft model doesn't know ${item}`, steps: 0 };
+    if (!taskSettings('craft')) return { ok: false, reason: 'the craft task is off (settings.decision_models.tasks.craft)', steps: 0 };
+    const target = countOf(bot, g) + count;
+    const r = await runCraft(g, target, layaCraftDeps(bot));
+    log(bot, r.ok ? `Laya craft: made ${item} in ${r.steps} steps.` : `Laya craft stopped after ${r.steps} steps: ${r.reason}.`);
+    return r;
+}

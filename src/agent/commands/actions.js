@@ -264,6 +264,28 @@ export const actionsList = [
         }, false, 10) // 10 minute timeout
     },
     {
+        name: '!layaCraft',
+        description: 'Make an item from scratch with the Laya craft model: it gathers, smelts, places stations and crafts every step needed, storing junk in a chest when the inventory is full.',
+        params: {
+            'item_name': { type: 'string', description: 'The item to make, e.g. iron_pickaxe, torch, chest, bread.' },
+            'num': { type: 'int', description: 'How many items to have made.', domain: [1, 64] }
+        },
+        perform: runAsAction(async (agent, item_name, num) => {
+            await skills.layaMake(agent.bot, item_name, num);
+        }, false, 20)
+    },
+    {
+        name: '!layaGather',
+        description: 'Gather resources with the Laya craft model, making any tool needed first (e.g. a stone pickaxe for iron), storing junk in a chest when full.',
+        params: {
+            'item_name': { type: 'string', description: 'What to gather: log, cobblestone, coal, raw_iron (iron ore), diamond, sand, wheat, wheat_seeds.' },
+            'num': { type: 'int', description: 'How many to gather.', domain: [1, 64] }
+        },
+        perform: runAsAction(async (agent, item_name, num) => {
+            await skills.layaMake(agent.bot, item_name, num);
+        }, false, 20)
+    },
+    {
         name: '!craftRecipe',
         description: 'Craft the given recipe a given number of times.',
         params: {
