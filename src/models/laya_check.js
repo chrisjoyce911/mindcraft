@@ -53,6 +53,7 @@ export async function run(args, config = settings.decision_models, out = console
     let status = 0;
     for (const task of tasks) {
         const r = await client.check(task, loadSample(task, config?.tasks?.[task]?.prompt));
+        if (r.reachable && r.model && !r.error && !r.models.includes(r.model)) r.error = `model "${r.model}" is not served here`;
         out(formatReport(r));
         if (r.enabled && (r.error || !r.reachable)) status = 1;
         if (!config?.tasks?.[task]) status = 1;
