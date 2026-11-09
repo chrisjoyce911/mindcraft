@@ -111,6 +111,16 @@ export const actionsList = [
         }, true)
     },
     {
+        name: '!layaFarm',
+        description: 'Farm nearby with the Laya farm model for some minutes: harvest ripe crops, replant, till, water, bone meal and breed animals, making a hoe, seeds or a water bucket when needed.',
+        params: {
+            'minutes': {type: 'float', description: 'How long to farm.', domain: [0.5, 60]}
+        },
+        perform: runAsAction(async (agent, minutes) => {
+            await skills.farmWithLayaModel(agent.bot, minutes);
+        })
+    },
+    {
         name: '!goToCoordinates',
         description: 'Go to the given x, y, z location.',
         params: {

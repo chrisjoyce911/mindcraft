@@ -5,6 +5,8 @@ import Vec3 from 'vec3';
 import settings from "../../../settings.js";
 import { laya, taskSettings } from "../../models/laya.js";
 import { followWithLaya } from "../laya/follow.js";
+import { farmWithLaya } from "../laya/farm.js";
+import { farmDeps } from "../laya/farm_actions.js";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -2145,3 +2147,34 @@ export async function useToolOn(bot, toolName, targetName) {
     log(bot, `Used ${toolName} on ${block.name}.`);
     return true;
  }
+
+
+export async function farmWithLayaModel(bot, minutes=5) {
+    /**
+     * Farm nearby with the Laya "farm" decision model (src/agent/laya/farm.js):
+     * harvest, replant, till, water, bone meal and breed, making a hoe, seeds
+     * or a water bucket when needed. Needs the farm task in
+     * settings.decision_models.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} minutes, how long to farm.
+     * @returns {Promise<boolean>} true if farming ran.
+     **/
+    const task = taskSettings('farm');
+    if (!task) {
+        log(bot, 'The Laya farm task is off (settings.decision_models.tasks.farm).');
+        return false;
+    }
+    const paused = ['item_collecting', 'hunting', 'torch_placing', 'unstuck', 'elbow_room'];
+    paused.forEach(m => bot.modes.pause(m));
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        await farmWithLaya(bot, minutes * 60000, {
+            client: laya, task, ...farmDeps(bot),
+            now: () => Date.now(), sleep, log: msg => log(bot, msg),
+            stepLog: `./bots/${bot.username}/logs/laya-farm.jsonl`,
+        });
+        return true;
+    } finally {
+        paused.forEach(m => bot.modes.unpause(m));
+    }
+}

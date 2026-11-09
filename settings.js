@@ -88,6 +88,16 @@ const settings = {
                 "check_ms": 2000,      // how often to ask
                 "fallback_ms": 10000,  // auto-eat runs this long after a fallback
                 "log_steps": true      // bots/<name>/logs/laya-eat.jsonl
+            },
+            "farm": {
+                "enabled": false,      // off: !layaFarm says so and does nothing
+                "server": "golaya",
+                "model": "farm-a",
+                "timeout_ms": 300,
+                "min_confidence": 0.5,
+                "step_ms": 500,        // pause between steps that do nothing
+                "max_steps": 400,
+                "log_steps": true      // bots/<name>/logs/laya-farm.jsonl
             }
         }
     },
