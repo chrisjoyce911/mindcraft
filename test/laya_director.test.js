@@ -7,7 +7,7 @@ import { JobStack, Director, decide, directorState, nextActivity, ACTIVITIES, QU
 
 const calm = { job: null, paused: null, health: 20, food: 20, armed: 'sword', armor: 0, hostiles: 0, nearest: null,
     light: 15, night: false, under: false, free: 20, home: 40, valuables: 0, foodItems: 3, danger: 'none', last: 'none' };
-const mine = { kind: 'mine', item: 'iron', left: 6 };
+const mine = { kind: 'mine', item: 'iron_ore', left: 6 };
 const s = x => ({ ...calm, ...x });
 
 test('answers are the spec words in its order', () => {
@@ -19,7 +19,7 @@ test('directorState: the spec lines in order', () => {
     const text = directorState(s({ job: mine, paused: 'farm', health: 14.4, food: 17, armor: 7, hostiles: 2,
         nearest: { kind: 'zombie', dist: 5 }, light: 7, night: true, under: true, free: 10, home: 140, valuables: 7, foodItems: 4, danger: 'fall', last: 'interrupted' }));
     assert.equal(text, ['Director.',
-        'Job mine iron left 6',
+        'Job mine iron_ore left 6',
         'Paused farm',
         'Health 14 Food 17 Armed sword Armor 7',
         'Hostiles 2 Nearest zombie 5',
@@ -36,42 +36,51 @@ test('directorState: the spec lines in order', () => {
     assert.equal(directorState(s({ job: { kind: 'farm', item: 'any', left: 'any' } })).split('\n')[1], 'Job farm any left any');
 });
 
-test('decide: the spec rules in priority order', () => {
+test('decide: the spec v1.1 rules in priority order, with laya-go rule names', () => {
     const z = d => ({ hostiles: 1, nearest: { kind: 'zombie', dist: d } });
-    // 1
-    for (const d of ['fluid', 'fire', 'drowning']) assert.deepEqual(decide(s({ danger: d, ...z(3) })), { activity: 'flee', rule: 1 });
+    for (const d of ['fluid', 'fire', 'drowning']) assert.deepEqual(decide(s({ danger: d, ...z(3) })), { activity: 'flee', rule: 'flee-danger' });
     assert.notEqual(decide(s({ danger: 'fall' })).activity, 'flee');
-    // 2
-    assert.deepEqual(decide(s({ ...z(4), health: 6 })), { activity: 'flee', rule: 2 });
-    assert.deepEqual(decide(s({ ...z(4), health: 10, armed: 'none' })), { activity: 'flee', rule: 2 });
-    assert.deepEqual(decide(s({ hostiles: 1, nearest: { kind: 'creeper', dist: 3 } })), { activity: 'flee', rule: 2 });
-    // 3
-    assert.deepEqual(decide(s({ ...z(4), health: 10 })), { activity: 'defend', rule: 3 });
-    assert.deepEqual(decide(s({ ...z(8) })), { activity: 'defend', rule: 3 });
-    assert.deepEqual(decide(s({ hostiles: 1, nearest: { kind: 'creeper', dist: 5 } })), { activity: 'defend', rule: 3 });
-    // 4
-    assert.deepEqual(decide(s({ health: 8, job: mine })), { activity: 'heal', rule: 4 });
-    assert.deepEqual(decide(s({ ...z(9), health: 8 })), { activity: 'heal', rule: 4 });
-    assert.notEqual(decide(s({ ...z(6), health: 6 })).activity, 'heal', 'a mob within 8: no heal');
-    // 5
-    assert.deepEqual(decide(s({ food: 6, job: mine })), { activity: 'eat', rule: 5 });
+    assert.deepEqual(decide(s({ ...z(4), health: 6 })), { activity: 'flee', rule: 'flee-hostile' });
+    assert.deepEqual(decide(s({ ...z(4), health: 10, armed: 'none' })), { activity: 'flee', rule: 'flee-hostile' });
+    assert.deepEqual(decide(s({ hostiles: 1, nearest: { kind: 'creeper', dist: 3 } })), { activity: 'flee', rule: 'flee-creeper' });
+    // v1.1: within 8 at health 6 or less: flee
+    assert.deepEqual(decide(s({ ...z(7), health: 6 })), { activity: 'flee', rule: 'flee-hostile' });
+    assert.deepEqual(decide(s({ ...z(4), health: 10 })), { activity: 'defend', rule: 'defend' });
+    assert.deepEqual(decide(s({ ...z(8) })), { activity: 'defend', rule: 'defend' });
+    assert.deepEqual(decide(s({ health: 8, job: mine })), { activity: 'heal', rule: 'heal' });
+    assert.deepEqual(decide(s({ ...z(9), health: 8 })), { activity: 'heal', rule: 'heal' });
+    assert.deepEqual(decide(s({ food: 6, job: mine })), { activity: 'eat', rule: 'eat-hungry' });
     assert.equal(decide(s({ food: 6, foodItems: 0, job: mine })).activity, 'continue');
-    // 6
-    assert.deepEqual(decide(s({ free: 2, home: 300, job: mine })), { activity: 'unload', rule: 6 });
-    assert.deepEqual(decide(s({ free: 6, home: 24, job: mine })), { activity: 'unload', rule: 6 });
+    assert.deepEqual(decide(s({ free: 2, home: 300, job: mine })), { activity: 'unload', rule: 'unload-full' });
+    assert.deepEqual(decide(s({ free: 6, home: 24, job: mine })), { activity: 'unload', rule: 'unload-near' });
+    assert.deepEqual(decide(s({ free: 6, home: 24, paused: 'mine' })), { activity: 'unload', rule: 'unload-near' }, 'paused counts');
     assert.equal(decide(s({ free: 6, home: 25, job: mine })).activity, 'continue');
-    assert.deepEqual(decide(s({ valuables: 4, hostiles: 2, nearest: { kind: 'zombie', dist: 12 }, job: mine })), { activity: 'unload', rule: 6 });
+    assert.deepEqual(decide(s({ valuables: 4, hostiles: 2, nearest: { kind: 'zombie', dist: 12 }, job: mine })), { activity: 'unload', rule: 'unload-valuables' });
     assert.equal(decide(s({ free: 0, home: null, job: mine })).activity, 'continue', 'no home: no unload');
-    // 7
-    assert.deepEqual(decide(s({ paused: 'mine' })), { activity: 'resume', rule: 7 });
-    // 8
-    assert.deepEqual(decide(s({ job: mine, last: 'interrupted' })), { activity: 'continue', rule: 8 });
-    // 9
-    assert.deepEqual(decide(s({ job: mine, last: 'failed', paused: 'farm' })), { activity: 'resume', rule: 9 });
-    assert.deepEqual(decide(s({ job: mine, last: 'blocked' })), { activity: 'idle', rule: 9 });
-    // 10
-    assert.deepEqual(decide(calm), { activity: 'idle', rule: 10 });
-    assert.deepEqual(decide(s({ food: 17, health: 19 })), { activity: 'eat', rule: 10 });
+    // v1.1: never unload while idle (unload-home-chest's setup)
+    assert.deepEqual(decide(s({ free: 4, home: 3 })), { activity: 'idle', rule: 'idle' });
+    assert.deepEqual(decide(s({ paused: 'mine' })), { activity: 'resume', rule: 'resume-paused' });
+    assert.deepEqual(decide(s({ job: mine, last: 'interrupted' })), { activity: 'continue', rule: 'continue' });
+    assert.deepEqual(decide(s({ job: mine, last: 'failed', paused: 'farm' })), { activity: 'resume', rule: 'resume-failed' });
+    assert.deepEqual(decide(s({ job: mine, last: 'blocked' })), { activity: 'idle', rule: 'idle-failed' });
+    assert.deepEqual(decide(s({ job: mine, last: 'blocked', food: 17, health: 19 })), { activity: 'eat', rule: 'eat-idle' });
+    assert.deepEqual(decide(calm), { activity: 'idle', rule: 'idle' });
+    assert.deepEqual(decide(s({ food: 17, health: 19 })), { activity: 'eat', rule: 'eat-idle' });
+});
+
+test('golden: the director request matches laya-go v1_sample_request.json byte for byte', () => {
+    const golden = JSON.parse(readFileSync(new URL('./fixtures/laya-director-v1/request.json', import.meta.url), 'utf8'));
+    // laya-go's sample: mining iron underground (6 left), a zombie 6 off, pack nearly full, home 18
+    const st = new JobStack();
+    st.start('layaMine', ['iron', 9], { remaining: () => 6 });
+    const text = directorState({ job: st.running(), paused: st.pausedKind(), health: 14, food: 12, armed: 'sword', armor: 8,
+        hostiles: 2, nearest: { kind: 'zombie', dist: 6 }, light: 4, night: false, under: true, free: 5, home: 18, valuables: 3,
+        foodItems: 4, danger: 'none', last: 'none' });
+    assert.equal(text, golden.state);
+    assert.equal(JSON.stringify({ questions: QUESTIONS, state: text }), JSON.stringify(golden));
+    assert.equal(QUESTIONS.Activity.instructions, 'What should I do now?');
+    assert.deepEqual(Object.keys(QUESTIONS), ['Activity']);
+    assert.ok(!ACTIVITIES.includes('unstuck'));
 });
 
 test('situation helpers', () => {
@@ -122,7 +131,7 @@ test('nextActivity: rules, or a confident model', async () => {
     let d = await nextActivity(s({ job: mine }));
     assert.equal(d.activity, 'continue');
     assert.equal(d.source, 'rules');
-    assert.match(d.state, /^Director\.\nJob mine iron left 6/);
+    assert.match(d.state, /^Director\.\nJob mine iron_ore left 6/);
     const client = { decide: async (task, text, q) => {
         assert.equal(task, 'director'); assert.deepEqual(q, QUESTIONS);
         return { answers: { Activity: { top: 'unload', topProbability: 0.9, confident: true } } };
@@ -167,4 +176,14 @@ test('Director: a mode pauses the job, resume after, heal pauses it, logs each d
     assert.ok(lines.some(l => l.event === 'resume-done'), 'a decision after the resume ends');
     assert.equal(ours[2].source, 'rules');
     assert.match(lines[0].state, /^Director\./);
+});
+
+test('itemWord: laya-go director item words', async () => {
+    const { itemWord } = await import('../src/agent/laya/director.js');
+    assert.equal(itemWord('mine', 'iron'), 'iron_ore');
+    assert.equal(itemWord('mine', 'lapis'), 'lapis_ore');
+    assert.equal(itemWord('farm', 'any'), 'none');
+    assert.equal(itemWord('farm', 'wheat'), 'wheat');
+    assert.equal(itemWord('craft', 'stone_pickaxe'), 'stone_pickaxe');
+    assert.equal(itemWord('follow', null), 'none');
 });

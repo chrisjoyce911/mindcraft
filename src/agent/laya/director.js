@@ -1,10 +1,13 @@
 // The director: the job stack and the one decision point for what andy does
 // next (nextActivity). Pure (no mineflayer), tested with fakes.
 //
-// It follows the shared director spec (Mindcraft decision point ↔ laya-go
-// director model): the same state text, the same answer words and the same
-// rules in the same order, so the laya-go director model can replace the
-// rules (decision_models.tasks.director) with no code change.
+// It follows the shared director spec v1.1 (Mindcraft decision point ↔
+// laya-go director model, games/director): the same state text, the same
+// question and answer words and the same rules (and rule names) in the same
+// order, so the laya-go director model can replace the rules
+// (decision_models.tasks.director) with no code change.
+// test/laya_director.test.js checks the request against laya-go's golden
+// v1_sample_request.json byte for byte.
 //
 // The job stack holds the current Laya job (!layaMine, !layaFarm,
 // !layaCraft, !layaGather) and, when a safety activity (defend, flee, eat,
@@ -20,6 +23,7 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { ORES } from './mine_state.js';
 
 // ACTIVITIES: the Activity question's answers, in the spec's order.
 export const ACTIVITIES = ['continue', 'defend', 'flee', 'eat', 'heal', 'unload', 'resume', 'idle'];
@@ -118,16 +122,27 @@ export class JobStack {
     }
 }
 
+// itemWord is a job's item as laya-go's director names it: a mine job's
+// ore block (iron → iron_ore), a farm of any crop none.
+export function itemWord(kind, item) {
+    if (item == null || item === '' || item === 'any') return NONE;
+    if (kind === 'mine' && ORES[item]) return ORES[item].blocks[0];
+    return String(item).toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+}
+
 // jobView is a job as the Job line shows it.
 export function jobView(j) {
     const rem = typeof j.remaining === 'function' ? j.remaining() : null;
     const n = j.args?.[1];
     const left = rem != null ? Math.max(0, rem) : n == null || n === 'any' ? 'any' : Number.isFinite(+n) ? +n : 'any';
-    return { kind: j.kind, item: j.item, left };
+    return { kind: j.kind, item: itemWord(j.kind, j.item), left };
 }
 
-const word = v => (v == null || v === '' ? 'none' : String(v).replace(/\s+/g, '_'));
+const NONE = 'none';
+const word = v => (v == null || v === '' ? NONE : String(v).replace(/\s+/g, '_'));
 const cap = (n, c) => Math.max(0, Math.min(c, Math.round(n)));
+// laya-go's caps: MaxLeft 999, MaxValuables 99, MaxFood (food items) 99
+const left = l => (l === 'any' ? 'any' : cap(l, 999));
 
 // directorState writes the situation as the spec's state text. s:
 //   job {kind, item, left} | null, paused (kind) | null,
@@ -140,47 +155,45 @@ export function directorState(s) {
     const near = s.nearest && s.hostiles > 0
         ? `${NEAREST_KINDS.includes(s.nearest.kind) ? s.nearest.kind : 'other'} ${cap(s.nearest.dist, 16)}` : 'none none';
     return ['Director.',
-        `Job ${kind || 'none'} ${kind ? word(j.item) : 'none'} left ${kind ? j.left : 0}`,
+        `Job ${kind || 'none'} ${kind ? word(j.item) : 'none'} left ${kind ? left(j.left) : 0}`,
         `Paused ${JOB_KINDS.includes(s.paused) ? s.paused : 'none'}`,
         `Health ${cap(s.health, 20)} Food ${cap(s.food, 20)} Armed ${s.armed || 'none'} Armor ${cap(s.armor || 0, 20)}`,
         `Hostiles ${cap(s.hostiles, 9)} Nearest ${near}`,
         `Light ${cap(s.light, 15)} Night ${s.night ? 'yes' : 'no'} Under ${s.under ? 'yes' : 'no'}`,
-        `Pack ${cap(s.free, 36)} Home ${s.home == null ? 'none' : cap(s.home, 99)} Valuables ${Math.max(0, s.valuables || 0)}`,
-        `Food items ${Math.max(0, s.foodItems || 0)}`,
+        `Pack ${cap(s.free, 36)} Home ${s.home == null ? 'none' : cap(s.home, 99)} Valuables ${cap(s.valuables || 0, 99)}`,
+        `Food items ${cap(s.foodItems || 0, 99)}`,
         `Danger ${DANGERS.includes(s.danger) ? s.danger : 'none'}`,
         `Last ${LASTS.includes(s.last) ? s.last : 'none'}`,
     ].join('\n');
 }
 
-// decide is the spec's rules, in order: {activity, rule (its number)}.
+// RULES are the rule names, in order (laya-go games/director/rules).
+export const RULES = ['flee-danger', 'flee-hostile', 'flee-creeper', 'defend', 'heal', 'eat-hungry', 'unload-full', 'unload-near',
+    'unload-valuables', 'resume-paused', 'continue', 'resume-failed', 'idle-failed', 'eat-idle', 'idle'];
+
+// decide is the spec's rules (v1.1), in order: {activity, rule}.
 export function decide(s) {
-    const near = s.hostiles > 0 && s.nearest ? Math.min(s.nearest.dist, 16) : null;
-    const jobNone = !s.job, pausedNone = !s.paused;
-    // 1
-    if (s.danger === 'fluid' || s.danger === 'fire' || s.danger === 'drowning') return { activity: 'flee', rule: 1 };
-    // 2
-    if (near != null && near <= 4 && (s.health <= 6 || (s.armed === 'none' && s.health <= 10))) return { activity: 'flee', rule: 2 };
-    if (near != null && s.nearest.kind === 'creeper' && near <= 3) return { activity: 'flee', rule: 2 };
-    // 3
-    if (near != null && near <= 8 && s.health > 6) return { activity: 'defend', rule: 3 };
-    // 4
-    if (s.health <= 8 && !(near != null && near <= 8)) return { activity: 'heal', rule: 4 };
-    // 5
-    if (s.food <= 6 && s.foodItems > 0) return { activity: 'eat', rule: 5 };
-    // 6
-    const home = s.home;
-    if (home != null && (s.free <= 2 || (s.free <= 6 && home <= 24)
-        || (s.valuables >= 4 && (s.health <= 8 || s.hostiles >= 2 || s.food <= 6)))) return { activity: 'unload', rule: 6 };
-    // 7
-    if (jobNone && !pausedNone) return { activity: 'resume', rule: 7 };
+    const within = d => s.hostiles > 0 && !!s.nearest && Math.min(s.nearest.dist, 16) <= d;
+    const r = (activity, rule) => ({ activity, rule });
+    const job = !!s.job, paused = !!s.paused, home = s.home != null;
+    if (s.danger === 'fluid' || s.danger === 'fire' || s.danger === 'drowning') return r('flee', 'flee-danger');
+    if (within(4) && (s.health <= 6 || (s.armed === 'none' && s.health <= 10))) return r('flee', 'flee-hostile');
+    if (within(3) && s.nearest.kind === 'creeper') return r('flee', 'flee-creeper');
+    if (within(8) && s.health <= 6) return r('flee', 'flee-hostile'); // v1.1
+    if (within(8) && s.health > 6) return r('defend', 'defend');
+    if (s.health <= 8 && !within(8)) return r('heal', 'heal');
+    if (s.food <= 6 && s.foodItems > 0) return r('eat', 'eat-hungry');
+    if (job || paused) { // v1.1: never unload while idle
+        if (s.free <= 2 && home) return r('unload', 'unload-full');
+        if (s.free <= 6 && home && s.home <= 24) return r('unload', 'unload-near');
+        if (s.valuables >= 4 && (s.health <= 8 || s.hostiles >= 2 || s.food <= 6) && home) return r('unload', 'unload-valuables');
+    }
     const stuck = s.last === 'failed' || s.last === 'blocked';
-    // 8
-    if (!jobNone && !stuck) return { activity: 'continue', rule: 8 };
-    // 9
-    if (!jobNone && stuck) return { activity: pausedNone ? 'idle' : 'resume', rule: 9 };
-    // 10 (rule 5's "nothing else to do": eat when not full)
-    if (s.food < 18 && s.health < 20 && s.foodItems > 0) return { activity: 'eat', rule: 10 };
-    return { activity: 'idle', rule: 10 };
+    if (!job && paused) return r('resume', 'resume-paused');
+    if (job && !stuck) return r('continue', 'continue');
+    if (job && paused) return r('resume', 'resume-failed');
+    if (s.food < 18 && s.health < 20 && s.foodItems > 0) return r('eat', 'eat-idle');
+    return job ? r('idle', 'idle-failed') : r('idle', 'idle');
 }
 
 // nextActivity is the decision point: the director model when deps.client

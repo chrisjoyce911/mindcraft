@@ -25,11 +25,12 @@ regenerate in a safe spot), `unload`, `resume` (pop the paused job), `idle`.
 
 ## Rules (priority order; the generator labels with these)
 1. Danger fluid/fire/drowning → `flee`.
-2. Hostiles, nearest ≤ 4, and (Health ≤ 6 or Armed none and Health ≤ 10) → `flee`; creeper nearest ≤ 3 → `flee`.
+2. Hostiles, nearest ≤ 4, and (Health ≤ 6 or Armed none and Health ≤ 10) → `flee`; creeper nearest ≤ 3 → `flee`;
+   Hostiles, nearest ≤ 8 and Health ≤ 6 → `flee` (v1.1).
 3. Hostiles, nearest ≤ 8 (Health > 6) → `defend`.
 4. Health ≤ 8, no hostiles within 8 → `heal` (eat if Food < 18 and food items > 0, then wait).
 5. Food ≤ 6 and food items > 0 → `eat`. (Food < 18 and Health < 20 and nothing else to do → `eat`.)
-6. Pack ≤ 2 and Home not none → `unload`; Pack ≤ 6 and Home ≤ 24 → `unload`;
+6. Only when Job or Paused is not none (v1.1: never unload while idle): Pack ≤ 2 and Home not none → `unload`; Pack ≤ 6 and Home ≤ 24 → `unload`;
    Valuables ≥ 4 and (Health ≤ 8 or Hostiles ≥ 2 or Food ≤ 6) and Home not none → `unload`.
 7. Job none and Paused not none → `resume`.
 8. Job not none and Last not failed/blocked → `continue`.
@@ -39,3 +40,8 @@ regenerate in a safe spot), `unload`, `resume` (pop the paused job), `idle`.
 Mindcraft pushes the current job onto Paused when it runs defend/flee/eat/heal/unload, and the director answers
 `resume` once the safety activity ends (Job none). A player command replaces Job; "stop" clears Job and Paused.
 Log each decision to `bots/<name>/logs/laya-director.jsonl` (time, state, answer, source rules|model, p).
+
+## v1.1 (2026-11-10 19:20)
+Flee within 8 at Health ≤ 6; rule 6 (unload) only with a job running or paused. The laya-go sample request
+`games/director/prompt/testdata/v1_sample_request.json` is the golden format: Mindcraft has a unit test that builds the same state
+and request byte for byte (Job none none left 0; Hostiles 0 Nearest none none; question "What should I do now?").
