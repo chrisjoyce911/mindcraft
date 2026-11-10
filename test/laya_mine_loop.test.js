@@ -595,7 +595,7 @@ test('pickOre: ore under a thin cave roof is not surface ore', () => {
     assert.equal(pickOre([{ x: 162, y: 69, z: 141 }], opts), null);
 });
 
-test('v2: every plan step unsafe (water below): restart once heading back, then stop, never loop', async () => {
+test('v2: every plan step unsafe (a cave below): new staircases from the entrance, then stop, never loop', async () => {
     // no floor anywhere at Y 19 except a thin shelf to the south: each plan
     // step is vetoed and the detour south abandons the segment
     const blocks = {};
@@ -605,18 +605,18 @@ test('v2: every plan step unsafe (water below): restart once heading back, then 
     const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.equal(r.ok, false);
     assert.match(r.reason, /unsafe \(water or caves\)/);
-    assert.equal(r.counters.restarts, 1);
-    assert.ok(r.counters.abandoned <= 17, `gave up after ${r.counters.abandoned} abandons`);
+    assert.equal(r.counters.restarts, 3, 'back, right and left from the entrance');
+    assert.ok(r.counters.abandoned <= 40, `gave up after ${r.counters.abandoned} abandons`);
 });
 
-test('v2: a blocked staircase starts once more heading back before giving up', async () => {
+test('v2: a blocked staircase starts again from the entrance in an untried heading', async () => {
     // a hollow under every stair cell to the east from Y 60: shifts run out
     const blocks = {};
     for (let x = 1; x <= 12; x++) for (let z = -6; z <= 6; z++) for (let y = 40; y <= 57; y++) blocks[`${x},${y},${z}`] = 'air';
     const s = v2({ y: 60, steps: 60, blocks });
     const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
-    assert.equal(r.counters.restarts, 1, 'one new staircase');
+    assert.ok(r.counters.restarts >= 1, 'a new staircase');
+    const restart = s.calls.logs.find(l => /a new staircase from the entrance/.test(l));
+    assert.match(restart, /entrance 0 60 0, heading W\./, 'from the entrance, back from the plan heading E');
     assert.ok(s.calls.moves.some(([x, y]) => x < 0 && y < 60), 'heading west, going down');
-    const restart = s.calls.logs.find(l => /starting the mine again/.test(l));
-    assert.match(restart, /heading W\./, 'back from the plan heading E, whatever the last move was');
 });
