@@ -47,6 +47,25 @@ export function floods(blockAt, pos) {
     return false;
 }
 
+// until polls cond (every 100 ms) until it holds or ms pass, and returns
+// whether it held: the world and inventory update a moment after an action.
+export async function until(cond, ms = 1500, sleep = t => new Promise(r => setTimeout(r, t))) {
+    for (let waited = 0; ; waited += 100) {
+        if (cond()) return true;
+        if (waited >= ms) return false;
+        await sleep(100);
+    }
+}
+
+// pourInto pours the held water bucket into the hole at pos: look at the
+// top of the block below it and use the item, as skills.useToolOn does (a
+// bucket is an item use, not a block activation). True when water is there.
+export async function pourInto(bot, pos) {
+    await bot.lookAt(pos.offset(0.5, 0.05, 0.5), true);
+    bot.activateItem();
+    return await until(() => bot.blockAt(pos)?.name === 'water');
+}
+
 function animalsNear(bot) {
     return Object.values(bot.entities)
         .filter(e => KINDS.includes(e.name) && e.position)
@@ -114,16 +133,14 @@ export function farmDeps(bot, radius = 64) {
             if (floods(blockAt, ground)) return false;
             await bot.dig(bot.blockAt(ground));
             if (!await equipItem('water_bucket')) return false;
-            await bot.activateBlock(bot.blockAt(ground.offset(0, -1, 0)), new Vec3(0, 1, 0));
-            return true;
+            return await pourInto(bot, ground);
         case 'pond': { // a 1-block hole in dry ground, filled from the bucket
             if (floods(blockAt, ground)) return false;
             const above = bot.blockAt(crop);
             if (above && above.name !== 'air') await bot.dig(above); // grass or a flower on top
             await bot.dig(bot.blockAt(ground));
             if (!await equipItem('water_bucket')) return false;
-            await bot.activateBlock(bot.blockAt(ground.offset(0, -1, 0)), new Vec3(0, 1, 0));
-            return bot.blockAt(ground)?.name === 'water';
+            return await pourInto(bot, ground);
         }
         case 'bone_meal':
             if (!await equipItem('bone_meal')) return false;
@@ -185,9 +202,10 @@ export async function craftWithSkills(bot, item, count, radius = 64) {
         if (!water) return false;
         if (count_of('bucket') === 0 && !await skills.craftRecipe(bot, 'bucket', 1)) return false;
         await skills.goToPosition(bot, water.position.x, water.position.y, water.position.z, 3);
-        await skills.equip(bot, 'bucket');
-        await bot.activateBlock(water);
-        return count_of('water_bucket') > 0;
+        if (!await skills.equip(bot, 'bucket')) return false;
+        await bot.lookAt(water.position.offset(0.5, 0.5, 0.5), true);
+        bot.activateItem(); // a bucket is an item use, not a block activation
+        return await until(() => count_of('water_bucket') > 0);
     }
     case 'bone_meal':
         return await skills.craftRecipe(bot, 'bone_meal', count);
