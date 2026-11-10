@@ -37,8 +37,8 @@ Phases (each gated by the strict suite and a live play):
 - [ ] command2-v21-c2 / craft2-v21-c2 (Studio): check, serve if better.
 - [ ] Wiki phrasing bank: fix labels and count wording; full Category:Tutorials overnight when the GPU is free (Ollama shares it).
 - [ ] Gap list → v3 command set (place, withdraw, harvest, smelt, build, search…) for the user to choose.
-- [ ] Model share: each test report shows, per task, how many steps the model decided versus rules.
-- [ ] Phase 2: switch off Mindcraft modes one by one as the director model covers them.
+- [x] Model share: each test report shows, per task, how many steps the model decided versus rules (`tools/andy-tests/lib/share.js`; reports, .json rows and MCP results).
+- [ ] Phase 2: switch off Mindcraft modes one by one as the director model covers them (inventory and order: `docs/laya-modes-to-models.md`).
 - [ ] Weakest-first cycling overnight on the v2.1 confs (follow-mobs first).
 
 ## Now: the current test round
