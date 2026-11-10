@@ -581,6 +581,19 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         const planFloor = s.plan && MOVES.has(s.plan.split(' ')[0]) && (unsafe(s.view, s.plan) === 'no floor' || isDrop(s.plan));
         const floorVeto = entry.veto === 'no floor' || entry.veto === 'drop' || dropped.length > 0 || planFloor;
         floorVetoes = floorVeto ? floorVetoes + 1 : 0;
+        // Above the ore's band a level there is no use: the staircase shifts
+        // sideways instead (plan.abandon) and goes on down.
+        if (plan && floorVetoes >= opts.floor_vetoes && s.plan?.startsWith('down') && by > ore.hi && plan.segment?.type === 'stair') {
+            floorVetoes = 0;
+            abandonStreak++;
+            counters.rules['shift-stair'] = (counters.rules['shift-stair'] || 0) + 1;
+            plan.abandon();
+            logStep({ ...entry, action: 'shift-stair', outcome: 'done' });
+            const stuck = unsafeHere(entry);
+            if (stuck) return stuck;
+            await deps.sleep?.(0);
+            continue;
+        }
         if (plan && floorVetoes >= opts.floor_vetoes && s.plan?.startsWith('down') && plan.stopDescent(feet)) {
             floorVetoes = 0;
             abandonStreak++;
