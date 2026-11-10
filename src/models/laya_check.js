@@ -6,7 +6,7 @@
 // it after changing which model answers a task. Exits 1 if an enabled task
 // can't be answered.
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import settings from '../../settings.js';
 import { createLayaClient } from './laya.js';
@@ -16,12 +16,13 @@ export const SAMPLES = {
     follow: new URL('../../test/fixtures/laya-follow-v1/request.json', import.meta.url),
     'follow:v2': new URL('../../test/fixtures/laya-follow-v2/request.json', import.meta.url),
     mine: new URL('../../test/fixtures/laya-mine-v1/request.json', import.meta.url),
+    'mine:v2': new URL('../../test/fixtures/laya-mine-v2/request.json', import.meta.url),
 };
 
 // loadSample returns a task's sample request, matching its prompt version.
 export function loadSample(task, prompt = 'v1') {
     const path = SAMPLES[prompt === 'v1' ? task : `${task}:${prompt}`] ?? SAMPLES[task];
-    if (!path) return null;
+    if (!path || !existsSync(path)) return null;
     const { state, questions } = JSON.parse(readFileSync(path, 'utf8'));
     return { state, questions };
 }

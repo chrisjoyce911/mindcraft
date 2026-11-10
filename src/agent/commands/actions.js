@@ -129,12 +129,12 @@ export const actionsList = [
     },
     {
         name: '!layaMine',
-        description: 'Mine underground until you have the given number of an ore (coal, copper, iron, lapis, gold, redstone or diamond), digging down to its height, tunnelling, placing torches, blocking lava, and crafting the pickaxe and torches it needs.',
+        description: 'Mine underground until you have the given number of an ore (coal, copper, iron, lapis, gold, redstone or diamond): a staircase down to its height and a branch mine there, placing torches, blocking lava, crafting the pickaxe and torches it needs, and emptying a full pack into the home chest (the remembered place "home_chest").',
         params: {
             'ore': {type: 'string', description: 'The ore: coal, copper, iron, lapis, gold, redstone or diamond.'},
             'count': {type: 'int', description: 'How many of the ore to collect.', domain: [1, 64]}
         },
-        perform: runLayaAction('layaMine', (agent, ore, count) => () => skills.mineOre(agent.bot, ore, count))
+        perform: runLayaAction('layaMine', (agent, ore, count) => () => skills.mineOre(agent.bot, ore, count, () => agent.memory_bank.recallPlace('home_chest')))
     },
     {
         name: '!layaFarm',

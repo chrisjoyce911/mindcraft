@@ -1,5 +1,6 @@
 // The mine task's state: the 5×5×5 blocks around the bot read from the world
-// and written as laya-go's mine prompt v1 (games/mine/prompt in laya-go),
+// and written as laya-go's mine prompt v1 or v2 (games/mine/prompt in laya-go;
+// v2 adds the mine plan's next step and the pack and home chest lines),
 // plus a port of laya-go's mine rules (games/mine/rules): which steps are
 // unsafe (the veto) and the best step (the fallback when the model isn't
 // sure). The text must match laya-go byte for byte:
@@ -54,6 +55,25 @@ export const QUESTIONS = {
     Hazard: { criteria: null, instructions: 'Lava or water is next to me.', type: 'noul' },
 };
 
+// QUESTIONS_V2 adds Unload: whether to empty the pack into the home chest.
+export const QUESTIONS_V2 = {
+    ...QUESTIONS,
+    Unload: { criteria: null, instructions: 'I should go and empty my pack into the home chest now.', type: 'noul' },
+};
+
+// MOVE_KINDS are the move steps' kinds, in laya-go's order.
+export const MOVE_KINDS = ['tunnel', 'down', 'up'];
+
+// HOME_CAP caps the home chest distance in prompt v2.
+export const HOME_CAP = 999;
+
+// homeDistance is the straight-line distance to the home chest as prompt v2
+// writes it: rounded up and capped, or null when no home chest is known.
+export function homeDistance(from, home) {
+    if (!home) return null;
+    return Math.min(HOME_CAP, Math.max(1, Math.ceil(Math.hypot(home.x - from.x, home.y - from.y, home.z - from.z))));
+}
+
 // cellOf classifies a block (null when not loaded) for an ore's blocks.
 export function cellOf(block, oreBlocks) {
     if (!block) return 'S';
@@ -98,11 +118,19 @@ export function countOf(inv, names) {
 }
 
 // state writes a situation ({ore, y, pick, torches, blocks, dark, heading,
-// seen, view}) as prompt v1.
+// seen, view}) as prompt v1; with a plan step (s.plan, e.g. 'down N') it
+// writes prompt v2, which adds `Plan <kind> <dir>` and `Pack <free> Home
+// <dist|none> Health <h> Food <f> Hostiles <n> Valuables <v>` after the
+// status line (s.free empty slots, s.home the home chest distance or null,
+// s.health and s.food 0–20, s.hostiles within 16 blocks capped at 9,
+// s.valuables from valuables()).
 export function state(s) {
     const lines = ['Mine.',
-        `Ore ${s.ore} Y ${s.y} Pick ${TIERS[s.pick]} Torches ${s.torches} Blocks ${s.blocks} Dark ${s.dark} Heading ${s.heading}`,
-        s.seen > 0 ? `Seen ${s.seen}` : 'Seen none'];
+        `Ore ${s.ore} Y ${s.y} Pick ${TIERS[s.pick]} Torches ${s.torches} Blocks ${s.blocks} Dark ${s.dark} Heading ${s.heading}`];
+    if (s.plan) lines.push(`Plan ${s.plan}`,
+        `Pack ${s.free} Home ${s.home == null ? 'none' : Math.min(s.home, HOME_CAP)} Health ${s.health} Food ${s.food} ` +
+        `Hostiles ${Math.min(s.hostiles, HOSTILES_CAP)} Valuables ${Math.min(s.valuables, VALUABLES_CAP)}`);
+    lines.push(s.seen > 0 ? `Seen ${s.seen}` : 'Seen none');
     for (let z = 0; z < SIZE; z++) lines.push(s.view.map(layer => layer[z].join('')).join(' '));
     return lines.join('\n');
 }
@@ -160,13 +188,39 @@ export function hazard(view) {
     return false;
 }
 
-// decide is laya-go's rules.Decide: the best step and its rule.
+// VALUABLES count fully in prompt v2's Valuables; coal counts half.
+export const VALUABLES = ['diamond', 'emerald', 'raw_iron', 'iron_ingot', 'raw_gold', 'gold_ingot', 'raw_copper', 'redstone', 'lapis_lazuli'];
+export const HOSTILES_CAP = 9, VALUABLES_CAP = 999;
+
+// valuables is prompt v2's Valuables for an inventory ({name: count}).
+export function valuables(inv) {
+    return Math.min(VALUABLES_CAP, countOf(inv, VALUABLES) + Math.floor((inv.coal || 0) / 2));
+}
+
+// unload is laya-go's v2 Unload truth: a home chest is known and no lava or
+// water touches the bot, and the pack is full, or nearly full with home
+// close, or it carries valuables while in danger (hurt, hungry or mobs).
+export function unload(s) {
+    if (s.home == null || touching(s.view).length) return false;
+    if (s.free <= 2) return true;
+    if (s.free <= 6 && s.home <= 24) return true;
+    return s.valuables >= 4 && (s.health <= 8 || s.hostiles >= 2 || s.food <= 6);
+}
+
+const RIGHT = d => DIRS[(DIRS.indexOf(d) + 1) % 4];
+const LEFT = d => DIRS[(DIRS.indexOf(d) + 3) % 4];
+const BACK = d => DIRS[(DIRS.indexOf(d) + 2) % 4];
+export { RIGHT as rightOf, LEFT as leftOf, BACK as backOf };
+
+// decide is laya-go's rules.Decide: the best step and its rule. With a plan
+// step (prompt v2) rule 5 follows the plan when it is safe, else detours.
 export function decide(s) {
     const ore = ORES[s.ore];
     if (!ore || s.pick < ore.tier) return { action: 'stop', rule: 'need-pickaxe' };
     if (touching(s.view).length && s.blocks > 0) return { action: 'block', rule: 'block-fluid' };
     if (s.seen > 0) return { action: 'collect', rule: 'collect' };
     if (s.dark >= TORCH_EVERY && s.torches > 0) return { action: 'torch', rule: 'torch' };
+    if (s.plan) return followPlan(s);
     let want = 'tunnel', rule = 'branch-mine', order = ['tunnel', 'down', 'up'];
     if (s.y > ore.hi) [want, rule, order] = ['down', 'go-down', ['down', 'tunnel', 'up']];
     else if (s.y < ore.lo) [want, rule, order] = ['up', 'go-up', ['up', 'tunnel', 'down']];
@@ -179,6 +233,20 @@ export function decide(s) {
             if (unsafe(s.view, a) === '') return { action: a, rule: k === want ? rule : 'detour' };
         }
     }
+    return { action: 'stop', rule: 'trapped' };
+}
+
+// followPlan is laya-go's v2 rule 5: the plan step when it is safe; else the
+// plan's kind to the right, left and back of the plan's direction, then the
+// other kinds ahead, right, left and back; never down below MIN_Y.
+function followPlan(s) {
+    const [kind, dir] = s.plan.split(' ');
+    const ok = a => !(a.startsWith('down') && s.y - 1 < MIN_Y) && unsafe(s.view, a) === '';
+    if (ok(s.plan)) return { action: s.plan, rule: 'follow-plan' };
+    const around = [RIGHT(dir), LEFT(dir), BACK(dir)];
+    const tries = [...around.map(d => `${kind} ${d}`),
+        ...MOVE_KINDS.filter(k => k !== kind).flatMap(k => [dir, ...around].map(d => `${k} ${d}`))];
+    for (const a of tries) if (ok(a)) return { action: a, rule: 'detour' };
     return { action: 'stop', rule: 'trapped' };
 }
 

@@ -41,3 +41,21 @@ Torches SHALL be placed on the left wall in the direction of travel away from th
 #### Scenario: torch side
 - **WHEN** a torch is due while digging a main tunnel heading north from the entrance
 - **THEN** the torch is placed on the west wall
+
+### Requirement: Prompt v2 carries the plan step and the pack
+With prompt v2 the state SHALL be prompt v1 with two lines after the status line, `Plan <kind> <dir>` and `Pack <free> Home <dist|none> Health <h> Food <f> Hostiles <n> Valuables <v>`, matching laya-go's golden v2 request byte for byte, and every request SHALL ask Action, Hazard and Unload (noul, "I should go and empty my pack into the home chest now."). Home is the straight-line distance to the remembered place `home_chest`, rounded up and capped at 999, or `none`; Hostiles are hostile mobs within 16 blocks, capped at 9; Valuables count diamond, emerald, raw and smelted iron and gold, raw copper, redstone and lapis lazuli, plus half the coal, capped at 999.
+
+#### Scenario: v2 state text
+- **WHEN** the bot has 5 free slots, its home chest 12 blocks away, full health and food, no mobs and no valuables, and its plan step is `tunnel E`
+- **THEN** the state's third and fourth lines are `Plan tunnel E` and `Pack 5 Home 12 Health 20 Food 20 Hostiles 0 Valuables 0`
+
+### Requirement: Unloading into the home chest
+With prompt v2 the bot SHALL go to its home chest, put in everything except tools, food, torches and `keep_blocks` throwaway blocks, and walk back to the plan when the model answers Unload confidently true, or, when the model isn't confident, when laya-go's Unload rule is true (a home chest known and no lava or water touching, and 2 or fewer free slots, or 6 or fewer with home within 24 blocks, or 4 or more valuables with health 8 or less, food 6 or less or 2 or more hostile mobs). With no free slot at all it SHALL unload whatever the model says; with no home chest known it SHALL never unload. Ore put in the chest SHALL count towards the count asked for.
+
+#### Scenario: full pack
+- **WHEN** the pack has no free slot, a home chest is remembered and the model says not to unload
+- **THEN** the bot unloads into the home chest and walks back to the plan
+
+#### Scenario: no home chest
+- **WHEN** no `home_chest` place is remembered
+- **THEN** the state says `Home none` and the bot never unloads

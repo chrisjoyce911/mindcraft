@@ -34,7 +34,7 @@ function setup({ y = 16, blocks = {}, inv = { stone_pickaxe: 1, torch: 5, cobble
     const inventory = { ...inv };
     const deps = {
         client: { decide: async (task, state) => { calls.decide.push(state); return decide(state, calls.decide.length); } },
-        task: { log_steps: false, max_steps: 40 },
+        task: { log_steps: false, max_steps: 40, prompt: 'v1' },
         blockAt: w.blockAt,
         inventory: () => ({ ...inventory }),
         nearestOre: (names, range) => {
@@ -153,4 +153,107 @@ test('an unknown ore is refused', async () => {
     const r = await mineWithLaya(bot, 'emerald', 1, deps);
     assert.equal(r.ok, false);
     assert.match(r.reason, /unknown ore/);
+});
+
+// ---- prompt v2: the mine plan and unloading ----
+
+// v2 sets a v2 run up: the rules answer (no model) unless decide is given.
+function v2(opts = {}) {
+    const s = setup({ decide: () => null, ...opts });
+    Object.assign(s.deps.task, { prompt: 'v2', max_steps: opts.steps ?? 20 });
+    s.calls.chat = [];
+    s.calls.walks = [];
+    s.calls.home = [];
+    s.calls.deposited = [];
+    const moveTo = s.deps.moveTo;
+    s.deps.moveTo = async (x, y, z, ms) => { if (ms) s.calls.walks.push([x, y, z]); return moveTo(x, y, z); };
+    s.deps.place = async (item, x, y, z, on) => { s.calls.placed.push([item, x, y, z, on]); s.w.m.set(`${x},${y},${z}`, item === 'torch' ? 'torch' : 'stone'); s.inventory[item]--; return true; };
+    s.deps.chat = msg => s.calls.chat.push(msg);
+    s.deps.freeSlots = () => opts.free ?? 20;
+    s.deps.home = () => opts.home ?? null;
+    s.deps.hostiles = () => 0;
+    s.deps.isFood = n => n === 'bread';
+    s.deps.goHome = async h => { s.calls.home.push(h); s.bot.entity.position = { x: h.x + 0.5, y: h.y, z: h.z + 1.5 }; return true; };
+    s.deps.deposit = async items => {
+        s.calls.deposited.push(items);
+        for (const { name, count } of items) s.inventory[name] -= count;
+        return true;
+    };
+    return s;
+}
+
+test('v2: says where the mine starts, then stairs down ahead', async () => {
+    const { bot, deps, calls } = v2({ y: 60, steps: 3 });
+    const r = await mineWithLaya(bot, 'iron', 1, deps);
+    assert.match(calls.chat[0], /iron mine starts at 0 60 0, heading E/);
+    assert.deepEqual(calls.moves, [[1, 59, 0], [2, 58, 0], [3, 57, 0]]);
+    assert.deepEqual(r.entrance, { x: 0, y: 60, z: 0 });
+    assert.equal(r.counters.asked, 3);
+});
+
+test('v2: the plan line goes to the model; an off-plan move is overruled', async () => {
+    const { bot, deps, calls } = v2({ y: 20, steps: 2, decide: () => answer('tunnel S') });
+    const r = await mineWithLaya(bot, 'iron', 1, deps);
+    assert.match(calls.decide[0], /\nPlan tunnel E\nPack 20 Home none Health 20 Food 20 Hostiles 0 Valuables 0\n/);
+    assert.deepEqual(calls.moves, [[1, 20, 0], [2, 20, 0]]);
+    assert.equal(r.counters.rules['off-plan'], 2);
+});
+
+test('v2: collects ore off the line, then walks back to the plan', async () => {
+    const { bot, deps, calls, w, inventory } = v2({ y: 20, steps: 3, blocks: { '2,20,3': 'iron_ore' } });
+    deps.collect = async () => {
+        w.m.set('2,20,3', 'air');
+        inventory.raw_iron = (inventory.raw_iron || 0) + 1;
+        bot.entity.position = { x: 2.5, y: 20, z: 3.5 };
+        return true;
+    };
+    await mineWithLaya(bot, 'iron', 2, deps);
+    assert.deepEqual(calls.walks, [[0, 20, 0]]);
+    assert.deepEqual(calls.moves.at(-1), [1, 20, 0], 'then the main tunnel goes on');
+});
+
+test('v2: lava in a branch: a detour, the branch is abandoned, the next branch starts', async () => {
+    const { bot, deps, calls } = v2({ y: 20, steps: 9, blocks: { '3,20,-3': 'lava' } });
+    const r = await mineWithLaya(bot, 'iron', 1, deps);
+    // main x 1..3, branch N to z -1, the lava is behind z -2: detour, walk back, branch S
+    assert.equal(r.counters.abandoned, 1);
+    assert.ok(!calls.dug.some(([x, , z]) => x === 3 && z <= -2), JSON.stringify(calls.dug));
+    assert.deepEqual(calls.walks, [[3, 20, 0]]);
+    assert.ok(calls.moves.some(([x, , z]) => x === 3 && z === 1), 'the south branch: ' + JSON.stringify(calls.moves));
+});
+
+test('v2: torches go on the left wall going out', async () => {
+    const { bot, deps, calls } = v2({ y: 20, steps: 10 });
+    await mineWithLaya(bot, 'iron', 1, deps);
+    // 3 main blocks east, then the north branch: left of north is the west wall
+    const torch = calls.placed.find(([item]) => item === 'torch');
+    assert.deepEqual(torch, ['torch', 3, 21, -5, 'west']);
+});
+
+test('v2: unloads at home when the pack is full, keeping tools, food, torches and 32 blocks', async () => {
+    const inv = { stone_pickaxe: 1, torch: 5, cobblestone: 50, bread: 3, raw_iron: 2, andesite: 10 };
+    const { bot, deps, calls } = v2({ y: 20, steps: 3, free: 1, home: { x: 0, y: 64, z: 10 }, inv });
+    deps.freeSlots = () => (calls.deposited.length ? 20 : 1);
+    const r = await mineWithLaya(bot, 'iron', 3, deps);
+    assert.deepEqual(calls.home, [{ x: 0, y: 64, z: 10 }]);
+    assert.deepEqual(calls.deposited[0], [{ name: 'cobblestone', count: 18 }, { name: 'andesite', count: 10 }, { name: 'raw_iron', count: 2 }]);
+    assert.equal(r.counters.unloads, 1);
+    assert.deepEqual(calls.walks[0], [0, 20, 0], 'walks back to the plan');
+    assert.equal(r.collected, 0, 'the iron it had before is not counted');
+});
+
+test('v2: the model decides Unload when sure; a completely full pack always unloads', async () => {
+    const withUnload = p => () => { const a = answer('tunnel E'); a.answers.Unload = { type: 'noul', probability: p, confident: true }; return a; };
+    let s = v2({ y: 20, steps: 2, free: 1, home: { x: 0, y: 20, z: 5 }, decide: withUnload(0.05) });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(s.calls.home.length, 0, 'the model says not yet');
+    s = v2({ y: 20, steps: 1, free: 0, home: { x: 0, y: 20, z: 5 }, decide: withUnload(0.05) });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(s.calls.home.length, 1, 'full: unload anyway');
+    s = v2({ y: 20, steps: 1, free: 30, home: { x: 0, y: 20, z: 5 }, decide: withUnload(0.95) });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(s.calls.home.length, 1, 'the model says go');
+    s = v2({ y: 20, steps: 2, free: 0, decide: withUnload(0.95) });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(s.calls.home.length, 0, 'no home chest known');
 });
