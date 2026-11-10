@@ -62,11 +62,21 @@ export const CHECKS = {
         if (c.none) return hit ? { ok: false, reason: `andy said "${hit}"` } : { ok: true, reason: `no /${c.match}/` };
         return hit ? { ok: true, reason: `"${hit}"` } : { ok: false, reason: `no reply /${c.match}/ (andy said: ${(ctx.chat || []).slice(-5).map(l => `"${l}"`).join(', ') || 'nothing'})` };
     },
-    // {task, match, min (1), max}
+    // {task, match, min (1), max, before}: with before (a match), only the
+    // entries logged before the first entry matching it count, and that entry
+    // must exist (so "collect steps came before the first down step").
     log(c, ctx) {
-        const n = (ctx.logs || []).filter(e => (!c.task || e.task === c.task) && matches(e, c.match)).length;
+        let logs = (ctx.logs || []).filter(e => !c.task || e.task === c.task);
+        let upTo = '';
+        if (c.before != null) {
+            const i = logs.findIndex(e => matches(e, c.before));
+            if (i < 0) return { ok: false, reason: `no laya-${c.task || '*'} entry matching ${JSON.stringify(c.before)} to count before` };
+            logs = logs.slice(0, i);
+            upTo = ` before the first ${JSON.stringify(c.before)}`;
+        }
+        const n = logs.filter(e => matches(e, c.match)).length;
         const want = { min: c.min ?? (c.max == null ? 1 : null), max: c.max };
-        return bounds(n, want, `laya-${c.task || '*'} entries matching ${JSON.stringify(c.match ?? {})}:`, false);
+        return bounds(n, want, `laya-${c.task || '*'} entries matching ${JSON.stringify(c.match ?? {})}${upTo}:`, false);
     },
     // {axis: x|y|z|dist, since ('before'), during: min|max, min, max}
     position(c, ctx) {
@@ -155,7 +165,7 @@ export function describeCheck(c) {
     case 'chest': return `chest at ${c.at} ${c.delta ? 'gains' : 'holds'} ${c.item} ${range()}`;
     case 'idle': return 'andy finishes before the timeout';
     case 'reply': return c.none ? `andy never says /${c.match}/` : `andy says /${c.match}/`;
-    case 'log': return `laya-${c.task || '*'} log has ${c.min ?? 1}+ entries matching ${JSON.stringify(c.match ?? {})}`;
+    case 'log': return `laya-${c.task || '*'} log has ${c.min ?? 1}+ entries matching ${JSON.stringify(c.match ?? {})}${c.before != null ? ` before the first ${JSON.stringify(c.before)}` : ''}`;
     case 'position': return `andy's ${c.axis || 'y'} ${c.during ? `(${c.during} during the test) ` : ''}changes by ${range()}`;
     case 'near': return `andy ends ${range(' blocks')} from tester`;
     case 'stat': return `andy's ${c.field} ${c.since ? `changes since ${c.since} by` : 'is'} ${range()}`;

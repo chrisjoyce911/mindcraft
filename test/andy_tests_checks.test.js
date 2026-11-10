@@ -65,6 +65,10 @@ test('log entries in the window', () => {
     ok({ type: 'log', task: 'mine', match: { outcome: '/fail/' } });
     bad({ type: 'log', task: 'eat' });
     ok({ type: 'log', task: 'eat', max: 0 });
+    // before: only entries before the first match of `before` count
+    ok({ type: 'log', task: 'farm', match: { action: 'harvest' }, before: { action: 'pond' } });
+    bad({ type: 'log', task: 'farm', match: { action: 'pond' }, before: { action: 'harvest' } });
+    bad({ type: 'log', task: 'farm', match: { action: 'harvest' }, before: { action: 'till' } });
 });
 
 test('position at the end and during, near, stat', () => {

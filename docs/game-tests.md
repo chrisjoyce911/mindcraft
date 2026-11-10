@@ -131,7 +131,7 @@ Options on any step: `timeout`, `repeat`, `optional`, `replyMs`, `idleFail`.
 - `chest`: what a chest holds, or with `delta` its change;
 - `idle`;
 - `reply`: or `none` for must not;
-- `log`: Laya entries matching fields in the test's window;
+- `log`: Laya entries matching fields in the test's window (with `before`, only those logged before the first entry matching another set of fields);
 - `position`: the change in y, x, z or horizontal distance, at the end or the extreme `during` the test;
 - `near`: distance to tester;
 - `stat`: health or hunger;

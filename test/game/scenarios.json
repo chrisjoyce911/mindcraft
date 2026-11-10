@@ -742,11 +742,11 @@
         "mine",
         "slow"
       ],
-      "timeout": 1800000,
+      "timeout": 2400000,
       "requires": [
         "mine"
       ],
-      "description": "!layaMine(\"iron\", 3) with the v2 mine plan: andy announces the entrance, stairs down (4+ `down` steps done in laya-mine and his Y 4+ below the start) and gets 3 raw iron. Iron showing at the surface by the mine site doesn't pass it: the announcement and the staircase steps are required.",
+      "description": "!layaMine(\"iron\", 12) with the v2 mine plan, in two phases. The mine site has 7 iron ore within 16 blocks of the entrance (3 at the surface about 11 away, 4 at y 61-62 about 15 away; 13 within 24), far fewer than 12. (a) He collects the iron he can see first: collect steps in laya-mine before the first `down` step. (b) Then, still short, he follows the plan: the \"iron mine starts at\" announcement, 4+ `down` staircase steps done and his Y 4+ below the start. (c) raw_iron reaches 12. The timeout allows the staircase from Y 74 to the iron band (Y 24) and some branch mining.",
       "setup": [
         {
           "reset": true,
@@ -775,10 +775,24 @@
       ],
       "action": [
         {
-          "andy": "!layaMine(\"iron\", 3)"
+          "andy": "!layaMine(\"iron\", 12)"
         }
       ],
       "checks": [
+        {
+          "type": "log",
+          "task": "mine",
+          "match": {
+            "action": "collect",
+            "outcome": "done"
+          },
+          "before": {
+            "action": "/^down/",
+            "outcome": "done"
+          },
+          "min": 3,
+          "note": "phase (a): the iron in sight is collected before the staircase starts (3 ore lie within 12 of the entrance)"
+        },
         {
           "type": "reply",
           "match": "iron mine starts at"
@@ -791,7 +805,7 @@
             "outcome": "done"
           },
           "min": 4,
-          "note": "staircase steps, not just collecting ore in reach"
+          "note": "phase (b): staircase steps, not just collecting ore in reach"
         },
         {
           "type": "position",
@@ -802,7 +816,8 @@
         {
           "type": "inventory",
           "item": "raw_iron",
-          "min": 3
+          "min": 12,
+          "note": "phase (c): more than the visible ore gives, so the plan is needed"
         },
         {
           "type": "idle"
@@ -834,7 +849,7 @@
       "requires": [
         "mine"
       ],
-      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone (keeping 32) into the chest. Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
+      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone into the chest until it is full (27 stacks; he keeps 32 and the rest stays in his pack). Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
       "setup": [
         {
           "reset": true,
@@ -883,9 +898,10 @@
         {
           "waitFor": {
             "item": "cobblestone",
-            "max": 200
+            "max": 300
           },
-          "timeout": 600000
+          "timeout": 600000,
+          "note": "one chest holds 27 stacks (1728): from 1984 andy is left with at least 256, so the old max 200 could never be met"
         },
         {
           "wait": 3000
