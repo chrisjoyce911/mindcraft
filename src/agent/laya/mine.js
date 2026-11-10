@@ -43,7 +43,7 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug,
+import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug, cellOf,
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
@@ -204,6 +204,8 @@ function cellsToDig(view, action) {
 //       hostiles() → hostile mobs within 16 blocks (bot.health and bot.food are read too),
 //       goHome({x, y, z}) → bool, deposit([{name, count}]) → bool (true: all went in), isFood(name) → bool,
 //       chat(msg) (optional)
+//   mines ({find(feet) → saved mine | null, save(rec)}, optional): mine
+//   memory (mine_memory.js); a mine within 16 blocks goes on
 //   sleep(ms), log(msg), stepLog (file path, or null)
 //   progress ({done}, optional): raised by each drop collected, so a job
 //   resumed after an interrupt knows how many are left
@@ -247,7 +249,18 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     const finish = (ok, reason) => {
         record();
         deps.log?.(summary(counters, got(), count, ore.drop));
-        return { ok, reason, collected: got(), counters, entrance: plan?.entrance };
+        saveMine();
+        return { ok, reason, collected: got(), counters, entrance: plan?.entrance, reused: !!reused };
+    };
+    // the mine's record (mine memory): entrance, heading, ores, deepest level
+    let mineRec = null, reused = null;
+    const saveMine = () => {
+        if (!mineRec || !deps.mines) return;
+        const f = feetOf();
+        mineRec.deepest = Math.min(mineRec.deepest ?? f.y, f.y);
+        mineRec.last = f;
+        mineRec.updated = new Date().toISOString();
+        deps.mines.save(mineRec);
     };
     const feetOf = () => {
         const p = bot.entity.position;
@@ -309,8 +322,25 @@ export async function mineWithLaya(bot, oreName, count, deps) {
 
     if (v2) {
         const f = feetOf();
-        plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface: openSky(deps.blockAt, f) });
-        const msg = `The ${oreName} mine starts at ${f.x} ${f.y} ${f.z}, heading ${heading}.`;
+        reused = deps.mines?.find(f) || null;
+        let msg;
+        if (reused) {
+            // the same layout from the same entrance: walk through what is dug
+            const e = reused.entrance;
+            heading = reused.heading;
+            plan = createPlan({ ...e, heading }, ore, { ...planOpts, surface: !!reused.surface });
+            const open = c => ['A', 'O'].includes(cellOf(deps.blockAt(c.x, c.y, c.z), [])) && cellOf(deps.blockAt(c.x, c.y + 1, c.z), []) === 'A';
+            const skipped = plan.skipDug(open);
+            mineRec = { ...reused, ores: [...new Set([...(reused.ores || []), oreName])] };
+            msg = `Going on with the mine at ${e.x} ${e.y} ${e.z} (heading ${heading}) for ${oreName}.`;
+            logStep({ reuse: e, skipped, outcome: 'reused' });
+        } else {
+            const surface = openSky(deps.blockAt, f);
+            plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface });
+            mineRec = { entrance: f, heading, surface, ores: [oreName], deepest: f.y, started: new Date().toISOString() };
+            msg = `The ${oreName} mine starts at ${f.x} ${f.y} ${f.z}, heading ${heading}.`;
+        }
+        saveMine();
         deps.log?.(msg);
         deps.chat?.(msg);
     }
@@ -318,6 +348,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     for (let step = 0; step < maxSteps && !bot.interrupt_code; step++) {
         if (got() >= count) return finish(true, 'done');
         record();
+        if (step && step % 50 === 0) saveMine();
         const inv = deps.inventory();
         const torches = inv.torch || 0;
         if (step >= noTorchUntil && torches < opts.torch_low && (canMakeTorches(inv) || (!torches && dark >= 8))) {

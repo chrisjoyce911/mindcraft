@@ -181,6 +181,20 @@ export function createPlan(start, band, options = {}) {
             advance();
         },
 
+        // skipDug fast-forwards over plan cells already dug (isOpen(cell):
+        // feet and head are air), as when a saved mine is reused: next()
+        // then walks to the first undug cell. Returns the cells skipped.
+        skipDug(isOpen, max = 5000) {
+            let n = 0;
+            while (current && n < max) {
+                if (current.k >= current.length) { advance(); continue; }
+                if (!isOpen(cellAt(current, current.k + 1))) break;
+                current.k++;
+                n++;
+            }
+            return n;
+        },
+
         // stopDescent ends a staircase where the bot stands (feet): the
         // level's grid starts there (e.g. the ground below is a cave).
         // Returns whether it did (only on a staircase going down).

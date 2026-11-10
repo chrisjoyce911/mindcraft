@@ -4,7 +4,7 @@
 - [x] 2. Resume after interrupt as a job stack + one decision point (`laya/director.js`, the shared director spec in design.md): rules, state text, `laya-director.jsonl`, `decision_models.tasks.director` (off); the interrupt's exception keeps the job; remaining count; tests.
 - [x] 3. Mine plan: staircase to at least 10 below the entrance and the ore's best level; tests.
 - [x] 4. Mine safety: rule `heal`; `drop` veto on model and rule moves; tests.
-- [ ] 5. Mine memory: save and resume mines; tests.
+- [x] 5. Mine memory: save and resume mines; tests.
 - [ ] 6. Home chest: block `rememberHere("home_chest")` off a chest, drop a home without a chest; tests.
 - [ ] 7. Unload failure backs off; collecting goes on.
 - [ ] 8. Torches: sticks, plank withdrawal, place back-off.

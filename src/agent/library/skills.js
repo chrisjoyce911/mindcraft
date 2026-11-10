@@ -12,6 +12,8 @@ import { ORES as MINE_ORES } from "../laya/mine_state.js";
 import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
 import { packDeps } from "../laya/pack_actions.js";
+import { mineStore } from "../laya/mine_memory.js";
+import { readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, mkdirSync as mkdirSyncFs } from "fs";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -2386,6 +2388,14 @@ export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) 
             ...packDeps(bot, homeChest),
             chat: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
             eat: () => eatBestFood(bot),
+            // mine memory: a mine within 16 blocks goes on (bots/<name>/laya-mines.json)
+            mines: mineStore({
+                load: () => JSON.parse(readFileSyncFs(`./bots/${bot.username}/laya-mines.json`, 'utf8')),
+                save: list => {
+                    mkdirSyncFs(`./bots/${bot.username}`, { recursive: true });
+                    writeFileSyncFs(`./bots/${bot.username}/laya-mines.json`, JSON.stringify(list, null, 1));
+                },
+            }),
             sleep,
             log: msg => log(bot, msg),
             stepLog: `./bots/${bot.username}/logs/laya-mine.jsonl`,

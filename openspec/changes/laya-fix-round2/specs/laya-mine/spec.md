@@ -21,3 +21,13 @@ floor vetoes in a row on a staircase going down, the descent SHALL stop and the 
 #### Scenario: hurt at Health 4 with no food
 - **WHEN** andy mines at Health 4 with no food and a skeleton near
 - **THEN** he walks back to the entrance, says he needs food and stops mining
+
+### Requirement: A saved mine is reused
+Each mine (entrance, heading, surface start, ores, deepest level, last position) SHALL be saved in
+`bots/<name>/laya-mines.json`. A mine job starting within 16 blocks of a saved mine SHALL lay out the same plan
+from that mine's entrance and heading, skip the cells already dug and walk to the first undug one, instead of a
+new staircase.
+
+#### Scenario: iron again beside the staircase
+- **WHEN** a mine job starts 3 blocks from a saved mine's entrance
+- **THEN** andy says he goes on with that mine and walks down its staircase to where digging continues

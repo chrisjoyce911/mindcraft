@@ -416,3 +416,43 @@ test('v2: never steps onto a drop; two floor vetoes on the staircase start the l
     const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.equal(r.counters.rules['stop-descent'], 1);
 });
+
+test('mine memory: nearestMine, upsertMine, mineStore', async () => {
+    const { nearestMine, upsertMine, mineStore } = await import('../src/agent/laya/mine_memory.js');
+    const a = { entrance: { x: 0, y: 70, z: 0 }, heading: 'E' }, b = { entrance: { x: 100, y: 70, z: 0 }, heading: 'N', last: { x: 30, y: 20, z: 0 } };
+    assert.equal(nearestMine([a, b], { x: 10, y: 70, z: 5 }), a);
+    assert.equal(nearestMine([a, b], { x: 40, y: 70, z: 0 }), b, 'near where the bot last was in it');
+    assert.equal(nearestMine([a, b], { x: 60, y: 70, z: 60 }), null);
+    let list = upsertMine([a, b], { ...a, ores: ['iron'] });
+    assert.equal(list.length, 2);
+    assert.deepEqual(list[0].ores, ['iron']);
+    let saved = null;
+    const st = mineStore({ load: () => { throw new Error('no file'); }, save: l => { saved = l; } });
+    assert.equal(st.find({ x: 0, y: 0, z: 0 }), null);
+    st.save(a);
+    assert.deepEqual(saved, [a]);
+});
+
+test('v2: a mine job near a saved mine goes on with it: same entrance, dug cells skipped', async () => {
+    let saved = [];
+    const store = { find: () => saved[0] || null, save: rec => { saved = [rec]; } };
+    // first job: a staircase from Y 60 heading E
+    let s = v2({ y: 60, steps: 4 });
+    s.deps.mines = store;
+    let r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.reused, false);
+    assert.deepEqual(saved[0].entrance, { x: 0, y: 60, z: 0 });
+    assert.equal(saved[0].heading, 'E');
+    const dug = new Map(s.w.m);
+    // second job 3 blocks away, facing north: goes on with the mine at its 5th stair cell
+    s = v2({ y: 60, steps: 2 });
+    for (const [k, v] of dug) s.w.m.set(k, v);
+    s.bot.entity.position = { x: 0.5, y: 60, z: 3.5 };
+    s.bot.entity.yaw = 0;
+    s.deps.mines = store;
+    r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.reused, true);
+    assert.match(s.calls.chat[0], /Going on with the mine at 0 60 0 \(heading E\) for iron/);
+    assert.deepEqual(s.calls.walks[0], [4, 56, 0], 'walks to the bottom of the dug staircase');
+    assert.deepEqual(saved[0].ores, ['iron']);
+});
