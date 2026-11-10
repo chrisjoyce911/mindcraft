@@ -359,12 +359,11 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         if (reused) {
             // the saved mine must still be there: its first plan cell dug
             const e = reused.entrance;
-            const probe = createPlan({ ...e, heading: reused.heading }, ore, { ...planOpts, surface: !!reused.surface });
-            const open = c => ['A', 'O'].includes(cellOf(deps.blockAt(c.x, c.y, c.z), [])) && cellOf(deps.blockAt(c.x, c.y + 1, c.z), []) === 'A';
             // the blocks andy dug for it must be air (a reset world, a filled
-            // mine: gone); older records without them: the first plan cell
-            const dugGone = reused.dug?.length && reused.dug.some(c => cellOf(deps.blockAt(c.x, c.y, c.z), []) !== 'A');
-            if (dugGone || (!reused.dug?.length && !probe.skipDug(open, 1))) {
+            // mine: gone)
+            // (a record with nothing dug is no mine to go back to)
+            const there = reused.dug?.length && reused.dug.every(c => cellOf(deps.blockAt(c.x, c.y, c.z), []) === 'A');
+            if (!there) {
                 logStep({ reuse: e, outcome: 'gone' });
                 deps.mines.forget?.(e);
                 reused = null;
