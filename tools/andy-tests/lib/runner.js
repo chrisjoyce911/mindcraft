@@ -131,6 +131,16 @@ export async function runStep(step, ctx) {
         }
         case 'snapshot': await s.snapshot(v); break;
         case 'anchor': await ctx.anchor(); break;
+        case 'reset': {
+            if (!s.onTestWorld?.()) { out.push('skipped: not the test world'); break; }
+            const r = await s.worldReset({ andyTimeoutMs: budget(90000) });
+            if (r.andy && !r.andy.inGame) throw new StepFailed(`andy wasn't back in game after the reset${r.andy.error ? ': ' + r.andy.error : ''}`);
+            out.push(`reset in ${(r.ms / 1000).toFixed(1)}s${r.andy ? `, andy back in ${((r.andyMs ?? 0) / 1000).toFixed(1)}s` : ''}`);
+            // the template has no player data: tester joins in survival
+            const g = await s.serverCommand(`/gamemode creative ${ctx.vars.tester}`, 800);
+            out.push(...g.replies);
+            break;
+        }
         case 'site': {
             const o = typeof v === 'string' ? { name: v } : v;
             const r = await s.siteTp(o.name, { who: o.who || 'both' });

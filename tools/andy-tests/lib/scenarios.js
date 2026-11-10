@@ -25,6 +25,7 @@ export const STEPS = {
     snapshot: 'save andy\'s inventory, position, health and food under this label',
     anchor: 'take andy\'s current block as {x} {y} {z} again',
     site: 'test world only: teleport andy, tester beside him, to a named site of tools/test-world/sites.json and take it as {x} {y} {z} ("farm", or {name, who: andy|tester|both}); does nothing on another world',
+    reset: 'test world only: put the world back to its template (andy restarts, with nothing saved; tester back in creative), so a test does not depend on what earlier tests dug or set; does nothing on another world',
 };
 // idleFail (waitFor, waitReply, waitLog): ms andy may stay idle after his
 // action ended before the wait fails (default 30000; false: wait out the
@@ -146,6 +147,7 @@ export function describeStep(step) {
     case 'walk': return `tester walks ${typeof v === 'string' ? 'to ' + v : JSON.stringify(v)}`;
     case 'snapshot': return `snapshot "${v}"`;
     case 'anchor': return 'take andy\'s position again';
+    case 'reset': return 'reset the test world';
     case 'site': return `andy${typeof v === 'object' && v.who && v.who !== 'both' ? ` (${v.who})` : ''} to site ${typeof v === 'string' ? v : v.name}`;
     default: return JSON.stringify(step);
     }

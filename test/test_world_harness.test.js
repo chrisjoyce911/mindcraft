@@ -136,12 +136,15 @@ test('the site step does nothing on another world; the test runs where andy is',
     assert.ok(f.world.commands.includes('/setblock 13 64 -5 chest'));
 });
 
-test('every scenario starts at a site, and the file still validates', () => {
+test('every scenario starts at a site (after an optional world reset), and the file still validates', () => {
     const { tests } = loadScenarios(SCENARIOS);
-    for (const t of tests) assert.ok(t.setup[0]?.site, t.name);
-    assert.equal(tests.find(t => t.name === 'farm-water').setup[0].site, 'farm');
-    assert.equal(tests.find(t => t.name === 'farm-no-water').setup[0].site, 'dry');
-    assert.equal(tests.find(t => t.name === 'mine-coal').setup[0].site, 'mine');
+    const first = t => t.setup.find(s => !s.reset);
+    for (const t of tests) assert.ok(first(t)?.site, t.name);
+    for (const t of tests) assert.ok(t.setup.findIndex(s => s.reset) <= 0, `${t.name}: a reset comes first`);
+    assert.equal(first(tests.find(t => t.name === 'farm-water')).site, 'farm');
+    assert.equal(first(tests.find(t => t.name === 'farm-no-water')).site, 'dry');
+    assert.equal(first(tests.find(t => t.name === 'mine-coal')).site, 'mine');
+    assert.deepEqual(tests.filter(t => t.setup[0]?.reset).map(t => t.name), ['home-chest-sign', 'mine-coal', 'mine-iron-staircase', 'unload-home-chest']);
 });
 
 test('MCP world tools: start switches to the test world, reset restarts andy, bot start/stop', async () => {

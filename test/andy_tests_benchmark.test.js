@@ -163,3 +163,27 @@ test('compare: better, worse, same, new, gone, via changes', () => {
     assert.equal(loadSummary(path.join(dir, 'a.json')).tests.length, 5);
     assert.throws(() => loadSummary(path.join(dir, 'bad.json')), /no "tests" list/);
 });
+
+test('reset step: test world only; andy must come back; tester back in creative', async () => {
+    const t = one({ name: 'r', setup: [{ reset: true }], action: [{ andy: '!inventory' }], checks: [] });
+    const a = fakeSession();
+    const r1 = await runTest(a.session, t, { defaults });
+    assert.equal(r1.status, 'pass', r1.reason);
+    assert.match(r1.steps[0].out[0], /skipped: not the test world/);
+
+    const b = fakeSession();
+    b.session.config.world = 'test';
+    b.session.testWorld = () => Promise.resolve({ sites: { sites: {} } });
+    let resets = 0;
+    b.session.worldReset = () => { resets++; return Promise.resolve({ ms: 9000, andy: { inGame: true }, andyMs: 3000 }); };
+    const r2 = await runTest(b.session, t, { defaults });
+    assert.equal(r2.status, 'pass', r2.reason);
+    assert.equal(resets, 1);
+    assert.ok(b.world.commands.includes('/gamemode creative tester'));
+    assert.match(r2.steps[0].out[0], /reset in 9\.0s, andy back in 3\.0s/);
+
+    b.session.worldReset = () => Promise.resolve({ ms: 9000, andy: { inGame: false, error: 'timed out' } });
+    const r3 = await runTest(b.session, t, { defaults });
+    assert.equal(r3.status, 'fail');
+    assert.match(r3.reason, /andy wasn't back in game after the reset: timed out/);
+});

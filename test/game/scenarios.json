@@ -264,6 +264,10 @@
       "description": "A chest 3 blocks east with a sign saying andy beside it. Starting a farm job makes andy look for a signed chest and adopt it. Andy looks for the home chest only once the farm loop runs, so the test runs at the farm site (water close by) and gives him a hoe and seeds; at a dry spot the job stops at \"No water near here\" first. Only works while andy has NO home chest saved (a fresh start with load_memory false), so it runs before the other home chest tests.",
       "setup": [
         {
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
+        {
           "site": "farm"
         },
         {
@@ -679,6 +683,10 @@
       "description": "Chat \"andy go mine coal 5\" with a stone pickaxe, torches and bread: he ends with 5+ more coal. (Coal unloaded into a home chest doesn't show in his inventory.)",
       "setup": [
         {
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
+        {
           "site": "mine"
         },
         {
@@ -740,6 +748,10 @@
       ],
       "description": "!layaMine(\"iron\", 3) with the v2 mine plan: andy announces the entrance, stairs down (4+ `down` steps done in laya-mine and his Y 4+ below the start) and gets 3 raw iron. Iron showing at the surface by the mine site doesn't pass it: the announcement and the staircase steps are required.",
       "setup": [
+        {
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
         {
           "site": "mine"
         },
@@ -824,6 +836,10 @@
       ],
       "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone (keeping 32) into the chest. Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
       "setup": [
+        {
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
         {
           "site": "mine"
         },
