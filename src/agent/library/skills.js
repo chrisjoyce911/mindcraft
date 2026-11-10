@@ -5,7 +5,7 @@ import Vec3 from 'vec3';
 import settings from "../../../settings.js";
 import { laya, taskSettings } from "../../models/laya.js";
 import { followWithLaya } from "../laya/follow.js";
-import { runCraft } from "../laya/craft.js";
+import { runCraft, settle } from "../laya/craft.js";
 import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
 import { mineWithLaya } from "../laya/mine.js";
 import { ORES as MINE_ORES } from "../laya/mine_state.js";
@@ -109,7 +109,16 @@ export async function craftRecipe(bot, itemName, num=1) {
     const requiredIngredients = mc.ingredientsFromPrismarineRecipe(recipe); //Items required to use the recipe once.
     const craftLimit = mc.calculateLimitingResource(inventory, requiredIngredients);
     
-    await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
+    const times = Math.min(craftLimit.num, num);
+    const before = world.getInventoryCounts(bot)[itemName] || 0;
+    await bot.craft(recipe, times, craftingTable);
+    // The inventory updates a moment after the craft: wait for the result (and
+    // an empty crafting grid) so the next step doesn't read a stale inventory
+    // or start a craft mineflayer stalls on (updateSlot timeout).
+    const want = before + (recipe.result?.count || 1) * times;
+    const gridEmpty = () => craftingTable || [0, 1, 2, 3, 4].every(i => !bot.inventory.slots[i]);
+    if (!await settle(() => (world.getInventoryCounts(bot)[itemName] || 0) >= want && gridEmpty()))
+        console.log(`craftRecipe: ${itemName} still short of ${want} after waiting`);
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     if (placedTable) {

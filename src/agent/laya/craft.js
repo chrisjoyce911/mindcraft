@@ -20,6 +20,18 @@ import { PICKAXES, FUELS } from './craft_data.js';
 const DEFAULTS = { max_steps: 40, log_steps: true, min_confidence: 0.3 };
 const STATIONS = new Set(['crafting_table', 'furnace', 'chest']);
 
+// settle waits until done() holds (the inventory shows what a craft made),
+// polling every step ms for at most ms; then a short quiet time so slot
+// updates still on the way arrive before the next step reads the inventory
+// or starts another craft. It returns whether done() held.
+export async function settle(done, { ms = 3000, step = 50, quiet = 150, sleep = t => new Promise(r => setTimeout(r, t)) } = {}) {
+    let waited = 0;
+    while (!done() && waited < ms) { await sleep(step); waited += step; }
+    const ok = done();
+    await sleep(quiet);
+    return ok;
+}
+
 const tierCarried = have => PICKAXES.reduce((t, p, i) => ((have[p] || 0) > 0 ? i + 1 : t), 0);
 
 // check returns null when step is possible in situation s, or why not.
