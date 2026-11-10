@@ -586,3 +586,17 @@ test('pickOre: ore under a thin cave roof is not surface ore', () => {
     const opts = { feet: { x: 172, y: 74, z: 140 }, anchor: { x: 172, y: 74, z: 140 }, range: 12, budget: 24, blockAt, below: 4, belowOpen: 4 };
     assert.equal(pickOre([{ x: 162, y: 69, z: 141 }], opts), null);
 });
+
+test('v2: every plan step unsafe (water below): restart once heading back, then stop, never loop', async () => {
+    // no floor anywhere at Y 19 except a thin shelf to the south: each plan
+    // step is vetoed and the detour south abandons the segment
+    const blocks = {};
+    for (let x = -40; x <= 40; x++) for (let z = -40; z <= 40; z++) for (let y = 8; y <= 19; y++)
+        if (z <= 0 || y < 19) blocks[`${x},${y},${z}`] = 'air'; // a cave below; a one-block shelf south
+    const s = v2({ y: 20, steps: 400, blocks });
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /unsafe \(water or caves\)/);
+    assert.equal(r.counters.restarts, 1);
+    assert.ok(r.counters.abandoned <= 17, `gave up after ${r.counters.abandoned} abandons`);
+});

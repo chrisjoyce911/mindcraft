@@ -46,10 +46,11 @@ import { dirname } from 'path';
 import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug, cellOf, TORCH_EVERY, LOW_HEALTH,
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
+import { backOf } from './mine_state.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
     keep_blocks: 32, unload_retry_steps: 50, unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4,
-    collect_below_open: 8, walk_restart: 2, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
+    collect_below_open: 8, walk_restart: 2, max_abandons: 8, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const MINE_CELLS = 400;
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
@@ -265,6 +266,26 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, noTorchUntil = 0, noUnloadUntil = 0;
     let offPlan = 0; // blocks collecting has taken the bot away from the plan
     let walkFails = 0; // failed walks back to the plan in a row
+    let abandonStreak = 0, unsafeRestarts = 0; // plan segments given up with no planned step done
+    // unsafeHere: after max_abandons segments given up (detours, descents
+    // stopped) with no planned step done, every plan step here is unsafe
+    // (water or a cave below): the plan starts again once from here, heading
+    // back the other way; a second time, mining stops. Returns finish() or null.
+    const unsafeHere = entry => {
+        if (!plan || abandonStreak < opts.max_abandons) return null;
+        abandonStreak = 0;
+        const f = feetOf();
+        if (++unsafeRestarts > 1) {
+            logStep({ ...entry, outcome: 'unsafe-ground' });
+            return finish(false, `the ground at ${f.x} ${f.y} ${f.z} is unsafe (water or caves): every plan step is vetoed`);
+        }
+        heading = backOf(heading);
+        plan = createPlan({ ...f, heading }, ore, planOpts);
+        counters.restarts = (counters.restarts || 0) + 1;
+        logStep({ restart: f, heading, reason: 'abandons', outcome: 'restarted' });
+        deps.log?.(`Every way here is unsafe: starting the mine again from ${f.x} ${f.y} ${f.z}, heading ${heading}.`);
+        return null;
+    };
     // mineCells: the mine dug so far (the entrance, then each cell a move
     // left the bot in), the last MINE_CELLS of them
     const mineCells = [];
@@ -562,9 +583,12 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         floorVetoes = floorVeto ? floorVetoes + 1 : 0;
         if (plan && floorVetoes >= opts.floor_vetoes && s.plan?.startsWith('down') && plan.stopDescent(feet)) {
             floorVetoes = 0;
+            abandonStreak++;
             counters.rules['stop-descent'] = (counters.rules['stop-descent'] || 0) + 1;
             logStep({ ...entry, action: 'stop-descent', outcome: 'done' });
             deps.log?.(`The ground below is hollow: the ${oreName} mine's level starts here at Y ${by}.`);
+            const stuck = unsafeHere(entry);
+            if (stuck) return stuck;
             await deps.sleep?.(0);
             continue;
         }
@@ -599,7 +623,10 @@ export async function mineWithLaya(bot, oreName, count, deps) {
                 entry.abandoned = plan.segment?.type;
                 plan.abandon(ok ? feetOf() : null);
                 counters.abandoned++;
-            }
+                abandonStreak++;
+            } else if (s.plan && action === s.plan && ok) abandonStreak = 0; // a planned step done
+            const stuck = unsafeHere(entry);
+            if (stuck) return stuck;
             if (!ok && pickTier(deps.inventory()) < ore.tier) ok = await ensurePickaxe(); // the pickaxe broke
         } else if (kind === 'torch') {
             const spots = [];
