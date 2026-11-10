@@ -192,3 +192,23 @@ test('v2 option lists, normalize and resolve match laya-go', () => {
     }
     assert.ok(c.resolve.some(r => r.command === 'farm'));
 });
+
+test('gather beef and kill cow with item none: the message names the animal', async () => {
+    const { mobIn, dropIn } = await import('../src/agent/laya/command.js');
+    assert.equal(mobIn('kill cow'), 'cow');
+    assert.equal(mobIn('kill those zombies'), 'zombie');
+    assert.equal(mobIn('kill the cave spider'), 'cave_spider');
+    assert.equal(mobIn('kill it'), null);
+    assert.deepEqual(dropIn('gather beef'), { drop: 'beef', animal: 'cow' });
+    assert.deepEqual(dropIn('get me some porkchops'), { drop: 'porkchop', animal: 'pig' });
+    let d = deps(answer({ command: 'gather' }));
+    assert.equal(await handleCommand('gather beef', d), true);
+    assert.deepEqual(d.ran, ['!attack("cow")']);
+    assert.match(d.said[0], /Hunting a cow for beef/);
+    d = deps(answer({ command: 'attack' }));
+    assert.equal(await handleCommand('kill cow', d), true);
+    assert.deepEqual(d.ran, ['!attack("cow")']);
+    d = deps(answer({ command: 'gather' }));
+    await handleCommand('gather stuff', d);
+    assert.deepEqual(d.said, ['What should I gather?']);
+});

@@ -48,6 +48,27 @@ const keep = n => /_(pickaxe|axe|sword|shovel|hoe|helmet|chestplate|leggings|boo
 
 const q = s => JSON.stringify(String(s));
 
+// The command model's item vocabulary has no animals, mobs or animal drops
+// yet (command v2.1 data will add them): when it answers gather or attack
+// with item none, the message's own words name the animal or the drop.
+export const MOBS = ['cow', 'pig', 'sheep', 'chicken', 'rabbit', 'goat', 'horse', 'zombie', 'skeleton', 'spider', 'creeper',
+    'enderman', 'witch', 'slime', 'drowned', 'husk', 'stray', 'phantom', 'pillager', 'cave_spider', 'zombie_villager'];
+export const DROP_ANIMAL = { beef: 'cow', steak: 'cow', leather: 'cow', porkchop: 'pig', pork: 'pig', mutton: 'sheep', wool: 'sheep',
+    chicken: 'chicken', feather: 'chicken', feathers: 'chicken', rabbit: 'rabbit' };
+
+// mobIn and dropIn find a mob, or an animal drop's animal, named in a message.
+export function mobIn(message) {
+    const words = String(message || '').toLowerCase().replace(/[^a-z_ ]/g, ' ').split(/\s+/).map(w => w.replace(/s$/, ''));
+    const joined = words.join('_');
+    // longest name first: cave_spider before spider
+    return [...MOBS].sort((a, b) => b.length - a.length).find(m => `_${joined}_`.includes(`_${m}_`)) || null;
+}
+export function dropIn(message) {
+    const words = String(message || '').toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/);
+    for (const w of words) if (DROP_ANIMAL[w] || DROP_ANIMAL[w.replace(/s$/, '')]) return { drop: w.replace(/s$/, ''), animal: DROP_ANIMAL[w] || DROP_ANIMAL[w.replace(/s$/, '')] };
+    return null;
+}
+
 // openEnded: a count that means "keep going" (none said).
 const openEnded = count => count === 'any' || count === 'all';
 
@@ -96,7 +117,11 @@ export function plan(r, ctx) {
         case 'inventory':
             return run(['!inventory']);
         case 'gather': {
-            if (item === NONE) return { kind: 'reply', text: 'What should I gather?' };
+            if (item === NONE) {
+                const d = dropIn(ctx.message);
+                if (d) return run([`!attack(${q(d.animal)})`], `Hunting a ${d.animal} for ${d.drop}.`);
+                return { kind: 'reply', text: 'What should I gather?' };
+            }
             const n = Math.min(64, countOf(count, o.gather_count));
             if (has('!layaGather')) return run([`!layaGather(${q(item)}, ${n})`], `Getting ${n} ${item}.`);
             return run([`!collectBlocks(${q(ORE_BLOCK[item] || item)}, ${n})`], `Getting ${n} ${item}.`);
@@ -141,7 +166,7 @@ export function plan(r, ctx) {
             return run([`!givePlayer(${q(ctx.speaker)}, ${q(item)}, ${n})`], say);
         }
         case 'attack': {
-            const mob = item !== NONE ? item : ctx.nearestHostile?.();
+            const mob = item !== NONE ? item : mobIn(ctx.message) || dropIn(ctx.message)?.animal || ctx.nearestHostile?.();
             if (!mob) return { kind: 'reply', text: "I don't see anything to fight." };
             return run([`!attack(${q(mob)})`], `Attacking the ${mob.replace(/_/g, ' ')}!`);
         }
@@ -185,7 +210,7 @@ export async function handleCommand(message, deps) {
     if (!text) return false;
     const r = await deps.client.decide('command', text, questionsFor(o.prompt));
     const carry = carried(deps.bot);
-    const p = plan(r, { speaker: deps.speaker, carry, has: deps.has, arity: deps.arity, nearestHostile: deps.nearestHostile, opts: o });
+    const p = plan(r, { speaker: deps.speaker, message, carry, has: deps.has, arity: deps.arity, nearestHostile: deps.nearestHostile, opts: o });
     const entry = { state: text, kind: p.kind, reason: p.reason, lines: p.lines, ms: r?.ms };
     if (r) {
         const a = r.answers;

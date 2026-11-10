@@ -10,5 +10,6 @@
 - [x] 8. Torches: a craft step waits for a late inventory before failing; materials taken 8 at a time; a failed torch place retries 3 moves on.
 - [x] 9. Collect filter: ore open to the air is collected down to collect_below_open (8) below; collect_below stays 4.
 - [x] 10. Memory summary without requests or jobs (prompt + scrubMemory).
+- [x] 11a. Command: gather/attack with item none read the animal or drop from the message (feedback 9, 10).
 - [ ] 11. `npm test` passes; merged into `laya-follow`.
 - [ ] 12. Full game suite with `llm` false; report.
