@@ -70,6 +70,10 @@ async function main() {
             console.log('resetting the test world…');
             const r = await session.worldReset();
             console.log(`test world reset in ${(r.ms / 1000).toFixed(1)}s${r.andy ? `, andy ${r.andy.inGame ? 'back in game' : 'NOT back: ' + (r.andy.error || 'timed out')}` : ' (no test bot running)'}`);
+            if (r.andy?.inGame) {
+                const st = await session.settleAfterRestart();
+                if (st.stopped) console.log(`andy started ${st.saw.join(', ') || 'something'} by himself after the restart: stopped`);
+            }
         }
         const c = await session.connect();
         console.log(`mindserver ${c.mindserver}, world ${c.world}${config.world === 'test' ? ' (test world)' : ''}`);

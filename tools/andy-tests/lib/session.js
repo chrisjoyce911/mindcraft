@@ -280,6 +280,26 @@ export class Session {
         return out;
     }
 
+    // settleAfterRestart: a restarted agent's LLM answers "Agent process
+    // restarted." from its chat history and may start a job by itself (seen:
+    // !layaFarm right after a reset). Watch watchMs; if andy got busy, !stop
+    // him and wait until he is idle, so the next test starts clean.
+    async settleAfterRestart({ watchMs = 10000 } = {}) {
+        const mind = await this.ensureMind();
+        const t0 = this.now();
+        const seen = [];
+        while (this.now() - t0 < watchMs) {
+            const label = mind.state()?.action?.current;
+            if (label && label !== 'Idle' && !seen.includes(label)) seen.push(label);
+            await this.sleep(500);
+        }
+        const busy = seen.length > 0 || !mind.state()?.action?.isIdle;
+        if (!busy) return { stopped: false, saw: [] };
+        await this.command('!stop', 500);
+        const w = await this.waitIdle({ timeout: 15000, grace: 0, settle: 1000 });
+        return { stopped: true, saw: seen, idle: w.idle };
+    }
+
     async botStart({ profiles, waitMs = 120000 } = {}) {
         const bot = await this.testBot();
         this.useWorld('test');

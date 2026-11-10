@@ -187,3 +187,19 @@ test('reset step: test world only; andy must come back; tester back in creative'
     assert.equal(r3.status, 'fail');
     assert.match(r3.reason, /andy wasn't back in game after the reset: timed out/);
 });
+
+test('after a reset, a job andy starts by himself is stopped before the test goes on', async () => {
+    const b = fakeSession();
+    b.session.config.world = 'test';
+    b.session.testWorld = () => Promise.resolve({ sites: { sites: {} } });
+    b.session.worldReset = () => {
+        b.world.after(2000, w => w.busy('action:layaFarm')); // his LLM answering "Agent process restarted."
+        return Promise.resolve({ ms: 9000, andy: { inGame: true }, andyMs: 3000 });
+    };
+    b.world.onMessage = m => { if (m === '!stop') b.world.after(300, w => w.idle()); };
+    const t = one({ name: 'r', setup: [{ reset: true }], action: [{ andy: '!inventory' }], checks: [] });
+    const r = await runTest(b.session, t, { defaults });
+    assert.equal(r.status, 'pass', r.reason);
+    assert.deepEqual(b.world.sent.map(x => x.message), ['!stop', '!inventory']);
+    assert.match(r.steps[0].out.join(' / '), /andy started action:layaFarm by himself after the restart: stopped/);
+});

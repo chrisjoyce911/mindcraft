@@ -120,7 +120,7 @@ Scenarios are data in `test/game/scenarios.json`, in suite order:
 - `snapshot`: save andy's state under a label;
 - `anchor`: retake andy's position;
 - `site`: test world only, andy and tester to a named site, taken as `{x} {y} {z}` (does nothing on another world);
-- `reset`: test world only, the world back to its template (about 10 s plus andy's restart, with nothing saved; tester is put back in creative). `home-chest-sign` and the three mine tests start with it, so they don't depend on what earlier tests dug or saved. Without it, mine-coal takes the coal by the mine site, and unload-home-chest then has to path far for coal. (Does nothing on another world.)
+- `reset`: test world only, the world back to its template (about 10 s plus andy's restart, with nothing saved; tester is put back in creative). Then andy is watched for 10 s (`settleMs`): his chat LLM answers "Agent process restarted." from its history and can start a job by itself (seen: `!layaFarm("wheat", 5)`), so a job he starts then is `!stop`ped. `--reset` on the CLI does the same. `home-chest-sign` and the three mine tests start with it, so they don't depend on what earlier tests dug or saved. Without it, mine-coal takes the coal by the mine site, and unload-home-chest then has to path far for coal. (Does nothing on another world.)
 
 Options on any step: `timeout`, `repeat`, `optional`, `replyMs`, `idleFail`.
 
