@@ -20,15 +20,17 @@ export const MIN_Y = -59;
 export const TIERS = ['none', 'wooden', 'stone', 'iron', 'diamond'];
 
 // ORES: laya-go's rules.Ores: pickaxe tier, best band of feet heights, the
-// ore's blocks and the item mining it drops.
+// ore's blocks and the item mining it drops; best is the level the mine
+// plan's staircase goes down to first (mine_plan.js; BEST_LEVEL).
+export const BEST_LEVEL = { coal: 45, copper: 48, iron: 16, lapis: 0, gold: -16, redstone: -58, diamond: -58, emerald: 16 };
 export const ORES = {
-    coal: { tier: 1, lo: 8, hi: 96, blocks: ['coal_ore', 'deepslate_coal_ore'], drop: 'coal' },
-    copper: { tier: 2, lo: 32, hi: 64, blocks: ['copper_ore', 'deepslate_copper_ore'], drop: 'raw_copper' },
-    iron: { tier: 2, lo: 8, hi: 24, blocks: ['iron_ore', 'deepslate_iron_ore'], drop: 'raw_iron' },
-    lapis: { tier: 2, lo: -8, hi: 8, blocks: ['lapis_ore', 'deepslate_lapis_ore'], drop: 'lapis_lazuli' },
-    gold: { tier: 3, lo: -24, hi: -8, blocks: ['gold_ore', 'deepslate_gold_ore'], drop: 'raw_gold' },
-    redstone: { tier: 3, lo: -58, hi: -50, blocks: ['redstone_ore', 'deepslate_redstone_ore'], drop: 'redstone' },
-    diamond: { tier: 3, lo: -58, hi: -52, blocks: ['diamond_ore', 'deepslate_diamond_ore'], drop: 'diamond' },
+    coal: { tier: 1, lo: 8, hi: 96, blocks: ['coal_ore', 'deepslate_coal_ore'], drop: 'coal', best: BEST_LEVEL.coal },
+    copper: { tier: 2, lo: 32, hi: 64, blocks: ['copper_ore', 'deepslate_copper_ore'], drop: 'raw_copper', best: BEST_LEVEL.copper },
+    iron: { tier: 2, lo: 8, hi: 24, blocks: ['iron_ore', 'deepslate_iron_ore'], drop: 'raw_iron', best: BEST_LEVEL.iron },
+    lapis: { tier: 2, lo: -8, hi: 8, blocks: ['lapis_ore', 'deepslate_lapis_ore'], drop: 'lapis_lazuli', best: BEST_LEVEL.lapis },
+    gold: { tier: 3, lo: -24, hi: -8, blocks: ['gold_ore', 'deepslate_gold_ore'], drop: 'raw_gold', best: BEST_LEVEL.gold },
+    redstone: { tier: 3, lo: -58, hi: -50, blocks: ['redstone_ore', 'deepslate_redstone_ore'], drop: 'redstone', best: BEST_LEVEL.redstone },
+    diamond: { tier: 3, lo: -58, hi: -52, blocks: ['diamond_ore', 'deepslate_diamond_ore'], drop: 'diamond', best: BEST_LEVEL.diamond },
 };
 
 // PICKAXES maps a pickaxe to its tier (gold mines like wood, netherite like

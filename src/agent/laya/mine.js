@@ -43,13 +43,13 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching,
+import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug, cellOf, TORCH_EVERY,
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
-    keep_blocks: 32, unload_retry_steps: 50, collect_range: 12, collect_budget: 24, collect_below: 4,
-    walk_restart: 2 };
+    keep_blocks: 32, unload_retry_steps: 50, unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4,
+    collect_below_open: 8, walk_restart: 2, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
@@ -111,14 +111,22 @@ export function oreSafe(blockAt, feet, ore) {
     return true;
 }
 
+// exposed: a block with air beside it (ore on a cave or pocket wall).
+export function exposed(blockAt, o) {
+    return SIDES.slice(1).some(([dx, dy, dz]) => blockAt(o.x + dx, o.y + dy, o.z + dz)?.boundingBox === 'empty');
+}
+
 // pickOre chooses the ore to collect from ores ([{x, y, z}], nearest
 // first): the nearest within range of anchor (the plan cell) and of sight
 // (SEEN_RANGE) of feet, not skipped, within the off-plan budget left, and
-// safe, and at most below blocks under anchor. It returns it or null.
-export function pickOre(ores, { feet, anchor, range, budget, blockAt, below = Infinity, skip = () => false }) {
+// safe, and at most below blocks under anchor (belowOpen for ore open to
+// the air, in a cave or pocket beside the stair). It returns it or null.
+export function pickOre(ores, { feet, anchor, range, budget, blockAt, below = Infinity, belowOpen = below, skip = () => false }) {
     for (const o of ores) {
         const d = dist(feet, o);
-        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || anchor.y - o.y > below || skip(o)) continue;
+        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || skip(o)) continue;
+        const depth = anchor.y - o.y;
+        if (depth > below && !(depth <= belowOpen && exposed(blockAt, o))) continue;
         if (oreSafe(blockAt, feet, o)) return o;
     }
     return null;
@@ -148,6 +156,35 @@ export function canMakeTorches(inv) {
     return fuel > 0 && wood;
 }
 
+// openSky reports whether nothing solid is above feet (up to 64 blocks):
+// the mine starts at the surface, so the staircase goes surface_depth down
+// before any branch.
+export function openSky(blockAt, f, height = 64) {
+    for (let dy = 2; dy <= height; dy++) {
+        const b = blockAt(f.x, f.y + dy, f.z);
+        if (b && b.boundingBox !== 'empty') return false;
+    }
+    return true;
+}
+
+// dropBelow counts the air under a cell (x, y, z) the bot would stand in:
+// from its floor down, or, when the floor is one block thick, from under
+// that floor (a thin floor over a cave). Unloaded blocks count as solid.
+export function dropBelow(blockAt, x, y, z, max = 8) {
+    const empty = yy => { const b = blockAt(x, yy, z); return !!b && b.boundingBox === 'empty'; };
+    const start = empty(y - 1) ? y - 1 : y - 2;
+    let n = 0;
+    while (n < max && empty(start - n)) n++;
+    return n;
+}
+
+// moveFeet is where a move leaves the bot's feet.
+export function moveFeet(action, bx, by, bz) {
+    const [kind, dir] = action.split(' ');
+    const [dx, dz] = OFFSET[dir];
+    return { x: bx + dx, y: by + { tunnel: 0, down: -1, up: 1 }[kind], z: bz + dz };
+}
+
 // worldCell turns a view cell [layer, dx, dz] into world coordinates.
 const worldCell = (bx, by, bz, [l, dx, dz]) => [bx + dx, by + FEET - l, bz + dz];
 
@@ -175,7 +212,11 @@ function cellsToDig(view, action) {
 //       hostiles() → hostile mobs within 16 blocks (bot.health and bot.food are read too),
 //       goHome({x, y, z}) → bool, deposit([{name, count}]) → bool (true: all went in), isFood(name) → bool,
 //       chat(msg) (optional)
+//   mines ({find(feet) → saved mine | null, save(rec)}, optional): mine
+//   memory (mine_memory.js); a mine within 16 blocks goes on
 //   sleep(ms), log(msg), stepLog (file path, or null)
+//   progress ({done}, optional): raised by each drop collected, so a job
+//   resumed after an interrupt knows how many are left
 export async function mineWithLaya(bot, oreName, count, deps) {
     const opts = { ...DEFAULTS, ...(deps.task || {}) };
     const v2 = opts.prompt === 'v2';
@@ -186,9 +227,12 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     const start = deps.inventory()[ore.drop] || 0;
     let deposited = 0; // of the ore's drop, in the home chest
     const got = () => (deps.inventory()[ore.drop] || 0) + deposited - start;
+    const progressBase = deps.progress?.done || 0;
+    const record = () => { if (deps.progress) deps.progress.done = progressBase + Math.max(0, got()); };
     let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, noTorchUntil = 0, noUnloadUntil = 0;
     let offPlan = 0; // blocks collecting has taken the bot away from the plan
     let walkFails = 0; // failed walks back to the plan in a row
+    let floorVetoes = 0; // "no floor" or drop vetoes in a row
     const failedOre = new Set(); // ore blocks a collect failed on
     const oreKey = o => `${o.x},${o.y},${o.z}`;
     const oresNear = range => deps.ores ? deps.ores(ore.blocks, range) : [deps.nearestOre(ore.blocks, range)].filter(Boolean);
@@ -211,8 +255,20 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         return await craft(TIER_PICKAXE[ore.tier], 1) && pickTier(deps.inventory()) >= ore.tier;
     };
     const finish = (ok, reason) => {
+        record();
         deps.log?.(summary(counters, got(), count, ore.drop));
-        return { ok, reason, collected: got(), counters, entrance: plan?.entrance };
+        saveMine();
+        return { ok, reason, collected: got(), counters, entrance: plan?.entrance, reused: !!reused };
+    };
+    // the mine's record (mine memory): entrance, heading, ores, deepest level
+    let mineRec = null, reused = null;
+    const saveMine = () => {
+        if (!mineRec || !deps.mines) return;
+        const f = feetOf();
+        mineRec.deepest = Math.min(mineRec.deepest ?? f.y, f.y);
+        mineRec.last = f;
+        mineRec.updated = new Date().toISOString();
+        deps.mines.save(mineRec);
     };
     const feetOf = () => {
         const p = bot.entity.position;
@@ -242,20 +298,65 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         return outcome;
     };
 
+    // heal (rule "heal"): hurt, so no more digging down: eat until food
+    // eat_to, retreat up the staircase from hostiles, and wait to regenerate.
+    // With no food it stops and asks for some.
+    const heal = async feet => {
+        counters.rules.heal = (counters.rules.heal || 0) + 1;
+        const hostiles = deps.hostiles?.() ?? 0;
+        const entry = { rule: 'heal', action: 'heal', source: 'rules', why: 'heal', pos: feet,
+            health: Math.round(bot.health ?? 20), food: bot.food ?? 20, hostiles };
+        let ate = 0;
+        while (!bot.interrupt_code && (bot.food ?? 20) < opts.eat_to && ate < 8 && deps.eat && await deps.eat().catch(() => false)) ate++;
+        let retreated = false;
+        if (hostiles > 0 && plan) retreated = await walkTo(plan.entrance);
+        if ((bot.food ?? 20) < opts.eat_to) {
+            logStep({ ...entry, ate, retreated, outcome: 'stopped' });
+            const msg = "I'm hurt and I have no food, so I've stopped mining. Can someone bring me food?";
+            deps.chat?.(msg);
+            return finish(false, 'hurt with no food');
+        }
+        for (let i = 0; i < opts.heal_wait_s && !bot.interrupt_code && (bot.health ?? 20) <= opts.heal_health; i++) {
+            if (!retreated && plan && (deps.hostiles?.() ?? 0) > 0) retreated = await walkTo(plan.entrance);
+            await deps.sleep(1000);
+        }
+        logStep({ ...entry, ate, retreated, health_after: Math.round(bot.health ?? 20), outcome: 'done' });
+        return null;
+    };
+
     let plan = null;
     const planOpts = Object.fromEntries(Object.keys(PLAN_DEFAULTS).filter(k => opts[k] != null).map(k => [k, opts[k]]));
     if (!await ensurePickaxe()) return finish(false, `needs a ${TIER_PICKAXE[ore.tier]}`);
 
     if (v2) {
         const f = feetOf();
-        plan = createPlan({ ...f, heading }, ore, planOpts);
-        const msg = `The ${oreName} mine starts at ${f.x} ${f.y} ${f.z}, heading ${heading}.`;
+        reused = deps.mines?.find(f) || null;
+        let msg;
+        if (reused) {
+            // the same layout from the same entrance: walk through what is dug
+            const e = reused.entrance;
+            heading = reused.heading;
+            plan = createPlan({ ...e, heading }, ore, { ...planOpts, surface: !!reused.surface });
+            const open = c => ['A', 'O'].includes(cellOf(deps.blockAt(c.x, c.y, c.z), [])) && cellOf(deps.blockAt(c.x, c.y + 1, c.z), []) === 'A';
+            const skipped = plan.skipDug(open);
+            mineRec = { ...reused, ores: [...new Set([...(reused.ores || []), oreName])] };
+            msg = `Going on with the mine at ${e.x} ${e.y} ${e.z} (heading ${heading}) for ${oreName}.`;
+            logStep({ reuse: e, skipped, outcome: 'reused' });
+        } else {
+            const surface = openSky(deps.blockAt, f);
+            plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface });
+            mineRec = { entrance: f, heading, surface, ores: [oreName], deepest: f.y, started: new Date().toISOString() };
+            msg = `The ${oreName} mine starts at ${f.x} ${f.y} ${f.z}, heading ${heading}.`;
+        }
+        saveMine();
         deps.log?.(msg);
         deps.chat?.(msg);
     }
 
     for (let step = 0; step < maxSteps && !bot.interrupt_code; step++) {
         if (got() >= count) return finish(true, 'done');
+        record();
+        if (step && step % 50 === 0) saveMine();
         const inv = deps.inventory();
         const torches = inv.torch || 0;
         if (step >= noTorchUntil && torches < opts.torch_low && (canMakeTorches(inv) || (!torches && dark >= 8))) {
@@ -264,7 +365,13 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         }
         const feet = feetOf();
         const { x: bx, y: by, z: bz } = feet;
-        const view = readView(deps.blockAt, bx, by, bz, ore.blocks);
+        if (plan && (bot.health ?? 20) <= opts.heal_health) {
+            const stop = await heal(feet);
+            if (stop) return stop;
+            await deps.sleep?.(0);
+            continue;
+        }
+        let view = readView(deps.blockAt, bx, by, bz, ore.blocks);
 
         let pn = plan ? plan.next(feet) : null;
         if (pn?.done) return finish(false, `plan: ${pn.done}`);
@@ -273,7 +380,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         const anchor = pn?.walk || feet;
         const near = pickOre(oresNear(SEEN_RANGE), { feet, anchor, blockAt: deps.blockAt,
             range: plan ? opts.collect_range : SEEN_RANGE, budget: plan ? opts.collect_budget - offPlan : Infinity,
-            below: plan ? opts.collect_below : Infinity,
+            below: plan ? opts.collect_below : Infinity, belowOpen: plan ? Math.max(opts.collect_below, opts.collect_below_open) : Infinity,
             skip: o => failedOre.has(oreKey(o)) });
         const seen = near ? Math.max(1, Math.ceil(Math.hypot(near.x - bx, near.y - by, near.z - bz))) : 0;
         const inv2 = deps.inventory();
@@ -295,7 +402,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
                         // can't get back (e.g. down a hole after ore): the
                         // mine starts again from here
                         const f = feetOf();
-                        plan = createPlan({ ...f, heading }, ore, planOpts);
+                        plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface: openSky(deps.blockAt, f) });
                         walkFails = 0; failures = 0; offPlan = 0;
                         counters.restarts = (counters.restarts || 0) + 1;
                         logStep({ restart: f, outcome: 'restarted' });
@@ -315,7 +422,20 @@ export async function mineWithLaya(bot, oreName, count, deps) {
                 hostiles: Math.min(HOSTILES_CAP, deps.hostiles?.() ?? 0), valuables: valuables(inv2) });
         }
 
-        const rule = decide(s);
+        // A move onto a drop (more than max_drop air under the cell, also
+        // under a one-block floor) is unsafe like "no floor": the rules
+        // answer with that move's floor taken away in their view.
+        const isDrop = a => MOVES.has(a.split(' ')[0])
+            && dropBelow(deps.blockAt, ...Object.values(moveFeet(a, bx, by, bz))) > opts.max_drop;
+        const dropped = [];
+        let rule = decide(s);
+        while (MOVES.has(rule.action.split(' ')[0]) && isDrop(rule.action) && dropped.length < 12) {
+            dropped.push(rule.action);
+            view = view.map(l => l.map(r => r.slice()));
+            const [l, dx, dz] = dug(rule.action).floor;
+            view[l][2 + dz][2 + dx] = 'A';
+            rule = decide({ ...s, view }); // the state text keeps the world as read
+        }
         let action = rule.action, source = 'rules', why = null;
         const entry = { rule: rule.action, pos: feet, state: state(s) };
         let r = null;
@@ -327,7 +447,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         else {
             const top = r.answers.Action.top;
             Object.assign(entry, { model: top, p: r.answers.Action.topProbability, hazard: r.answers.Hazard?.probability, ms: r.ms });
-            const veto = unsafe(view, top);
+            const veto = unsafe(view, top) || (isDrop(top) ? 'drop' : '');
             if (!r.answers.Action.confident) why = 'low-confidence';
             else if (veto) { why = 'veto'; counters.vetoes[veto] = (counters.vetoes[veto] || 0) + 1; entry.veto = veto; }
             else if (top === 'collect' && !s.seen) why = 'nothing-seen';
@@ -344,12 +464,16 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             const u = r?.answers?.Unload;
             entry.unload = u?.probability;
             const want = s.free === 0 || (u?.confident ? u.probability >= 0.5 : unload(s));
-            if (want && !touching(view).length) {
+            // ore in sight and room for it: collect it first
+            const collectFirst = s.seen > 0 && s.free > 0;
+            if (want && collectFirst) entry.unload_later = 'collect-first';
+            if (want && !collectFirst && !touching(view).length) {
                 // A full chest after putting things in is a partial unload: no
                 // failure, but no Unload again for a while either.
                 const outcome = await goUnload(homePos);
                 const ok = outcome !== 'failed';
-                if (outcome !== 'done') noUnloadUntil = step + opts.unload_retry_steps;
+                // a failed unload backs off longer: mining and collecting go on
+                if (outcome !== 'done') noUnloadUntil = step + (ok ? opts.unload_retry_steps : opts.unload_fail_steps);
                 logStep({ ...entry, action: 'unload', source: u?.confident ? 'model' : 'rules', outcome });
                 failures = ok ? 0 : failures + 1;
                 if (!ok) counters.failures++;
@@ -362,6 +486,21 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         if (source === 'model') counters.model++;
         else counters.rules[why] = (counters.rules[why] || 0) + 1;
         Object.assign(entry, { action, source, why });
+        if (dropped.length) entry.drops = dropped;
+
+        // Floor vetoes in a row on the staircase: the ground below is a cave
+        // or a drop, so the descent stops here and the level starts.
+        const planFloor = s.plan && MOVES.has(s.plan.split(' ')[0]) && (unsafe(s.view, s.plan) === 'no floor' || isDrop(s.plan));
+        const floorVeto = entry.veto === 'no floor' || entry.veto === 'drop' || dropped.length > 0 || planFloor;
+        floorVetoes = floorVeto ? floorVetoes + 1 : 0;
+        if (plan && floorVetoes >= opts.floor_vetoes && s.plan?.startsWith('down') && plan.stopDescent(feet)) {
+            floorVetoes = 0;
+            counters.rules['stop-descent'] = (counters.rules['stop-descent'] || 0) + 1;
+            logStep({ ...entry, action: 'stop-descent', outcome: 'done' });
+            deps.log?.(`The ground below is hollow: the ${oreName} mine's level starts here at Y ${by}.`);
+            await deps.sleep?.(0);
+            continue;
+        }
 
         let ok = false;
         const kind = action.split(' ')[0];
@@ -400,7 +539,9 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             const [dx, dz] = OFFSET[{ N: 'S', S: 'N', E: 'W', W: 'E' }[heading]];
             for (const [x, z] of [[dx, dz], ...Object.values(OFFSET)]) if (view[FEET][2 + z][2 + x] === 'A') spots.push([x, 0, z, 'bottom']);
             for (const [x, y, z, on] of spots) if ((ok = await deps.place('torch', bx + x, by + y, bz + z, on))) break;
-            if (ok) dark = 0;
+            // placed: dark again from 0; failed: try again a few moves on,
+            // not at once in the same spot
+            dark = ok ? 0 : Math.min(dark, TORCH_EVERY - opts.torch_place_retry);
         } else if (kind === 'block') {
             const item = THROWAWAY.find(n => (deps.inventory()[n] || 0) > 0);
             ok = !!item;

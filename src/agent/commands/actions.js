@@ -2,6 +2,7 @@ import * as skills from '../library/skills.js';
 import settings from '../settings.js';
 import { parseGoal as parseFarmGoal } from '../laya/farm.js';
 import { nearestChestTo } from '../laya/pack_actions.js';
+import { isHomeName } from '../laya/home_chest.js';
 
 // homeChestAdopter lets a Laya task save a chest marked by a sign with the
 // bot's name as the home chest (when none is saved), telling the player.
@@ -36,21 +37,34 @@ function runAsAction (actionFn, resume = false, timeout = -1) {
     return wrappedAction;
 }
 
-// runLayaAction runs a Laya skill as a resumable action: when a mode (a fight,
-// eating) interrupts it, it carries on once the bot is idle again. start(agent,
-// ...args) is called once per command and returns the work, so goals fixed at
-// the command (have N more logs) aren't counted again on resume. The resume
-// ends when the work finishes by itself or a new command or !stop replaces it.
+// runLayaAction runs a Laya skill as a job on the director's job stack
+// (laya/director.js): when a mode (a fight, eating, unstuck) interrupts it,
+// the director resumes it once the mode is done. start(agent, ...args) is
+// called once per command and returns the work (work.remaining(), optional:
+// how many are left), so goals fixed at the command (have N more logs)
+// aren't counted again on resume. The job ends when the work finishes by
+// itself (or fails), or a player's new command or !stop replaces it.
 function runLayaAction(label, start, timeout = -1) {
     return async function (agent, ...args) {
         const work = start(agent, ...args);
-        const r = await agent.actions.runAction(`action:${label}`, async () => {
-            await work();
-            if (!agent.bot.interrupt_code) agent.actions.cancelResume();
-        }, { timeout, resume: true });
-        if (r.interrupted && !r.timedout) return;
-        return r.message;
+        const job = agent.director.stack.start(label, args, { work, remaining: work.remaining, timeout });
+        return await runJob(agent, job);
     };
+}
+
+// runJob runs (or resumes) a job from the stack as the agent's action.
+export async function runJob(agent, job) {
+    const stack = agent.director.stack;
+    stack.resumed(job);
+    let result;
+    const r = await agent.actions.runAction(`action:${job.name}`, async () => { result = await job.work(); }, { timeout: job.timeout ?? -1 });
+    if (stack.has(job)) {
+        if (r.interrupted && !r.timedout) stack.paused(job);
+        else stack.ended(job, !r.success ? 'blocked' : (result === false || result?.ok === false) ? 'failed' : 'done');
+    }
+    agent.director.tick('job-ended').catch(() => {});
+    if (r.interrupted && !r.timedout) return;
+    return r.message;
 }
 
 export const actionsList = [
@@ -82,6 +96,7 @@ export const actionsList = [
         name: '!stop',
         description: 'Force stop all actions and commands that are currently executing.',
         perform: async function (agent) {
+            agent.director?.stack.clear(); // no Laya job resumes
             await agent.actions.stop();
             agent.clearBotLogs();
             agent.actions.cancelResume();
@@ -145,7 +160,15 @@ export const actionsList = [
             'ore': {type: 'string', description: 'The ore: coal, copper, iron, lapis, gold, redstone or diamond.'},
             'count': {type: 'int', description: 'How many of the ore to collect.', domain: [1, 64]}
         },
-        perform: runLayaAction('layaMine', (agent, ore, count) => () => skills.mineOre(agent.bot, ore, count, () => agent.memory_bank.recallPlace('home_chest')))
+        // progress.done (the drop collected so far) is kept across resumes
+        // after a fight, so a resumed job mines only what is left.
+        perform: runLayaAction('layaMine', (agent, ore, count) => {
+            const progress = { done: 0 };
+            const work = () => skills.mineOre(agent.bot, ore, Math.max(1, count - progress.done),
+                () => agent.homeChest(), progress);
+            work.remaining = () => count - progress.done;
+            return work;
+        })
     },
     {
         name: '!layaFarm',
@@ -159,9 +182,13 @@ export const actionsList = [
             if (goal.error) return goal.error;
             const end = goal.minutes == null ? null : Date.now() + goal.minutes * 60000;
             const progress = { harvested: 0 }; // kept across resumes after a fight
-            return runLayaAction('layaFarm', () => () => skills.farmWithLayaModel(agent.bot,
-                { crop: goal.crop, count: goal.count, progress, minutes: end == null ? null : Math.max(0.1, (end - Date.now()) / 60000) },
-                () => agent.memory_bank.recallPlace('home_chest'), homeChestAdopter(agent)))(agent);
+            return runLayaAction('layaFarm', () => {
+                const work = () => skills.farmWithLayaModel(agent.bot,
+                    { crop: goal.crop, count: goal.count, progress, minutes: end == null ? null : Math.max(0.1, (end - Date.now()) / 60000) },
+                    () => agent.homeChest(), homeChestAdopter(agent));
+                if (goal.count != null) work.remaining = () => goal.count - progress.harvested;
+                return work;
+            })(agent, goal.crop, goal.count ?? 'any');
         }
     },
     {
@@ -229,6 +256,13 @@ export const actionsList = [
         params: {'name': { type: 'string', description: 'The name to remember the location as.' }},
         perform: async function (agent, name) {
             const pos = agent.bot.entity.position;
+            if (isHomeName(name)) {
+                // the home chest is only ever a chest: the one nearest me
+                const c = nearestChestTo(agent.bot, pos);
+                if (!c) return "There's no chest here, so I can't make it my home chest. Stand by a chest and use !setHomeChest.";
+                agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z);
+                return `Home chest set at ${c.x} ${c.y} ${c.z}.`;
+            }
             agent.memory_bank.rememberPlace(name, pos.x, pos.y, pos.z);
             return `Location saved as "${name}".`;
         }

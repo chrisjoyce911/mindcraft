@@ -3,8 +3,12 @@
 //
 // From the entrance (the bot's feet and heading when it starts):
 //   1. a staircase (1 wide, 2 high) straight ahead down to the first level:
-//      the ore band's top, or the entrance height when it is inside the band
-//      (up to the band's bottom when it starts below it);
+//      the ore's best level (band.best, clamped to the band; else the band's
+//      top), and from the surface (surface: true) at least surface_depth
+//      below the entrance, so it never branch-mines at the surface; the
+//      entrance height when it starts underground inside the band, or from
+//      the surface already below the target (up to the band's bottom when it
+//      starts below it);
 //   2. at each level a main tunnel main_length blocks long, with a branch
 //      branch_length blocks to the left and then the right every branch_every
 //      blocks of it;
@@ -14,7 +18,8 @@
 //   4. when the next level would leave the band (below its bottom, or MIN_Y),
 //      a tunnel next_shaft blocks to the right (of the entrance heading)
 //      starts a new column with a grid at that level, which then climbs
-//      level by level, and so on, turning back at each end of the band.
+//      level by level (never above the first level's target), and so on,
+//      turning back at each end.
 //
 // The plan is a list of segments (a straight run of one move kind in one
 // direction from a start cell) made lazily, so a segment can start where the
@@ -30,7 +35,8 @@
 
 import { OFFSET, MIN_Y, rightOf, leftOf, backOf } from './mine_state.js';
 
-export const PLAN_DEFAULTS = { branch_every: 3, branch_length: 16, main_length: 32, level_gap: 4, next_shaft: 40, max_shifts: 3 };
+export const PLAN_DEFAULTS = { branch_every: 3, branch_length: 16, main_length: 32, level_gap: 4, next_shaft: 40, max_shifts: 3,
+    surface_depth: 10 };
 
 const DY = { tunnel: 0, down: -1, up: 1 };
 
@@ -42,14 +48,30 @@ export function cellAt(seg, k) {
 
 const same = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
 
-// firstLevel is the plan's first level for an entrance height and a band.
-export function firstLevel(y, lo, hi, minY = MIN_Y) {
+// targetLevel is the level the staircase goes down to from above: the
+// ore's best level (else the band's top) clamped to the band, and from the
+// surface at least depth below the entrance (within the band).
+export function targetLevel(y, lo, hi, minY = MIN_Y, { best = null, surface = false, depth = PLAN_DEFAULTS.surface_depth } = {}) {
     const bottom = Math.max(lo, minY);
-    return y > hi ? hi : y < bottom ? bottom : y;
+    const clamp = v => Math.max(bottom, Math.min(hi, v));
+    let t = clamp(best ?? hi);
+    if (surface) t = clamp(Math.min(t, y - depth));
+    return t;
+}
+
+// firstLevel is the plan's first level for an entrance height and a band
+// (opts: targetLevel's best, surface, depth).
+export function firstLevel(y, lo, hi, minY = MIN_Y, opts = {}) {
+    const bottom = Math.max(lo, minY);
+    // already underground inside the band: the grid starts here
+    if (!opts.surface && y >= bottom && y <= hi) return y;
+    const t = targetLevel(y, lo, hi, minY, opts);
+    return y > t ? t : y < bottom ? bottom : y;
 }
 
 // createPlan lays out a mine from start {x, y, z, heading} for an ore band
-// {lo, hi}. Options: PLAN_DEFAULTS, minY.
+// {lo, hi, best?}. Options: PLAN_DEFAULTS, minY, surface (the entrance is
+// under the open sky).
 export function createPlan(start, band, options = {}) {
     const o = { ...PLAN_DEFAULTS, minY: MIN_Y, ...options };
     const bottom = Math.max(band.lo, o.minY);
@@ -66,6 +88,7 @@ export function createPlan(start, band, options = {}) {
             const s = seg('stair', ty < at.y ? 'down' : 'up', dir, at, Math.abs(ty - at.y));
             yield s;
             at = stopped(s);
+            if (s.stopAt) return s.stopAt; // the descent stops here: this is the level
             if (!s.abandoned) continue;
             if (s.k > 0) shifts = 0; // stair steps were done since the last one
             if (++shifts > o.max_shifts) return null;
@@ -97,7 +120,10 @@ export function createPlan(start, band, options = {}) {
 
     function* layout() {
         let at = entrance, dir = start.heading, vdir = -1;
-        const y1 = firstLevel(entrance.y, band.lo, band.hi, o.minY);
+        const lv = { best: band.best ?? null, surface: !!o.surface, depth: o.surface_depth };
+        const y1 = firstLevel(entrance.y, band.lo, band.hi, o.minY, lv);
+        // climbing columns stop at the first level's target (or y1 when lower down)
+        const top = Math.max(y1, targetLevel(entrance.y, band.lo, band.hi, o.minY, lv));
         if (y1 !== at.y) {
             at = yield* stair(at, dir, y1);
             if (!at) return 'the staircase is blocked';
@@ -105,7 +131,7 @@ export function createPlan(start, band, options = {}) {
         for (;;) {
             at = yield* grid(at, dir);
             let ny = at.y + vdir * o.level_gap;
-            if (ny >= bottom && ny <= band.hi) {
+            if (ny >= bottom && ny <= top) {
                 at = yield* stair(at, dir, ny);
                 if (!at) return 'the staircase is blocked';
             } else {
@@ -153,6 +179,31 @@ export function createPlan(start, band, options = {}) {
             current.abandoned = true;
             if (restart) current.restart = { x: restart.x, y: restart.y, z: restart.z };
             advance();
+        },
+
+        // skipDug fast-forwards over plan cells already dug (isOpen(cell):
+        // feet and head are air), as when a saved mine is reused: next()
+        // then walks to the first undug cell. Returns the cells skipped.
+        skipDug(isOpen, max = 5000) {
+            let n = 0;
+            while (current && n < max) {
+                if (current.k >= current.length) { advance(); continue; }
+                if (!isOpen(cellAt(current, current.k + 1))) break;
+                current.k++;
+                n++;
+            }
+            return n;
+        },
+
+        // stopDescent ends a staircase where the bot stands (feet): the
+        // level's grid starts there (e.g. the ground below is a cave).
+        // Returns whether it did (only on a staircase going down).
+        stopDescent(feet) {
+            if (!current || current.type !== 'stair' || current.kind !== 'down') return false;
+            current.abandoned = true;
+            current.stopAt = { x: feet.x, y: feet.y, z: feet.z };
+            advance();
+            return true;
         },
 
         // torchWall is the wall a torch goes on: the left of the direction of

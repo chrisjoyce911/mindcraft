@@ -12,6 +12,8 @@ import { ORES as MINE_ORES } from "../laya/mine_state.js";
 import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
 import { packDeps } from "../laya/pack_actions.js";
+import { mineStore } from "../laya/mine_memory.js";
+import { readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, mkdirSync as mkdirSyncFs } from "fs";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -2218,6 +2220,10 @@ async function layaGatherBlocks(bot, g, n) {
     return countOf(bot, g) > before;
 }
 
+// TAKE_IN_BULK: materials the craft task takes at least TAKE_MIN of at once.
+export const TAKE_IN_BULK = new Set(['planks', 'log', 'stick', 'coal', 'charcoal', 'cobblestone']);
+const TAKE_MIN = 8;
+
 function layaCraftDeps(bot) {
     return {
         client: laya,
@@ -2245,7 +2251,9 @@ function layaCraftDeps(bot) {
             craft: async (g, times) => {
                 const before = countOf(bot, g);
                 await craftRecipe(bot, realName(bot, g), times);
-                return countOf(bot, g) > before;
+                // the inventory can show the craft late ("craft stick failed"
+                // with the sticks made): wait for it before calling it failed
+                return countOf(bot, g) > before || await settle(() => countOf(bot, g) > before, { ms: 3000, quiet: 0 });
             },
             smelt: async (g, n) => {
                 const before = countOf(bot, g);
@@ -2267,7 +2275,9 @@ function layaCraftDeps(bot) {
                     name = c.containerItems().find(i => layaGeneric(i.name) === g)?.name ?? g;
                     await c.close();
                 }
-                return await takeFromChest(bot, name, n);
+                // materials in one withdrawal, not one at a time (planks x1 ×4)
+                const bulk = TAKE_IN_BULK.has(g) ? Math.max(n, TAKE_MIN) : n;
+                return await takeFromChest(bot, name, bulk);
             },
             store: async (name, n) => {
                 const total = bot.inventory.items().filter(i => i.name === name).reduce((s, i) => s + i.count, 0);
@@ -2316,7 +2326,18 @@ export async function craftForTask(bot, item, count) {
     return !!(await craftRecipe(bot, item, count));
 }
 
-export async function mineOre(bot, ore, count=1, homeChest=null) {
+// eatBestFood eats the most filling safe food carried (rotten flesh last);
+// returns whether it ate.
+const HARMFUL_FOOD = new Set(['pufferfish', 'poisonous_potato', 'spider_eye', 'suspicious_stew']);
+export async function eatBestFood(bot) {
+    const foods = bot.registry.foodsByName || {};
+    const points = i => i.name === 'rotten_flesh' ? -1 : (foods[i.name].foodPoints || 0);
+    const item = bot.inventory.items().filter(i => foods[i.name] && !HARMFUL_FOOD.has(i.name)).sort((a, b) => points(b) - points(a))[0];
+    if (!item) return false;
+    try { await bot.equip(item, 'hand'); await bot.consume(); return true; } catch { return false; }
+}
+
+export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) {
     /**
      * Mine until count more of an ore's drop is collected, finding the ore
      * underground with the Laya mine task (a staircase down to the ore's
@@ -2327,6 +2348,7 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
      * @param {string} ore, one of coal, copper, iron, lapis, gold, redstone, diamond.
      * @param {number} count, how many of the ore's drop to collect.
      * @param {function} homeChest, optional: returns the home chest's [x, y, z] (the remembered place "home_chest"), or nothing.
+     * @param {object} progress, optional: {done}, raised by each drop collected (kept across a resumed job).
      * @returns {Promise<boolean>} true if it collected them.
      **/
     const info = MINE_ORES[ore];
@@ -2373,9 +2395,19 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
             // the home chest and its neighbours, as the farm task uses them
             ...packDeps(bot, homeChest),
             chat: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
+            eat: () => eatBestFood(bot),
+            // mine memory: a mine within 16 blocks goes on (bots/<name>/laya-mines.json)
+            mines: mineStore({
+                load: () => JSON.parse(readFileSyncFs(`./bots/${bot.username}/laya-mines.json`, 'utf8')),
+                save: list => {
+                    mkdirSyncFs(`./bots/${bot.username}`, { recursive: true });
+                    writeFileSyncFs(`./bots/${bot.username}/laya-mines.json`, JSON.stringify(list, null, 1));
+                },
+            }),
             sleep,
             log: msg => log(bot, msg),
             stepLog: `./bots/${bot.username}/logs/laya-mine.jsonl`,
+            progress,
         });
         log(bot, r.ok ? `Mined ${r.collected} ${info.drop}.` : `Stopped mining ${ore}: ${r.reason}.`);
         return r.ok;

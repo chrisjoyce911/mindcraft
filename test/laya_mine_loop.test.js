@@ -370,3 +370,123 @@ test('pickUpDrop: waits for the drop, fetches a left item, and says when it neve
     assert.equal(fetched, 3);
     assert.equal(await pickUpDrop({ count: () => 6, before: 5, findItem: () => null, fetch: async () => {}, sleep }), true);
 });
+
+test('dropBelow: air under the floor, and under a one-block floor over a cave', async () => {
+    const { dropBelow } = await import('../src/agent/laya/mine.js');
+    const w = fakeWorld(20, { '1,19,0': 'air', '1,18,0': 'air', '2,18,0': 'air', '2,17,0': 'air', '2,16,0': 'air', '2,15,0': 'air' });
+    assert.equal(dropBelow(w.blockAt, 0, 20, 0), 0);
+    assert.equal(dropBelow(w.blockAt, 1, 20, 0), 2);
+    assert.equal(dropBelow(w.blockAt, 2, 20, 0), 4, 'a thin floor over 4 air');
+});
+
+test('v2 heal: hurt, so eat to 18, wait to regenerate, then go on (rule heal)', async () => {
+    const s = v2({ y: 20, steps: 3 });
+    s.bot.health = 6; s.bot.food = 12;
+    let ate = 0;
+    s.deps.eat = async () => { ate++; s.bot.food = Math.min(20, s.bot.food + 4); return true; };
+    s.deps.sleep = async ms => { if (ms >= 1000) s.bot.health += 1; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(ate, 2, 'food 12 → 20');
+    assert.equal(s.bot.health, 9);
+    assert.equal(r.counters.rules.heal, 1);
+    assert.ok(s.calls.moves.length >= 1, 'then mining goes on');
+});
+
+test('v2 heal: hurt with no food: stop and ask; hostiles: retreat up the staircase', async () => {
+    const s = v2({ y: 60, steps: 5 });
+    s.bot.health = 4; s.bot.food = 16;
+    s.deps.eat = async () => false;
+    s.deps.hostiles = () => 1;
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, 'hurt with no food');
+    assert.match(s.calls.chat.at(-1), /no food/);
+    assert.deepEqual(s.calls.walks.at(-1), [0, 60, 0], 'back to the entrance');
+});
+
+test('v2: never steps onto a drop; two floor vetoes on the staircase start the level there', async () => {
+    // a cave under the plan's tunnel east at Y 20: the rules go another way
+    let s = v2({ y: 20, steps: 1, blocks: { '1,18,0': 'air', '1,17,0': 'air', '1,16,0': 'air', '1,15,0': 'air' } });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.notDeepEqual(s.calls.moves[0], [1, 20, 0]);
+    // staircase east from Y 60 with a hollow under every next stair cell
+    const blocks = {};
+    for (let x = 1; x <= 4; x++) for (let z = -3; z <= 3; z++) for (let y = 50; y <= 57; y++) blocks[`${x},${y},${z}`] = "air";
+    s = v2({ y: 60, steps: 4, blocks });
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.counters.rules['stop-descent'], 1);
+});
+
+test('mine memory: nearestMine, upsertMine, mineStore', async () => {
+    const { nearestMine, upsertMine, mineStore } = await import('../src/agent/laya/mine_memory.js');
+    const a = { entrance: { x: 0, y: 70, z: 0 }, heading: 'E' }, b = { entrance: { x: 100, y: 70, z: 0 }, heading: 'N', last: { x: 30, y: 20, z: 0 } };
+    assert.equal(nearestMine([a, b], { x: 10, y: 70, z: 5 }), a);
+    assert.equal(nearestMine([a, b], { x: 40, y: 70, z: 0 }), b, 'near where the bot last was in it');
+    assert.equal(nearestMine([a, b], { x: 60, y: 70, z: 60 }), null);
+    let list = upsertMine([a, b], { ...a, ores: ['iron'] });
+    assert.equal(list.length, 2);
+    assert.deepEqual(list[0].ores, ['iron']);
+    let saved = null;
+    const st = mineStore({ load: () => { throw new Error('no file'); }, save: l => { saved = l; } });
+    assert.equal(st.find({ x: 0, y: 0, z: 0 }), null);
+    st.save(a);
+    assert.deepEqual(saved, [a]);
+});
+
+test('v2: a mine job near a saved mine goes on with it: same entrance, dug cells skipped', async () => {
+    let saved = [];
+    const store = { find: () => saved[0] || null, save: rec => { saved = [rec]; } };
+    // first job: a staircase from Y 60 heading E
+    let s = v2({ y: 60, steps: 4 });
+    s.deps.mines = store;
+    let r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.reused, false);
+    assert.deepEqual(saved[0].entrance, { x: 0, y: 60, z: 0 });
+    assert.equal(saved[0].heading, 'E');
+    const dug = new Map(s.w.m);
+    // second job 3 blocks away, facing north: goes on with the mine at its 5th stair cell
+    s = v2({ y: 60, steps: 2 });
+    for (const [k, v] of dug) s.w.m.set(k, v);
+    s.bot.entity.position = { x: 0.5, y: 60, z: 3.5 };
+    s.bot.entity.yaw = 0;
+    s.deps.mines = store;
+    r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.reused, true);
+    assert.match(s.calls.chat[0], /Going on with the mine at 0 60 0 \(heading E\) for iron/);
+    assert.deepEqual(s.calls.walks[0], [4, 56, 0], 'walks to the bottom of the dug staircase');
+    assert.deepEqual(saved[0].ores, ['iron']);
+});
+
+test('v2: ore in sight with room in the pack is collected before unloading; a failed unload backs off', async () => {
+    const inv = { stone_pickaxe: 1, torch: 5, cobblestone: 10, dirt: 40 };
+    let s = v2({ y: 20, steps: 2, free: 1, home: { x: 0, y: 20, z: 10 }, inv, blocks: { '2,20,1': 'iron_ore' } });
+    s.deps.ores = () => [{ x: 2, y: 20, z: 1 }];
+    s.deps.collect = async () => { s.w.m.set('2,20,1', 'air'); s.inventory.raw_iron = (s.inventory.raw_iron || 0) + 1; return true; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.ok, true);
+    assert.equal(s.calls.home.length, 0, 'collected first');
+    // unload fails (no chest there): no retry for unload_fail_steps
+    s = v2({ y: 20, steps: 12, free: 2, home: { x: 0, y: 20, z: 10 }, inv });
+    s.deps.deposit = async () => false;
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(s.calls.home.length, 1);
+    assert.ok(s.calls.moves.length > 5, 'mining went on');
+});
+
+test('a failed torch place waits a few moves before trying again', async () => {
+    const s = v2({ y: 20, steps: 14, inv: { stone_pickaxe: 1, torch: 5, cobblestone: 10 } });
+    s.deps.place = async (item, x, y, z, on) => { s.calls.placed.push([item, x, y, z, on]); return false; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    // 8 moves, a failed torch, 3 moves, a failed torch, 2 moves
+    assert.equal(r.counters.steps.torch, 2);
+    assert.equal(r.counters.steps.tunnel, 12);
+});
+
+test('pickOre: ore 5–8 below is taken only when open to the air (a pocket beside the stair)', () => {
+    const w = fakeWorld(50, { '3,44,0': 'iron_ore', '3,43,0': 'air', '5,44,0': 'iron_ore' });
+    const opts = { feet: { x: 0, y: 50, z: 0 }, anchor: { x: 0, y: 50, z: 0 }, range: 12, budget: 24, blockAt: w.blockAt, below: 4, belowOpen: 8 };
+    assert.deepEqual(pickOre([{ x: 5, y: 44, z: 0 }, { x: 3, y: 44, z: 0 }], opts), { x: 3, y: 44, z: 0 }, 'the buried one 6 below is left');
+    assert.equal(pickOre([{ x: 5, y: 44, z: 0 }], opts), null);
+    assert.equal(pickOre([{ x: 3, y: 41, z: 0 }], { ...opts, blockAt: fakeWorld(50, { '3,41,0': 'iron_ore', '3,40,0': 'air' }).blockAt }), null, '9 below: too deep');
+    assert.equal(pickOre([{ x: 3, y: 44, z: 0 }], { ...opts, belowOpen: 4 }), null, 'collect_below alone');
+});

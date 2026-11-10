@@ -171,3 +171,30 @@ test('detours with no stair step between end the plan after max_shifts; a stair 
     }
     assert.ok(plan.next(feet).step);
 });
+
+test('the staircase goes to the ore best level, and from the surface at least 10 down', async () => {
+    const { targetLevel, firstLevel } = await import('../src/agent/laya/mine_plan.js');
+    const { ORES, BEST_LEVEL } = await import('../src/agent/laya/mine_state.js');
+    const lvl = (ore, y, surface = true) => firstLevel(y, ORES[ore].lo, ORES[ore].hi, undefined, { best: ORES[ore].best, surface });
+    assert.equal(lvl('coal', 70), 45, 'coal from Y 70: down to 45, not the surface');
+    assert.equal(lvl('coal', 50), 40, 'at least 10 below a surface entrance');
+    assert.equal(lvl('coal', 30, false), 30, 'underground in the band: start here');
+    assert.equal(lvl('coal', 70, false), 70, 'underground in the band: start here');
+    assert.equal(lvl('iron', 70, false), 16, 'above the band: down to the best level');
+    assert.equal(lvl('copper', 70), 48);
+    assert.equal(lvl('iron', 70), 16);
+    assert.equal(lvl('lapis', 70), 0);
+    assert.equal(lvl('gold', 70), -16);
+    assert.equal(lvl('redstone', 70), -58);
+    assert.equal(lvl('diamond', 70), -58);
+    assert.equal(BEST_LEVEL.emerald, 16);
+    assert.equal(targetLevel(20, 8, 24, undefined, { best: 16, surface: true }), 10, 'clamped to the band');
+    assert.equal(targetLevel(12, 8, 24, undefined, { best: 16, surface: true }), 8);
+    // the coal plan: a staircase from 70 down to 45, then the grid; never a branch above 45
+    const plan = createPlan({ x: 0, y: 70, z: 0, heading: 'N' }, ORES.coal, { surface: true });
+    const { out } = follow(plan, { x: 0, y: 70, z: 0 }, 4000, { abandonWhen: r => r.segment === 'branch' });
+    const firstGrid = out.findIndex(r => r.segment === 'main' || r.segment === 'branch');
+    assert.ok(out.slice(0, firstGrid).every(r => r.segment === 'stair'));
+    assert.equal(out[firstGrid].feet.y, 45);
+    assert.ok(out.filter(r => r.feet).every(r => r.segment === 'stair' || r.feet.y <= 45), 'no grid above the first level');
+});

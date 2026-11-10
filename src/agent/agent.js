@@ -17,8 +17,16 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { laya, taskSettings } from '../models/laya.js';
-import { handleCommand } from './laya/command.js';
-import { getNearestEntityWhere } from './library/world.js';
+import { handleCommand, CANNED } from './laya/command.js';
+import { llmOn, route, NO_LLM_REPLY, deathMessage } from './llm_gate.js';
+import { Director, KIND_OF, armedOf, armorPoints, dangerOf, HARMFUL } from './laya/director.js';
+import { valuables } from './laya/mine_state.js';
+import { depositList } from './laya/mine.js';
+import { packDeps } from './laya/pack_actions.js';
+import { homeState } from './laya/home_chest.js';
+import Vec3 from 'vec3';
+import { runJob } from './commands/actions.js';
+import { getNearestEntityWhere, getInventoryCounts } from './library/world.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
 
 export class Agent {
@@ -47,6 +55,7 @@ export class Agent {
         this.npc = new NPCContoller(this);
         this.memory_bank = new MemoryBank();
         this.self_prompter = new SelfPrompter(this);
+        this.director = this._makeDirector();
         convoManager.initAgent(this);
         await this.prompter.initExamples();
 
@@ -197,7 +206,7 @@ export class Agent {
             bannedFood: ["rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chicken"]
         };
 
-        if (save_data?.self_prompt) {
+        if (save_data?.self_prompt && llmOn(settings)) {
             if (init_message) {
                 this.history.add('system', init_message);
             }
@@ -213,7 +222,7 @@ export class Agent {
                 convoManager.receiveFromBot(this.last_sender, msg_package);
             }
         }
-        else if (init_message) {
+        else if (init_message && llmOn(settings)) {
             await this.handleMessage('system', init_message, 2);
         }
         else {
@@ -273,44 +282,67 @@ export class Agent {
         const from_other_bot = convoManager.isOtherAgent(source);
         if (!self_prompt) this.last_speaker = source; // !setHomeChest looks next to them
 
-        if (!self_prompt && !from_other_bot) { // from user, check for forced commands
-            const user_command_name = containsCommand(message);
-            if (user_command_name) {
-                if (!commandExists(user_command_name)) {
-                    this.routeResponse(source, `Command '${user_command_name}' does not exist.`);
-                    return false;
-                }
-                this.routeResponse(source, `*${source} used ${user_command_name.substring(1)}*`);
-                if (user_command_name === '!newAction') {
-                    // all user-initiated commands are ignored by the bot except for this one
-                    // add the preceding message to the history to give context for newAction
-                    this.history.add(source, message);
-                }
-                let execute_res = await executeCommand(this, message);
-                if (execute_res) 
-                    this.routeResponse(source, execute_res);
-                return true;
-            }
+        const llm = llmOn(settings);
+        const user_command_name = !self_prompt && !from_other_bot ? containsCommand(message) : null;
+        const where = route({ llm, selfPrompt: self_prompt, fromOtherBot: from_other_bot, userCommand: user_command_name,
+            commandTask: !!taskSettings('command') });
+        if (where === 'refuse') {
+            this.routeResponse(source, NO_LLM_REPLY);
+            return false;
+        }
+        if (where === 'drop') {
+            // settings.llm off: system, self and other bots' messages are
+            // only logged (an interrupted Laya job resumes by itself)
+            console.log(`(llm off) not answering ${source}: ${message.slice(0, 200)}`);
+            return false;
+        }
+        if (where === 'canned') {
+            this.history.add(source, message);
+            this.routeResponse(source, CANNED);
+            return false;
         }
 
-        if (!self_prompt && !from_other_bot && taskSettings('command')) {
+        if (where === 'command') { // from user, check for forced commands
+            if (!commandExists(user_command_name)) {
+                this.routeResponse(source, `Command '${user_command_name}' does not exist.`);
+                return false;
+            }
+            this.routeResponse(source, `*${source} used ${user_command_name.substring(1)}*`);
+            this._playerCommand(user_command_name);
+            if (user_command_name === '!newAction') {
+                // all user-initiated commands are ignored by the bot except for this one
+                // add the preceding message to the history to give context for newAction
+                this.history.add(source, message);
+            }
+            let execute_res = await executeCommand(this, message);
+            if (execute_res) 
+                this.routeResponse(source, execute_res);
+            return true;
+        }
+
+        if (where === 'laya') {
             // The Laya command model turns plain chat into a command; chat and
-            // unsure answers fall through to the LLM below.
+            // unsure answers fall through to the LLM below (with the LLM off:
+            // a canned reply).
             const handled = await handleCommand(message, {
                 client: laya,
-                task: taskSettings('command'),
+                task: llm ? taskSettings('command') : { ...taskSettings('command'), no_llm: true },
                 bot: this.bot,
                 speaker: source,
                 has: name => commandExists(name),
                 arity: name => commandArity(name),
                 nearestHostile: () => getNearestEntityWhere(this.bot, e => isHostile(e), 16)?.name ?? null,
-                execute: line => executeCommand(this, line),
+                execute: line => { this._playerCommand(containsCommand(line)); return executeCommand(this, line); },
                 say: text => this.routeResponse(source, text),
                 logPath: `./bots/${this.name}/logs/laya-command.jsonl`,
             });
             if (handled) {
                 this.history.add(source, message);
                 return true;
+            }
+            if (!llm) {
+                this.routeResponse(source, CANNED);
+                return false;
             }
         }
 
@@ -365,6 +397,7 @@ export class Agent {
 
                 if (checkInterrupt()) break;
                 this.self_prompter.handleUserPromptedCmd(self_prompt, isAction(command_name));
+                if (!self_prompt && !from_other_bot) this._playerCommand(command_name);
 
                 if (settings.show_command_syntax === "full") {
                     this.routeResponse(source, res);
@@ -404,6 +437,14 @@ export class Agent {
         }
 
         return used_command;
+    }
+
+    // _playerCommand: a player's new action command replaces the top Laya
+    // job (a new Laya job replaces it itself); !stop clears the stack.
+    _playerCommand(name) {
+        if (!name) return;
+        if (name === '!stop') this.director.stack.clear();
+        else if (isAction(name) && !name.startsWith('!laya')) this.director.stack.replaceTop();
     }
 
     async routeResponse(to_player, message) {
@@ -488,6 +529,7 @@ export class Agent {
             }
         });
         this.bot.on('death', () => {
+            this.director.stack.clear();
             this.actions.cancelResume();
             this.actions.stop();
         });
@@ -504,9 +546,14 @@ export class Agent {
                 this.memory_bank.rememberPlace('last_death_position', death_pos.x, death_pos.y, death_pos.z);
                 let death_pos_text = null;
                 if (death_pos) {
-                    death_pos_text = `x: ${death_pos.x.toFixed(2)}, y: ${death_pos.y.toFixed(2)}, z: ${death_pos.x.toFixed(2)}`;
+                    death_pos_text = `x: ${death_pos.x.toFixed(2)}, y: ${death_pos.y.toFixed(2)}, z: ${death_pos.z.toFixed(2)}`;
                 }
                 let dimention = this.bot.game.dimension;
+                if (!llmOn(settings)) {
+                    // no LLM to decide what next: say where, and stay stopped
+                    this.openChat(deathMessage(death_pos, message));
+                    return;
+                }
                 this.handleMessage('system', `You died at position ${death_pos_text || "unknown"} in the ${dimention} dimension with the final message: '${message}'. Your place of death is saved as 'last_death_position' if you want to return. Previous actions were stopped and you have respawned.`);
             }
         });
@@ -517,6 +564,7 @@ export class Agent {
             setTimeout(() => {
                 if (this.isIdle()) {
                     this.actions.resumeAction();
+                    this.director.tick('idle').catch(err => console.warn('[laya] director:', err.message));
                 }
             }, 1000);
         });
@@ -542,8 +590,146 @@ export class Agent {
         this.bot.emit('idle');
     }
 
+    // _makeDirector: the job stack and the one decision point for what to do
+    // next (laya/director.js, the shared director spec); the modes stay the
+    // executors of defend and flee, the agent runs eat, heal, unload, resume.
+    _makeDirector() {
+        return new Director({
+            read: () => this._directorSituation(),
+            current: () => {
+                const kind = KIND_OF[(this.actions.currentActionLabel || '').replace(/^action:/, '')];
+                return kind ? { kind, item: null, left: 'any' } : null;
+            },
+            idle: () => this.isIdle(),
+            resume: job => runJob(this, job),
+            perform: activity => this.actions.runAction(`director:${activity}`, () => this._perform(activity)),
+            client: taskSettings('director') ? laya : null,
+            task: taskSettings('director') || null,
+            now: () => Date.now(),
+            warn: err => console.warn('[laya] director:', err?.message || err),
+            stepLog: `./bots/${this.name}/logs/laya-director.jsonl`,
+        });
+    }
+
+    _directorSituation() {
+        const bot = this.bot;
+        const pos = bot.entity.position;
+        const hostiles = Object.values(bot.entities).filter(e => e !== bot.entity && e.position && isHostile(e)
+            && e.position.distanceTo(pos) <= 16);
+        let nearest = null;
+        for (const e of hostiles) {
+            const d = Math.ceil(e.position.distanceTo(pos));
+            if (!nearest || d < nearest.dist) nearest = { kind: e.name, dist: d };
+        }
+        const items = bot.inventory.items();
+        const foods = bot.registry.foodsByName || {};
+        const inv = getInventoryCounts(this.bot);
+        const home = this._usableHome();
+        const feet = pos.floored();
+        const blockAt = (dx, dy, dz) => { try { return bot.blockAt(feet.offset(dx, dy, dz)); } catch { return null; } };
+        const here = blockAt(0, 0, 0), head = blockAt(0, 1, 0);
+        const time = bot.time?.timeOfDay ?? 6000;
+        const night = time >= 13000 && time < 23000;
+        let under = false;
+        for (let dy = 2; dy <= 64 && !under; dy++) under = blockAt(0, dy, 0)?.boundingBox === 'block';
+        const near = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0], [0, 1, 0], [1, 1, 0], [-1, 1, 0], [0, 1, 1], [0, 1, -1], [0, 2, 0]];
+        return {
+            health: bot.health ?? 20, food: bot.food ?? 20,
+            armed: armedOf(items.map(i => i.name)),
+            armor: armorPoints([5, 6, 7, 8].map(i => bot.inventory.slots[i]?.name).filter(Boolean)),
+            hostiles: hostiles.length, nearest,
+            light: Math.max(here?.light ?? 0, night ? 0 : (here?.skyLight ?? 0)), night, under,
+            free: bot.inventory.emptySlotCount(),
+            home: home ? Math.ceil(Math.hypot(home.x - pos.x, home.y - pos.y, home.z - pos.z)) : null,
+            valuables: valuables(inv),
+            foodItems: items.filter(i => foods[i.name] && !HARMFUL.has(i.name)).reduce((n, i) => n + i.count, 0),
+            danger: dangerOf({
+                onFire: !!((bot.entity.metadata?.[0] ?? 0) & 1), inFire: /fire$/.test(here?.name || ''),
+                oxygen: bot.oxygenLevel, headInWater: head?.name === 'water',
+                lavaNear: near.some(([x, y, z]) => blockAt(x, y, z)?.name === 'lava'),
+                falling: !bot.entity.onGround && (bot.entity.velocity?.y ?? 0) < -0.6 && !here?.name?.includes('water'),
+            }),
+        };
+    }
+
+    // homeChest is the saved home chest place ([x, y, z]) when a chest is
+    // still there (or its chunk isn't loaded); a home whose chest is gone is
+    // forgotten, with a word to the players.
+    homeChest() {
+        const h = this.memory_bank.recallPlace('home_chest');
+        if (!h) return undefined;
+        let st = 'unknown';
+        try { st = homeState(h, (x, y, z) => this.bot.blockAt(new Vec3(x, y, z))); } catch { /* not loaded */ }
+        if (st !== 'gone') return h;
+        this.memory_bank.forgetPlace('home_chest');
+        this.openChat(`My home chest at ${Math.floor(h[0])} ${Math.floor(h[1])} ${Math.floor(h[2])} is gone, so I've forgotten it.`);
+        return undefined;
+    }
+
+    // _usableHome: the home chest unless unloading there failed lately (then
+    // the director sees Home none and goes on with the job).
+    _usableHome() {
+        if (Date.now() < (this._noUnloadUntil || 0)) return null;
+        const h = this.homeChest();
+        return h ? { x: h[0], y: h[1], z: h[2] } : null;
+    }
+
+    async _eatBest() {
+        const foods = this.bot.registry.foodsByName || {};
+        const item = this.bot.inventory.items().filter(i => foods[i.name] && !HARMFUL.has(i.name))
+            .sort((a, b) => (i => i.name === 'rotten_flesh' ? -1 : (foods[i.name].foodPoints || 0))(b)
+                - (i => i.name === 'rotten_flesh' ? -1 : (foods[i.name].foodPoints || 0))(a))[0];
+        if (!item) return false;
+        try { await this.bot.equip(item, 'hand'); await this.bot.consume(); return true; } catch { return false; }
+    }
+
+    // _perform runs the director's eat, heal and unload.
+    async _perform(activity) {
+        const bot = this.bot;
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        if (activity === 'eat') { await this._eatBest(); return; }
+        if (activity === 'heal') {
+            // stop, eat to full, wait to regenerate (until 9 health, a mob near, or 60 s)
+            while (!bot.interrupt_code && (bot.food ?? 20) < 18 && await this._eatBest()) await sleep(200);
+            if ((bot.food ?? 20) < 18) {
+                if (Date.now() - (this._askedFoodAt || 0) > 120000) {
+                    this._askedFoodAt = Date.now();
+                    this.openChat("I'm hurt and I have no food. Can someone give me some?");
+                }
+                await sleep(10000);
+                return;
+            }
+            const end = Date.now() + 60000;
+            while (!bot.interrupt_code && Date.now() < end && (bot.health ?? 20) <= 8) {
+                const s = this._directorSituation();
+                if (s.nearest && s.nearest.dist <= 8) break;
+                await sleep(1000);
+            }
+            return;
+        }
+        if (activity === 'unload') {
+            const home = this._usableHome();
+            if (!home) return;
+            const pack = packDeps(bot, () => this.homeChest());
+            let ok = await pack.goHome(home);
+            if (ok) {
+                const items = depositList(getInventoryCounts(bot), pack.isFood, 32);
+                const before = bot.inventory.emptySlotCount();
+                ok = await pack.deposit(items).catch(() => false) || bot.inventory.emptySlotCount() > before;
+            }
+            if (!ok) {
+                this._noUnloadUntil = Date.now() + 60000; // carry on; try again in a minute
+                console.log('[laya] director: unload failed; Home none for 60 s');
+            }
+        }
+    }
+
     async update(delta) {
         await this.bot.modes.update();
+        if (Date.now() - (this._directorAt || 0) >= 1000) {
+            this._directorAt = Date.now();
+            this.director.tick('tick').catch(err => console.warn('[laya] director:', err.message));
+        }
         this.self_prompter.update(delta);
         await this.checkTaskDone();
     }

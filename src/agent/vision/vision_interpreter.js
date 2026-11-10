@@ -1,6 +1,8 @@
 import { Vec3 } from 'vec3';
 import { Camera } from "./camera.js";
 import fs from 'fs';
+import settings from '../settings.js';
+import { llmOn } from '../llm_gate.js';
 
 export class VisionInterpreter {
     constructor(agent, allow_vision) {
@@ -65,6 +67,7 @@ export class VisionInterpreter {
     }
 
     async analyzeImage(filename) {
+        if (!llmOn(settings)) return 'No image analysis: the chat LLM is off (settings.llm).';
         try {
             const imageBuffer = fs.readFileSync(`${this.fp}/${filename}.jpg`);
             const messages = this.agent.history.getHistory();
