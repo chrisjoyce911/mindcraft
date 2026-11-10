@@ -10,7 +10,8 @@ import Vec3 from 'vec3';
 import * as skills from '../library/skills.js';
 import { readFarm, parseCellName, C, KINDS } from './farm_state.js';
 
-const FARM_BLOCKS = ['farmland', 'wheat', 'carrots', 'potatoes', 'beetroots'];
+const CROP_BLOCKS = ['wheat', 'carrots', 'potatoes', 'beetroots'];
+const FARM_BLOCKS = ['farmland', ...CROP_BLOCKS];
 
 // The real item each game item stands for when it has to be made.
 const MAKE = { hoe: 'wooden_hoe', water_bucket: 'water_bucket', bone_meal: 'bone_meal', wheat_seeds: 'wheat_seeds' };
@@ -121,13 +122,13 @@ export function farmDeps(bot, radius = 64) {
         case 'plant':
             if (!await equipItem(item)) return false;
             await bot.activateBlock(bot.blockAt(ground), new Vec3(0, 1, 0));
-            return true;
+            return await until(() => CROP_BLOCKS.includes(bot.blockAt(crop)?.name));
         case 'till': {
             const above = bot.blockAt(crop);
             if (above && above.name !== 'air') await bot.dig(above); // grass or a flower on top
             if (!await equipItem('hoe')) return false;
             await bot.activateBlock(bot.blockAt(ground), new Vec3(0, 1, 0));
-            return true;
+            return await until(() => bot.blockAt(ground)?.name === 'farmland');
         }
         case 'water':
             if (floods(blockAt, ground)) return false;
