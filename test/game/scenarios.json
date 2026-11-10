@@ -525,7 +525,7 @@
         },
         {
           "type": "reply",
-          "match": "Harvested",
+          "match": "Harvested [1-9]",
           "none": true
         },
         {
