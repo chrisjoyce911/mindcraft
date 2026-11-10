@@ -11,8 +11,10 @@
 // possible), the loop takes laya-go's rule answer instead (mine_state.decide).
 //
 // What it lacks it crafts (deps.craft): the pickaxe the ore needs (before
-// starting, and on "stop" for a weak pickaxe), torches when they run out, and
-// a pickaxe again if it breaks.
+// starting, and on "stop" for a weak pickaxe), a batch of torches whenever it
+// has fewer than torch_low and carries coal (or charcoal) and sticks (or wood
+// for them), or none left in the dark (backing off torch_retry_steps after a
+// failed craft), and a pickaxe again if it breaks.
 //
 // Ore in sight is collected only when it is safe and near the mine: within
 // collect_range of the plan cell (v2; of the bot with v1), with no water or
@@ -42,7 +44,7 @@ import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, H
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
-const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4,
+const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
     keep_blocks: 32, unload_retry_steps: 50, collect_range: 8, collect_budget: 24 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
@@ -118,6 +120,13 @@ export function pickOre(ores, { feet, anchor, range, budget, blockAt, skip = () 
     return null;
 }
 
+// canMakeTorches: coal or charcoal and sticks, or wood to make sticks from.
+export function canMakeTorches(inv) {
+    const fuel = (inv.coal || 0) + (inv.charcoal || 0);
+    const wood = Object.entries(inv).some(([n, c]) => c > 0 && (n === 'stick' || /_(planks|log|wood|stem|hyphae)$/.test(n)));
+    return fuel > 0 && wood;
+}
+
 // worldCell turns a view cell [layer, dx, dz] into world coordinates.
 const worldCell = (bx, by, bz, [l, dx, dz]) => [bx + dx, by + FEET - l, bz + dz];
 
@@ -156,7 +165,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     const start = deps.inventory()[ore.drop] || 0;
     let deposited = 0; // of the ore's drop, in the home chest
     const got = () => (deps.inventory()[ore.drop] || 0) + deposited - start;
-    let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, triedTorches = false, noUnloadUntil = 0;
+    let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, noTorchUntil = 0, noUnloadUntil = 0;
     let offPlan = 0; // blocks collecting has taken the bot away from the plan
     const failedOre = new Set(); // ore blocks a collect failed on
     const oreKey = o => `${o.x},${o.y},${o.z}`;
@@ -226,9 +235,10 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     for (let step = 0; step < maxSteps && !bot.interrupt_code; step++) {
         if (got() >= count) return finish(true, 'done');
         const inv = deps.inventory();
-        if (dark >= 8 && !inv.torch && !triedTorches) {
-            triedTorches = true;
-            await craft('torch', opts.torch_batch);
+        const torches = inv.torch || 0;
+        if (step >= noTorchUntil && torches < opts.torch_low && (canMakeTorches(inv) || (!torches && dark >= 8))) {
+            if (!await craft('torch', opts.torch_batch) || (deps.inventory().torch || 0) <= torches)
+                noTorchUntil = step + opts.torch_retry_steps;
         }
         const feet = feetOf();
         const { x: bx, y: by, z: bz } = feet;

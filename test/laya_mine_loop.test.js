@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mineWithLaya, pickOre, oreSafe } from '../src/agent/laya/mine.js';
+import { mineWithLaya, pickOre, oreSafe, canMakeTorches } from '../src/agent/laya/mine.js';
 import { ORES } from '../src/agent/laya/mine_state.js';
 
 const EMPTY = new Set(['air', 'torch', 'lava', 'water']);
@@ -271,6 +271,13 @@ test('pickOre: near the plan, within budget, away from water and lava', () => {
     assert.equal(oreSafe(w.blockAt, { x: 0, y: 20, z: 0 }, { x: 5, y: 20, z: 0 }), true);
 });
 
+test('canMakeTorches: coal or charcoal, and sticks or wood', () => {
+    assert.equal(canMakeTorches({ coal: 1, stick: 1 }), true);
+    assert.equal(canMakeTorches({ charcoal: 2, oak_log: 1 }), true);
+    assert.equal(canMakeTorches({ coal: 3, cobblestone: 5 }), false);
+    assert.equal(canMakeTorches({ stick: 3, spruce_planks: 5 }), false);
+});
+
 test('v2: ore far from the plan is left; ore chains never pull the bot away', async () => {
     // a line of ore going east from the plan's first branch, away from the mine
     const blocks = { '2,20,3': 'iron_ore', '9,20,3': 'iron_ore', '16,20,3': 'iron_ore', '23,20,3': 'iron_ore' };
@@ -307,4 +314,13 @@ test('v2: a full home chest after taking some is a partial unload, not a failure
     assert.equal(calls.home.length, 1, 'no unload again straight away');
     assert.equal(r.counters.failures, 0);
     assert.ok(calls.logs.some(l => /home chest is full/.test(l)));
+});
+
+test('v2: crafts a torch batch when low and it carries coal and sticks; backs off after a failure', async () => {
+    let s = v2({ y: 20, steps: 3, inv: { stone_pickaxe: 1, torch: 2, coal: 2, stick: 4, cobblestone: 10 } });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.deepEqual(s.calls.crafted, ['torch'], 'once: then it has 6');
+    s = v2({ y: 20, steps: 5, craftOk: false, inv: { stone_pickaxe: 1, torch: 1, coal: 2, stick: 4, cobblestone: 10 } });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.deepEqual(s.calls.crafted, ['torch'], 'a failed craft is not retried every step');
 });
