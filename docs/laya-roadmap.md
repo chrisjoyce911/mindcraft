@@ -9,6 +9,25 @@ What we've agreed to build next, after the current test round. Each numbered ite
 - Every new or changed model must beat the model it replaces on its held-out test before it is served, and is then checked in game on the test world (`docs/test-world.md`) against the strict baseline (`npm run game-test:compare`).
 - Helper jobs run as Claude agents in titled Herdr tabs.
 
+## 0. The aim: model-only control (user, 2026-11-10)
+
+No decision logic outside the Laya models. The models say exactly what to do next, all the time; the bot code is only a framework: **sensors** (build each model's state text from the world), **actuators** (do one primitive or tool action and report done/failed) and a **job stack** (bookkeeping, no choices). No chat LLM.
+
+Model layers:
+- **command**: player chat → a job (and a templated reply). Unknown → "say that again" with examples.
+- **director** (new): every event and ~1 s, health/food/mobs/light/pack/home/current job/stack top → the next activity: continue, defend, eat, heal, flee, unload, resume, idle (later chores). Replaces Mindcraft's modes (self-defence, cowardice, hunger, unstuck, item collecting, torch placing) and the hand-back to the LLM.
+- **skill models** (follow, mine, farm, craft, defend, eat, later build): the next step of the activity.
+- **chores** (later): what to do when idle.
+
+Tools stay in code but the models choose when to use them: pathfinding, the mine plan's geometry, crafting recipes, blueprints. Code may compute facts and execute; it never chooses.
+
+Phases (each gated by the strict suite and a live play):
+1. **LLM off** (now): `llm: false` setting; command model only for chat; system messages never reach an LLM; job stack + one rule-based decision point (`nextActivity`, logged to `laya-director.jsonl`); command v2.1 training (phrasings, animals and drops). Gate: the suite with the LLM off scores at least as well as with it.
+2. **Director model**: training data generated from the decision-point rules; served in place of the rules; Mindcraft modes switched off one by one.
+3. **Rules into models**: every step logs whether the model or a rule decided it; the test report shows the **model share** per task. Retrain until rule steps are near zero; what remains are masks that only reject physically impossible actions, and their failures go back into the state.
+4. **Chores, build, v3 models**: the bot code is sensors + actuators + the loop.
+5. **Learning from play**: in-game outcomes (deaths, lost items, failed jobs, the user's feedback) become training data.
+
 ## Now: the current test round
 
 - [ ] mine v2 (`mine-p`: staircase + branch mine, Pack/Unload): served after the strict v1 baseline; in-game run and comparison.
