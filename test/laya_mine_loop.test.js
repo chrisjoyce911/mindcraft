@@ -515,3 +515,30 @@ test('v2: a saved mine that is not there any more (a reset world) is forgotten a
     assert.match(s.calls.chat[0], /iron mine starts at 0 60 0/);
     assert.deepEqual(saved[0].ores, ['iron']);
 });
+
+test('pickOre: range and depth from the nearest mine cell (the entrance counts), not only the next plan cell', () => {
+    const w = fakeWorld(73, { '162,69,141': 'iron_ore' });
+    const ore = { x: 162, y: 69, z: 141 };
+    const opts = { feet: { x: 178, y: 68, z: 140 }, anchor: { x: 179, y: 67, z: 140 }, range: 12, budget: 24, blockAt: w.blockAt, below: 4 };
+    assert.equal(pickOre([ore], opts), null, 'from the next plan cell alone: 17 away');
+    const anchors = [opts.anchor, { x: 172, y: 74, z: 140 }, { x: 171, y: 73, z: 140 }];
+    assert.deepEqual(pickOre([ore], { ...opts, feet: { x: 172, y: 73, z: 140 }, anchors }), ore, 'from the first stair cell: 9.1 away, 4 below');
+    assert.equal(pickOre([ore], { ...opts, feet: { x: 172, y: 74, z: 140 }, anchors: [{ x: 172, y: 74, z: 140 }] }), null, '5 below the entrance: collect_below holds');
+});
+
+test('headingToward and a surface mine facing the ore in sight', async () => {
+    const { headingToward } = await import('../src/agent/laya/mine.js');
+    assert.equal(headingToward({ x: 172, y: 74, z: 140 }, { x: 162, y: 69, z: 141 }), 'W');
+    assert.equal(headingToward({ x: 0, y: 0, z: 0 }, { x: 1, y: -5, z: 3 }), 'S');
+    assert.equal(headingToward({ x: 0, y: 0, z: 0 }, { x: 1, y: -5, z: 1 }), null, 'straight below: keep the heading');
+    // open sky above 61: a surface start at Y 60 looking east, iron 10 west and 5 down
+    const s = v2({ y: 60, steps: 3, blocks: { '-10,55,0': 'iron_ore' } });
+    const blockAt = s.deps.blockAt;
+    s.deps.blockAt = (x, y, z) => (y >= 62 ? { name: 'air', boundingBox: 'empty' } : blockAt(x, y, z));
+    s.deps.ores = () => [{ x: -10, y: 55, z: 0 }];
+    s.deps.collect = async () => { s.w.m.set('-10,55,0', 'air'); s.inventory.raw_iron = (s.inventory.raw_iron || 0) + 1; return true; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.match(s.calls.chat[0], /iron mine starts at 0 60 0, heading W/);
+    assert.deepEqual(s.calls.moves[0], [-1, 59, 0], 'the staircase goes down towards the ore');
+    assert.equal(r.ok, true, 'and collects it from the mine');
+});

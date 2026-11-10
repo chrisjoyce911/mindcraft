@@ -51,6 +51,7 @@ const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 
     keep_blocks: 32, unload_retry_steps: 50, unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4,
     collect_below_open: 8, walk_restart: 2, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
+const MINE_CELLS = 400;
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
 const TOOL = /_(pickaxe|axe|shovel|sword|hoe)$|^(shears|flint_and_steel)$/;
@@ -117,19 +118,33 @@ export function exposed(blockAt, o) {
 }
 
 // pickOre chooses the ore to collect from ores ([{x, y, z}], nearest
-// first): the nearest within range of anchor (the plan cell) and of sight
-// (SEEN_RANGE) of feet, not skipped, within the off-plan budget left, and
-// safe, and at most below blocks under anchor (belowOpen for ore open to
-// the air, in a cave or pocket beside the stair). It returns it or null.
-export function pickOre(ores, { feet, anchor, range, budget, blockAt, below = Infinity, belowOpen = below, skip = () => false }) {
+// first): the nearest within sight (SEEN_RANGE) of feet, not skipped, within
+// the off-plan budget left, and safe, that is within range of a mine cell
+// and at most below blocks under that cell (belowOpen for ore open to the
+// air, in a cave or pocket beside the stair). The mine cells are anchors
+// ([{x, y, z}]: the plan cell and the cells of the mine dug so far, the
+// entrance first), or the one anchor. It returns it or null.
+export function pickOre(ores, { feet, anchor, anchors = null, range, budget, blockAt, below = Infinity, belowOpen = below, skip = () => false }) {
+    const cells = anchors?.length ? anchors : [anchor];
+    const fromMine = o => cells.some(a => {
+        if (dist(a, o) > range) return false;
+        const depth = a.y - o.y;
+        return depth <= below || (depth <= belowOpen && exposed(blockAt, o));
+    });
     for (const o of ores) {
         const d = dist(feet, o);
-        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || skip(o)) continue;
-        const depth = anchor.y - o.y;
-        if (depth > below && !(depth <= belowOpen && exposed(blockAt, o))) continue;
+        if (d > SEEN_RANGE || d > budget || skip(o) || !fromMine(o)) continue;
         if (oreSafe(blockAt, feet, o)) return o;
     }
     return null;
+}
+
+// headingToward is the compass heading from feet towards o along its
+// longer horizontal axis, or null when o is (nearly) straight below/above.
+export function headingToward(feet, o) {
+    const dx = o.x - feet.x, dz = o.z - feet.z;
+    if (Math.max(Math.abs(dx), Math.abs(dz)) < 2) return null;
+    return Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? 'E' : 'W') : (dz > 0 ? 'S' : 'N');
 }
 
 // pickUpDrop makes sure a dug ore's drop reached the pack: count() is how
@@ -232,6 +247,14 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, noTorchUntil = 0, noUnloadUntil = 0;
     let offPlan = 0; // blocks collecting has taken the bot away from the plan
     let walkFails = 0; // failed walks back to the plan in a row
+    // mineCells: the mine dug so far (the entrance, then each cell a move
+    // left the bot in), the last MINE_CELLS of them
+    const mineCells = [];
+    const addMineCell = c => {
+        if (mineCells.some(m => m.x === c.x && m.y === c.y && m.z === c.z)) return;
+        mineCells.push({ x: c.x, y: c.y, z: c.z });
+        if (mineCells.length > MINE_CELLS) mineCells.splice(1, 1); // keep the entrance
+    };
     let floorVetoes = 0; // "no floor" or drop vetoes in a row
     const failedOre = new Set(); // ore blocks a collect failed on
     const oreKey = o => `${o.x},${o.y},${o.z}`;
@@ -355,11 +378,20 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             logStep({ reuse: e, skipped, outcome: 'reused' });
         } else {
             const surface = openSky(deps.blockAt, f);
+            // from the surface, face the nearest target ore in sight: the
+            // staircase goes down towards it, so it stays near the mine
+            // (else the way andy happens to look)
+            const seenOre = !surface ? null : oresNear(SEEN_RANGE).filter(o => oreSafe(deps.blockAt, f, o))
+                .sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0];
+            const toward = seenOre && headingToward(f, seenOre);
+            if (toward) heading = toward;
             plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface });
+            logStep({ start: f, heading, toward: seenOre || null, outcome: 'planned' });
             mineRec = { entrance: f, heading, surface, ores: [oreName], deepest: f.y, started: new Date().toISOString() };
             msg = `The ${oreName} mine starts at ${f.x} ${f.y} ${f.z}, heading ${heading}.`;
         }
         saveMine();
+        addMineCell(plan.entrance);
         deps.log?.(msg);
         deps.chat?.(msg);
     }
@@ -389,7 +421,10 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         if (pn && !pn.walk) offPlan = 0; // back on the plan
         // Ore to collect: near the plan cell (v1: the bot), safe, within budget.
         const anchor = pn?.walk || feet;
-        const near = pickOre(oresNear(SEEN_RANGE), { feet, anchor, blockAt: deps.blockAt,
+        // the mine dug so far counts too: ore seen from the mine (also
+        // behind the heading, from the entrance) is near the mine
+        const anchors = plan ? [anchor, ...mineCells] : null;
+        const near = pickOre(oresNear(SEEN_RANGE), { feet, anchor, anchors, blockAt: deps.blockAt,
             range: plan ? opts.collect_range : SEEN_RANGE, budget: plan ? opts.collect_budget - offPlan : Infinity,
             below: plan ? opts.collect_below : Infinity, belowOpen: plan ? Math.max(opts.collect_below, opts.collect_below_open) : Infinity,
             skip: o => failedOre.has(oreKey(o)) });
@@ -530,7 +565,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             ok = true;
             for (const c of dig) ok = await deps.dig(...worldCell(bx, by, bz, c)) && ok;
             if (ok) ok = await deps.moveTo(...worldCell(bx, by, bz, target));
-            if (ok) { heading = dir; dark++; }
+            if (ok) { heading = dir; dark++; if (plan) addMineCell(feetOf()); }
             if (detour) {
                 // A detour round an unsafe plan step: give up that segment; a
                 // staircase goes on from where the detour took the bot.
