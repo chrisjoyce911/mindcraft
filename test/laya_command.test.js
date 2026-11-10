@@ -72,7 +72,7 @@ test('plan: gather, mine and craft use the Laya commands when present', () => {
     assert.deepEqual(plan(answer({ command: 'gather', item: 'wood', count: '10' }), ctx()).lines, ['!layaGather("log", 10)']);
     assert.deepEqual(plan(answer({ command: 'gather', item: 'wood' }), ctx()).lines, ['!layaGather("log", 8)']);
     assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: '4' }), ctx()).lines, ['!layaGather("raw_iron", 4)']);
-    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron' }), ctx({ has: n => n === '!layaMine' })).lines, ['!layaMine("raw_iron", 4)']);
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron' }), ctx({ has: n => n === '!layaMine' })).lines, ['!layaMine("iron", 4)']);
     assert.deepEqual(plan(answer({ command: 'mine', item: 'iron' }), ctx({ has: () => false })).lines, ['!collectBlocks("iron_ore", 4)']);
     assert.equal(plan(answer({ command: 'mine' }), ctx()).kind, 'reply');
     assert.deepEqual(plan(answer({ command: 'craft', item: 'pickaxe', count: '1' }), ctx()).lines, ['!layaCraft("iron_pickaxe", 1)'], 'best tier: 4 iron ingots');
@@ -134,4 +134,61 @@ test('handleCommand runs commands, merges inventory, and falls back to the LLM',
     d = deps(answer({ addressed: 0.02, command: 'follow' }));
     assert.equal(await handleCommand('bob follow me', d), true);
     assert.deepEqual([d.ran, d.said], [[], []], 'for someone else: ignored');
+});
+
+test('plan: farm a count, until stopped, and open-ended mining', () => {
+    const farmCtx = ctx({ has: n => ['!layaFarm', '!layaMine'].includes(n), arity: n => (n === '!layaMine' ? { min: 1, max: 2 } : { min: 0, max: 2 }) });
+    assert.deepEqual(plan(answer({ command: 'farm', item: 'wheat', count: '20' }), farmCtx).lines, ['!layaFarm("wheat", 20)']);
+    assert.deepEqual(plan(answer({ command: 'farm', item: 'carrots', count: 'any' }), farmCtx).lines, ['!layaFarm("carrots")']);
+    assert.deepEqual(plan(answer({ command: 'farm', item: 'none', count: 'any' }), farmCtx).lines, ['!layaFarm("any")']);
+    assert.equal(plan(answer({ command: 'farm', item: 'wheat' }), ctx()).kind, 'llm', 'no !layaFarm');
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: 'any' }), farmCtx).lines, ['!layaMine("iron")']);
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: '9' }), farmCtx).lines, ['!layaMine("iron", 9)']);
+    const fixedMine = ctx({ has: n => n === '!layaMine', arity: () => ({ min: 2, max: 2 }) });
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: 'any' }), fixedMine).lines, ['!layaMine("iron", 4)'], 'count required: the default count');
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'stone', count: '8' }), ctx({ has: n => n === '!layaMine' })).lines, ['!collectBlocks("stone", 8)'], 'stone is no ore');
+});
+
+test('home command: !setHomeChest, a short reply when it worked', async () => {
+    const homeCtx = ctx({ has: n => n === '!setHomeChest' });
+    const p = plan(answer({ command: 'home' }), homeCtx);
+    assert.deepEqual(p.lines, ['!setHomeChest']);
+    assert.equal(plan(answer({ command: 'home' }), ctx()).kind, 'llm');
+    for (const [result, want] of [['Home chest set at 1 64 2.', "That's my chest now."], ["I can't see a chest near you.", "I can't see a chest near you."]]) {
+        const said = [];
+        await handleCommand('andy this is your chest', {
+            client: { decide: async () => answer({ command: 'home' }) }, task: { log_decisions: false }, bot: { username: 'andy', inventory: { items: () => [] } },
+            speaker: 'chrisjoyce911', has: n => n === '!setHomeChest', execute: async () => result, say: t => said.push(t),
+        });
+        assert.deepEqual(said, [want]);
+    }
+});
+
+import { QUESTIONS_V2, questionsFor, COMMANDS_V2, ITEMS_V2 } from '../src/agent/laya/command_state.js';
+
+const fixture2 = name => JSON.parse(readFileSync(new URL(`./fixtures/laya-command-v2/${name}`, import.meta.url), 'utf8'));
+
+test('golden v2 requests: match laya-go byte for byte', () => {
+    for (const [file, msg] of [['request.json', 'Andy, can you craft me 2 iron picks please?'], ['farm_request.json', 'andy farm wheat 10'], ['home_request.json', 'andy this is your home chest']]) {
+        const g = fixture2(file);
+        assert.equal(state('andy', 'chrisjoyce911', msg), g.state, file);
+        assert.deepEqual(JSON.parse(JSON.stringify(QUESTIONS_V2)), g.questions, file);
+    }
+    assert.equal(questionsFor('v2'), QUESTIONS_V2);
+    assert.equal(questionsFor('v1'), QUESTIONS);
+    assert.equal(questionsFor(undefined), QUESTIONS);
+});
+
+test('v2 option lists, normalize and resolve match laya-go', () => {
+    const c = fixture2('resolve_cases.json');
+    assert.deepEqual(COMMANDS_V2, c.commands);
+    assert.deepEqual(ITEMS_V2, c.items);
+    assert.deepEqual(TIERS, c.tiers);
+    assert.deepEqual(COUNTS, c.counts);
+    for (const [input, want] of Object.entries(c.normalize)) assert.equal(normalize(input), want);
+    for (const r of c.resolve) {
+        const carry = (r.carry || []).map(s => ({ item: s.Item, count: s.Count }));
+        assert.equal(resolve(r.command, r.item, r.tier, carry), r.want, JSON.stringify(r));
+    }
+    assert.ok(c.resolve.some(r => r.command === 'farm'));
 });

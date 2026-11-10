@@ -169,3 +169,256 @@ test('loop: no hoe to be had stops farming instead of waiting', async () => {
     assert.deepEqual(calls.craft, [['hoe', 1]]);
     assert.equal(calls.asked, 0);
 });
+
+// ---- v2: goals, no water, waits, unload, crop.
+import { parseGoal, farmKeep, NO_WATER } from '../src/agent/laya/farm.js';
+import { decide, stateV2, questionsV2, farmValuables, hasWater } from '../src/agent/laya/farm_state.js';
+import { pack } from '../src/agent/laya/pack.js';
+import { parseCommandMessage, commandArity } from '../src/agent/commands/index.js';
+
+// The trial's savanna plateau (bots/andy/logs/laya-farm.jsonl): all dry.
+const PLATEAU = ['XXLLLLLLL', 'XXLLLLLLL', 'XLLLLLLLL', 'LLLLLLLXL', 'LLLLLLLLL', 'LLLLLLLXL', 'LLLLLLLLL', 'LLLLLLLLL', 'LLLLLLLLL'];
+const plateau = carry => ({ grid: PLATEAU.map(r => [...r]), ys: PLATEAU.map(() => Array(9).fill(Y0)), carry, animals: [] });
+
+test('goal: crop and count, open-ended, old minutes', () => {
+    assert.deepEqual(parseGoal(), { crop: 'any', count: null, minutes: null });
+    assert.deepEqual(parseGoal('wheat'), { crop: 'wheat', count: null, minutes: null });
+    assert.deepEqual(parseGoal('carrot', '12'), { crop: 'carrots', count: 12, minutes: null });
+    assert.deepEqual(parseGoal('potatoes', 'any'), { crop: 'potatoes', count: null, minutes: null });
+    assert.deepEqual(parseGoal('3'), { crop: 'any', count: null, minutes: 3 });
+    assert.deepEqual(parseGoal(2.5), { crop: 'any', count: null, minutes: 2.5 });
+    assert.ok(parseGoal('melons').error);
+    assert.ok(parseGoal('wheat', 'lots').error);
+    assert.ok(parseGoal('wheat', '0').error);
+});
+
+test('!layaFarm takes 0, 1 or 2 arguments', () => {
+    assert.deepEqual(parseCommandMessage('!layaFarm').args, []);
+    assert.deepEqual(parseCommandMessage('!layaFarm(3)').args, ['3']);
+    assert.deepEqual(parseCommandMessage('!layaFarm("wheat", 10)').args, ['wheat', '10']);
+    assert.deepEqual(parseCommandMessage('!layaFarm("wheat", "any")').args, ['wheat', 'any']);
+    assert.match(parseCommandMessage('!layaFarm("wheat", 1, 2)'), /requires 0 to 2 args/);
+    assert.deepEqual(commandArity('!layaFarm'), { min: 0, max: 2 });
+    assert.match(parseCommandMessage('!goToPlayer("bob")'), /requires 2 args/, 'required params still required');
+});
+
+test('keep and valuables when unloading', () => {
+    const keep = farmKeep(n => ['bread', 'carrot', 'potato', 'beetroot'].includes(n), 16);
+    assert.equal(keep('iron_hoe', 1), 1);
+    assert.equal(keep('water_bucket', 1), 1);
+    assert.equal(keep('bucket', 1), 1);
+    assert.equal(keep('bread', 5), 5);
+    assert.equal(keep('wheat_seeds', 40), 16);
+    assert.equal(keep('carrot', 40), 16, 'carrots are seeds: keep 16 though they are food');
+    assert.equal(keep('wheat', 40), 0);
+    assert.equal(keep('beetroot', 9), 0, 'produce goes even when it is food');
+    assert.equal(keep('cobblestone', 9), 0);
+    assert.equal(farmValuables({ wheat: 10, carrot: 20, wheat_seeds: 30, bread: 2 }, keep), 14);
+});
+
+test('v2 state: Crop and Pack after Farm., Unload asked', () => {
+    const s = { ...sample(), crop: 'wheat', pack: pack({ free: 5, home: 12 }) };
+    const lines = stateV2(s).split('\n');
+    assert.deepEqual(lines.slice(0, 3), ['Farm.', 'Crop wheat', 'Pack 5 Home 12 Health 20 Food 20 Hostiles 0 Valuables 0']);
+    assert.equal(lines.length, 14);
+    const q = questionsV2(s);
+    assert.deepEqual(q.Action.criteria, ['harvest', 'plant', 'till', 'water', 'pond', 'bone_meal', 'breed', 'find_water', 'wait']);
+    assert.equal(q.Unload.type, 'noul');
+});
+
+test('rules: the golden farm harvests first; the plateau has no water', () => {
+    assert.equal(decide(sample()).action, 'harvest');
+    assert.equal(hasWater(plateau([]).grid), false);
+});
+
+function setupV2(answers, { situation, inv = {}, water = null, home = null, free = () => 20, task = {} } = {}) {
+    const { deps, calls, bot } = setup(answers, { situation });
+    const said = [];
+    calls.walked = []; calls.deposited = []; calls.home = 0;
+    const inventory = { ...inv };
+    Object.assign(deps, {
+        task: { ...deps.task, prompt: 'v2', wait_limit: 3, ...task },
+        inventory: () => ({ ...inventory }),
+        say: m => said.push(m),
+        position: () => ({ x: 0, y: Y0 + 1, z: 0 }),
+        goTo: async p => { calls.walked.push(p); return true; },
+        findWater: async () => water,
+        pack: {
+            freeSlots: () => free(), hostiles: () => 0, health: () => 20, food: () => 20,
+            home: () => home, goHome: async () => { calls.home++; return true; },
+            deposit: async items => { calls.deposited.push(items); for (const i of items) inventory[i.name] -= i.count; return true; },
+            isFood: n => n === 'bread',
+        },
+    });
+    const act = deps.act;
+    deps.act = async (action, target, item) => {
+        if (action === 'harvest') inventory.wheat = (inventory.wheat || 0) + 6;
+        return act(action, target, item);
+    };
+    return { deps, calls, bot, said };
+}
+
+test('trial plateau, no water near: says so and stops (never waits forever)', async () => {
+    const { deps, calls, bot, said } = setupV2(Array(80).fill(reply('wait', 'none', 'none', 1)),
+        { situation: plateau([{ item: 'hoe', count: 1 }, { item: 'wheat_seeds', count: 1 }]) });
+    const c = await farmWithLaya(bot, { crop: 'any' }, deps);
+    assert.equal(calls.asked, 1);
+    assert.deepEqual(said, [NO_WATER]);
+    assert.equal(c.reason, 'no water');
+});
+
+test('trial plateau with v1 too: stops instead of 73 waits', async () => {
+    const { deps, calls, bot, said } = setupV2(Array(80).fill(reply('wait', 'none', 'none', 1)),
+        { situation: plateau([{ item: 'hoe', count: 1 }, { item: 'wheat_seeds', count: 1 }]), task: { prompt: 'v1' } });
+    await farmWithLaya(bot, 180000, deps);
+    assert.equal(calls.asked, 1);
+    assert.deepEqual(said, [NO_WATER]);
+});
+
+test('find_water: walks to water and carries on, once', async () => {
+    const { deps, calls, bot, said } = setupV2([reply('find_water', 'none', 'none'), reply('find_water', 'none', 'none')],
+        { situation: plateau([{ item: 'hoe', count: 1 }, { item: 'wheat_seeds', count: 1 }]), water: { x: 30, y: 63, z: 4 } });
+    const c = await farmWithLaya(bot, { crop: 'any' }, deps);
+    assert.deepEqual(calls.walked, [{ x: 30, y: 63, z: 4 }]);
+    assert.equal(c.water_trips, 1);
+    assert.deepEqual(said, [NO_WATER], 'still dry after walking there: stops');
+});
+
+test('plateau with a water bucket: a wait becomes a pond', async () => {
+    const { deps, calls, bot } = setupV2([reply('wait', 'none', 'none')],
+        { situation: plateau([{ item: 'hoe', count: 1 }, { item: 'water_bucket', count: 1 }, { item: 'wheat_seeds', count: 3 }]), task: { max_steps_open: 1 } });
+    await farmWithLaya(bot, { crop: 'any' }, deps);
+    assert.equal(calls.act[0][0], 'pond');
+    assert.equal(calls.act[0][2], 'water_bucket');
+});
+
+test('pond veto: only dry ground', () => {
+    assert.equal(veto(sample(), 'pond', 'E4 N4', 'water_bucket'), null);
+    assert.equal(veto(sample(), 'pond', 'W3 N3', 'water_bucket'), 'not-dry-ground');
+});
+
+test('wait limit: stops after waits with nothing growing, not while crops grow', async () => {
+    const grass = ['GGGGWGGGG', ...Array(8).fill('GGGGGGGGG')];
+    const s0 = { grid: grass.map(r => [...r]), ys: grass.map(() => Array(9).fill(Y0)), carry: [{ item: 'hoe', count: 1 }, { item: 'wheat_seeds', count: 1 }], animals: [] };
+    const idle = setupV2(Array(50).fill(reply('wait', 'none', 'none')), { situation: s0 });
+    const c = await farmWithLaya(idle.bot, { crop: 'any' }, idle.deps);
+    assert.equal(idle.calls.asked, 3);
+    assert.equal(c.reason, 'nothing to do');
+    const busy = setupV2(Array(10).fill(reply('wait', 'none', 'none')), { task: { max_steps_open: 10 } });
+    const c2 = await farmWithLaya(busy.bot, { crop: 'any' }, busy.deps);
+    assert.equal(busy.calls.asked, 10, 'the golden farm has growing crops: keeps waiting');
+    assert.equal(c2.reason, 'max steps');
+});
+
+test('count goal: stops once enough is harvested, across resumes', async () => {
+    const progress = { harvested: 0 };
+    const a = setupV2(Array(10).fill(reply('harvest', 'W2 N1', 'none')));
+    const c = await farmWithLaya(a.bot, { crop: 'wheat', count: 10, progress }, a.deps);
+    assert.equal(a.calls.act.length, 2);
+    assert.equal(c.harvested, 12);
+    assert.match(a.said.at(-1), /Harvested 12 wheat/);
+    const b = setupV2(Array(10).fill(reply('harvest', 'W2 N1', 'none')));
+    progress.harvested = 6;
+    await farmWithLaya(b.bot, { crop: 'wheat', count: 10, progress }, b.deps);
+    assert.equal(b.calls.act.length, 1, 'a resume counts what was harvested before');
+});
+
+test('unload: full pack goes home, keeps tools and seeds, walks back', async () => {
+    let free = 0;
+    const u = setupV2([reply('wait', 'none', 'none'), reply('harvest', 'W2 N1', 'none')], {
+        home: { x: 10, y: Y0 + 1, z: 10 }, free: () => free,
+        inv: { iron_hoe: 1, wheat: 60, wheat_seeds: 40, bread: 2, bucket: 1, dirt: 5 }, task: { max_steps_open: 2 },
+    });
+    u.deps.pack.goHome = async () => { u.calls.home++; free = 20; return true; };
+    await farmWithLaya(u.bot, { crop: 'any' }, u.deps);
+    assert.equal(u.calls.home, 1);
+    assert.deepEqual(u.calls.deposited[0], [{ name: 'wheat', count: 60 }, { name: 'wheat_seeds', count: 24 }, { name: 'dirt', count: 5 }]);
+    assert.deepEqual(u.calls.walked, [{ x: 0, y: Y0 + 1, z: 0 }], 'walked back to the farm');
+    assert.deepEqual(u.calls.act, [['harvest', 'W2 N1', 'none']]);
+});
+
+test('unload: the model when sure; never without a home chest', async () => {
+    const yes = r => ({ ...r, answers: { ...r.answers, Unload: { type: 'noul', probability: 0.9, confident: true } } });
+    const m = setupV2([yes(reply('wait', 'none', 'none'))], { home: { x: 5, y: 65, z: 5 }, task: { max_steps_open: 1 } });
+    await farmWithLaya(m.bot, { crop: 'any' }, m.deps);
+    assert.equal(m.calls.home, 1);
+    const n = setupV2([yes(reply('harvest', 'W2 N1', 'none'))], { free: () => 0, task: { max_steps_open: 1 } });
+    await farmWithLaya(n.bot, { crop: 'any' }, n.deps);
+    assert.equal(n.calls.home, 0);
+    assert.match(n.said[0], /pack is full/);
+});
+
+test('a crop asked for: plants its seed', async () => {
+    const s0 = { ...sample(), carry: [...sample().carry] };
+    const { deps, calls, bot } = setupV2([reply('plant', 'E1 N2', 'wheat_seeds')], { situation: s0, task: { max_steps_open: 1 } });
+    await farmWithLaya(bot, { crop: 'carrots' }, deps);
+    assert.deepEqual(calls.act, [['plant', 'E1 N2', 'carrot']]);
+});
+
+test('v2 unsure: the rules decide', async () => {
+    const { deps, calls, bot } = setupV2([reply('wait', 'none', 'none', 0.2)], { task: { max_steps_open: 1 } });
+    const c = await farmWithLaya(bot, { crop: 'any' }, deps);
+    assert.deepEqual(calls.act, [['harvest', 'W2 N1', 'none']]);
+    assert.equal(c.rules, 1);
+});
+
+const goldenV2 = JSON.parse(readFileSync(new URL('./fixtures/laya-farm-v2/request.json', import.meta.url), 'utf8'));
+const barrenV2 = JSON.parse(readFileSync(new URL('./fixtures/laya-farm-v2/barren_request.json', import.meta.url), 'utf8'));
+
+test('golden v2 state and questions: match laya-go byte for byte', () => {
+    const s = { ...sample(), crop: 'carrots', pack: pack({ free: 5, home: 12, health: 20, food: 18, hostiles: 0, valuables: 6 }) };
+    assert.equal(stateV2(s), goldenV2.state);
+    assert.deepEqual(JSON.parse(JSON.stringify(questionsV2(s))), goldenV2.questions);
+    assert.equal(decide(s).rule, 'harvest');
+});
+
+test('golden v2 barren plateau (the trial): find_water, by the rules too', () => {
+    const s = { ...plateau([{ item: 'hoe', count: 1 }, { item: 'wheat_seeds', count: 1 }]), crop: 'wheat', pack: pack({ free: 30 }) };
+    assert.equal(stateV2(s), barrenV2.state);
+    assert.deepEqual(JSON.parse(JSON.stringify(questionsV2(s))), barrenV2.questions);
+    assert.deepEqual(decide(s), { action: 'find_water', target: 'none', item: 'none', rule: 'find_water' });
+    const wet = { ...s, carry: [...s.carry, { item: 'water_bucket', count: 1 }] };
+    assert.deepEqual(decide(wet), { action: 'pond', target: 'E0 N1', item: 'water_bucket', rule: 'pond' });
+});
+
+// parseFarmState reads a v1 or v2 state text back to a situation (as laya-go
+// prompt.ParseState does).
+function parseFarmState(text) {
+    const L = text.split('\n'), s = { carry: [], animals: [] };
+    let i = 1;
+    if (L[1].startsWith('Crop ')) {
+        const f = L[2].split(' ');
+        s.crop = L[1].slice(5);
+        s.pack = pack({ free: +f[1], home: f[3] === 'none' ? null : +f[3], health: +f[5], food: +f[7], hostiles: +f[9], valuables: +f[11] });
+        i = 3;
+    }
+    const c = L[i].split(' ').slice(1), a = L[i + 1].split(' ').slice(1);
+    if (c[0] !== 'none') for (let k = 0; k < c.length; k += 2) s.carry.push({ item: c[k], count: +c[k + 1].slice(1) });
+    if (a[0] !== 'none') for (let k = 0; k < a.length; k += 2) s.animals.push({ kind: a[k], count: +a[k + 1] });
+    s.grid = L.slice(i + 2).map(r => [...r]);
+    return s;
+}
+
+test('rules port agrees with laya-go on 400 generated v1 and v2 situations', () => {
+    const cases = readFileSync(new URL('./fixtures/laya-farm-v2/decisions.jsonl', import.meta.url), 'utf8').trim().split('\n').map(l => JSON.parse(l));
+    assert.equal(cases.length, 400);
+    const seen = new Set();
+    for (const d of cases) {
+        const s = parseFarmState(d.state);
+        assert.equal(s.crop ? stateV2(s) : state(s), d.state);
+        assert.deepEqual(decide(s), { action: d.action, target: d.target, item: d.item, rule: d.rule }, d.state);
+        assert.deepEqual(targetOptions(s), d.targets, d.state);
+        assert.deepEqual(questions(s).Item.criteria, d.items);
+        seen.add(d.rule);
+    }
+    for (const r of ['harvest', 'water', 'plant-crop', 'replant', 'plant', 'till', 'pond', 'find_water', 'breed', 'bone_meal', 'wait']) assert.ok(seen.has(r), r);
+});
+
+import { loadSample } from '../src/models/laya_check.js';
+
+test('laya:check asks the farm sample of the task prompt', () => {
+    assert.equal(loadSample('farm', 'v2').state, goldenV2.state);
+    assert.ok(loadSample('farm', 'v2').questions.Unload);
+    assert.equal(loadSample('farm', 'v1').state, golden.state);
+    assert.equal(rootSettings.decision_models.tasks.farm.prompt, 'v2');
+});

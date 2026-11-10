@@ -16,6 +16,10 @@ export const SAMPLES = {
     follow: new URL('../../test/fixtures/laya-follow-v1/request.json', import.meta.url),
     'follow:v2': new URL('../../test/fixtures/laya-follow-v2/request.json', import.meta.url),
     mine: new URL('../../test/fixtures/laya-mine-v1/request.json', import.meta.url),
+    farm: new URL('../../test/fixtures/laya-farm-v1/request.json', import.meta.url),
+    'farm:v2': new URL('../../test/fixtures/laya-farm-v2/request.json', import.meta.url),
+    command: new URL('../../test/fixtures/laya-command-v1/request.json', import.meta.url),
+    'command:v2': new URL('../../test/fixtures/laya-command-v2/request.json', import.meta.url),
 };
 
 // loadSample returns a task's sample request, matching its prompt version.
@@ -53,7 +57,7 @@ export async function run(args, config = settings.decision_models, out = console
     let status = 0;
     for (const task of tasks) {
         const r = await client.check(task, loadSample(task, config?.tasks?.[task]?.prompt));
-        if (r.reachable && r.model && !r.error && !r.models.includes(r.model)) r.error = `model "${r.model}" is not served here`;
+        if (r.reachable && r.model && !r.models.includes(r.model)) r.error = `model "${r.model}" is not served here`;
         out(formatReport(r));
         if (r.enabled && (r.error || !r.reachable)) status = 1;
         if (!config?.tasks?.[task]) status = 1;
