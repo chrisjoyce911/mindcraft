@@ -177,7 +177,12 @@ export async function runCraft(item, count, deps) {
         if (step.action === 'take' && chest) n = Math.min(n, chest[step.item] || n);
         const ok = await deps.act[step.action](step.item, n);
         logStep({ ...entry, outcome: ok ? 'did' : 'failed' });
-        if (!ok) return { ok: false, reason: `${step.action} ${step.item} failed`, steps };
+        if (!ok) {
+            // a failed extra step after the goal is carried doesn't undo it
+            const now = situation(deps.items(), item, count, deps.near(), chest || {});
+            if ((now.have[now.goal] || 0) >= now.count) return { ok: true, reason: 'done', steps };
+            return { ok: false, reason: `${step.action} ${step.item} failed`, steps };
+        }
         if (chest && (step.action === 'store' || step.action === 'take')) {
             const moved = step.action === 'store' ? (n === -1 ? s.have[step.item] : n) : -n;
             chest[step.item] = Math.max(0, (chest[step.item] || 0) + moved);
