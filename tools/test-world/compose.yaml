@@ -1,0 +1,49 @@
+# Mindcraft test world: a local vanilla 1.21.6 server for the andy game tests.
+# Driven by world.js (npm run world:start|stop|reset|template), which sets the
+# variables below; don't run `docker compose up` by hand without them.
+#
+# EULA: the user accepted the Minecraft EULA (https://www.minecraft.net/eula)
+# for this local test server on 2026-11-10. See docs/test-world.md.
+name: mindcraft-test-world
+services:
+  mc:
+    # exact tag, published 2026-10-25 (digest sha256:07ab333a8542208c4c863a78fd3cf3fd1138d5a2e118306e1a316d202f69ab74)
+    image: itzg/minecraft-server:2026.10.1-java21
+    container_name: mindcraft-test-world
+    restart: "no"
+    stop_grace_period: 60s
+    ports:
+      - "127.0.0.1:${TEST_WORLD_PORT:-25566}:25565"
+      - "127.0.0.1:${TEST_WORLD_RCON_PORT:-25576}:25575"
+    environment:
+      EULA: "TRUE"
+      TYPE: VANILLA
+      VERSION: "1.21.6"
+      MEMORY: 3G
+      TZ: Australia/Brisbane
+      ONLINE_MODE: "false"
+      ENFORCE_SECURE_PROFILE: "false"
+      SEED: "${TEST_WORLD_SEED:?set by world.js from sites.json}"
+      LEVEL: world
+      MODE: survival
+      DIFFICULTY: easy
+      SPAWN_PROTECTION: "0"
+      VIEW_DISTANCE: "8"
+      SIMULATION_DISTANCE: "6"
+      MAX_PLAYERS: "8"
+      ALLOW_FLIGHT: "true"
+      MOTD: Mindcraft test world
+      # operators: world.js writes ops.json with offline UUIDs (the image
+      # would look the names up online, which offline mode doesn't use)
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD_FILE: /run/secrets/rcon
+      BROADCAST_RCON_TO_OPS: "false"
+      BROADCAST_CONSOLE_TO_OPS: "false"
+      ENABLE_AUTOPAUSE: "false"
+      SNOOPER_ENABLED: "false"
+      ENABLE_QUERY: "false"
+      OVERRIDE_SERVER_PROPERTIES: "true"
+    volumes:
+      - "${TEST_WORLD_DATA:?set by world.js}/server:/data"
+      - "${TEST_WORLD_DATA:?set by world.js}/rcon.secret:/run/secrets/rcon:ro"

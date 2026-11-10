@@ -9,7 +9,8 @@ import { fakeSession, MemReport } from './helpers/andy_fakes.js';
 
 const SCENARIOS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'game/scenarios.json');
 const WANTED = ['connect', 'disconnect', 'andy_status', 'andy_say', 'andy_command', 'server_command', 'tester_tp', 'tester_move',
-    'andy_wait_idle', 'andy_chat_log', 'andy_logs', 'inventory_snapshot', 'inventory_diff', 'chest_contents', 'list_tests', 'run_test', 'run_suite'];
+    'andy_wait_idle', 'andy_chat_log', 'andy_logs', 'inventory_snapshot', 'inventory_diff', 'chest_contents',
+    'world_status', 'world_start', 'world_stop', 'world_reset', 'bot_start', 'bot_stop', 'use_world', 'site_tp', 'list_tests', 'run_test', 'run_suite'];
 
 function setup() {
     const f = fakeSession();

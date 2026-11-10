@@ -1,0 +1,65 @@
+{
+  "about": "Known places in the test world (seed 1, vanilla 1.21.6), verified by `npm run world:sites`. x y z is where a player stands (feet). The template builds the base pad, the base chest and sign, and the dry sky platform with the commands in build, then clears dropped items (the fills knock plants loose, and andy would pick them up).",
+  "seed": "1",
+  "spawn": { "x": 166, "y": 70, "z": 169 },
+  "generateRadius": 48,
+  "sites": {
+    "base": {
+      "x": 166, "y": 70, "z": 169,
+      "about": "Flat open grass pad (x 156..184, z 161..177, grass at y 69) on the forest edge beside world spawn; the base chest and sign are in its north-west corner. Open grass continues east for the follow test.",
+      "checks": [
+        { "type": "grass", "radius": 4 },
+        { "type": "block", "at": "-8 0 -7", "name": "^chest$" },
+        { "type": "block", "at": "-7 0 -7", "name": "sign" }
+      ]
+    },
+    "farm": {
+      "x": 208, "y": 63, "z": 149,
+      "about": "Grass at sea level (y 62) on the river mouth's west bank, water two blocks east; the template clears trees from x 203..209, z 144..154 (tree placement differs between generations).",
+      "checks": [
+        { "type": "grass", "radius": 1 },
+        { "type": "water", "radius": 4, "min": 3 }
+      ]
+    },
+    "dry": {
+      "x": 200, "y": 200, "z": 200,
+      "about": "A 9x9 grass platform at y 199 in the sky, glass walls round it, built by the template: no water within 64 (the farm task's water_radius). Natural grass near spawn always has an aquifer or the sea within 64.",
+      "checks": [
+        { "type": "grass", "radius": 4 },
+        { "type": "noWater", "radius": 64 }
+      ]
+    },
+    "mine": {
+      "x": 172, "y": 74, "z": 140,
+      "about": "Top of the bare stone and granite hill north of spawn (coal and iron showing on its slopes); dig or stair down from here.",
+      "checks": [
+        { "type": "stone", "radius": 6, "min": 40 }
+      ]
+    },
+    "cave": {
+      "x": 178, "y": 57, "z": 195,
+      "about": "A natural cave pocket 14 blocks under the forest south-east of spawn, stone all round, dark.",
+      "checks": [
+        { "type": "cave", "roof": 24 },
+        { "type": "stone", "radius": 4, "min": 20 }
+      ]
+    }
+  },
+  "build": [
+    "fill 156 68 161 184 68 177 dirt",
+    "fill 156 69 161 184 69 177 grass_block",
+    "fill 156 70 161 184 80 177 air",
+    "setblock 158 70 162 chest[facing=south]",
+    "setblock 159 70 162 oak_sign[rotation=8]{front_text:{messages:[\"test base\",\"\",\"\",\"\"]}}",
+    "fill 203 63 144 209 80 154 air",
+    "fill 203 62 144 209 62 154 grass_block",
+    "fill 195 197 195 205 197 205 glass",
+    "fill 196 198 196 204 198 204 dirt",
+    "fill 196 199 196 204 199 204 grass_block",
+    "fill 195 198 195 205 201 195 glass",
+    "fill 195 198 205 205 201 205 glass",
+    "fill 195 198 195 195 201 205 glass",
+    "fill 205 198 195 205 201 205 glass",
+    "kill @e[type=item]"
+  ]
+}

@@ -45,7 +45,7 @@ export function defineTools(session, { scenariosPath, newReport = title => new R
         },
         {
             name: 'server_command',
-            description: 'Run a slash command as tester (needs cheats), e.g. /time set day, /give andy bread 4, /fill ..., /summon zombie ~3 ~ ~. Note ~ is relative to tester. Returns the server\'s reply lines.',
+            description: 'Run a slash command, e.g. /time set day, /give andy bread 4, /fill ..., /summon zombie ~3 ~ ~. On the test world it goes over RCON unless it uses ~, ^ or @s (then tester types it, so ~ is relative to tester); elsewhere tester types it (cheats must be on). Returns the server\'s reply lines and which way it went (via).',
             inputSchema: obj({ command: str('the command, with or without the leading /'), wait_ms: num('how long to collect replies (default 1000)') }, ['command']),
             run: a => session.serverCommand(a.command, a.wait_ms ?? 1000),
         },
@@ -100,6 +100,54 @@ export function defineTools(session, { scenariosPath, newReport = title => new R
             description: 'Tester teleports onto the chest (or barrel) at x y z, opens it and returns {item: count}. Tester stays there.',
             inputSchema: obj({ x: num('x'), y: num('y'), z: num('z') }, ['x', 'y', 'z']),
             run: a => session.chestContents(a.x, a.y, a.z),
+        },
+        {
+            name: 'world_status',
+            description: 'The local test world (tools/test-world, 127.0.0.1:25566): container state, ready, players online, seed, template, the named sites, the test bot (andy started by bot_start) and which world the tools are using now.',
+            inputSchema: obj(),
+            run: () => session.worldStatus(),
+        },
+        {
+            name: 'world_start',
+            description: 'Start the local test world and wait until it accepts players (about 10 s), then point the tools at it (tester joins it, server commands go over RCON).',
+            inputSchema: obj(),
+            run: () => session.worldStart(),
+        },
+        {
+            name: 'world_stop',
+            description: 'Stop the local test world (the world is saved). Tester leaves; andy is kicked.',
+            inputSchema: obj(),
+            run: () => session.worldStop(),
+        },
+        {
+            name: 'world_reset',
+            description: 'Put the test world back to its template (stop, replace the world, start, wait; about 10 s), then start andy again through the mindserver if the test bot is running and wait until he is back in game. Snapshots are cleared.',
+            inputSchema: obj({ andy_timeout_ms: num('how long to wait for andy to be back in game (default 90000)') }),
+            run: a => session.worldReset({ andyTimeoutMs: a.andy_timeout_ms ?? 90000 }),
+        },
+        {
+            name: 'bot_start',
+            description: 'Start Mindcraft (andy) against the test world in the background, without touching settings.js: host 127.0.0.1:25566, mindserver 8091, the rest of this checkout\'s settings.js. Waits until andy is in game. Output goes to the test world\'s logs directory.',
+            inputSchema: obj({ profiles: { type: 'array', items: { type: 'string' }, description: 'profile files (default ["./andy.json"])' }, wait_ms: num('how long to wait for andy in game (default 120000; 0 = don\'t wait)') }),
+            run: a => session.botStart({ profiles: a.profiles, waitMs: a.wait_ms ?? 120000 }),
+        },
+        {
+            name: 'bot_stop',
+            description: 'Stop the test bot started by bot_start (Mindcraft and its agents).',
+            inputSchema: obj(),
+            run: () => session.botStop(),
+        },
+        {
+            name: 'use_world',
+            description: 'Point the tools at a world: "test" (the local test world) or "settings" (your own world from settings.js, e.g. a LAN world). Drops the current connections.',
+            inputSchema: obj({ world: str('test or settings', { enum: ['test', 'settings'] }) }, ['world']),
+            run: a => session.useWorld(a.world),
+        },
+        {
+            name: 'site_tp',
+            description: 'Test world only: teleport andy and/or tester to a named site (base, farm, dry, mine, cave; see world_status). With who "both" tester lands 2 blocks east of andy.',
+            inputSchema: obj({ site: str('site name'), who: str('andy, tester or both (default)', { enum: ['andy', 'tester', 'both'] }) }, ['site']),
+            run: a => session.siteTp(a.site, { who: a.who || 'both' }),
         },
         {
             name: 'list_tests',

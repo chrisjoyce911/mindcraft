@@ -4,7 +4,9 @@
 //     wait (false: no wait for idle after the action), checks [checks],
 //     cleanup [steps] }
 // Strings may hold templates, filled at the test's start from andy's block
-// position: {x} {y+1} {z-3}, and the names {andy} and {tester}.
+// position: {x} {y+1} {z-3}, and the names {andy} and {tester}. On the
+// test world, {site:farm} is a site's "x y z" and {site:farm.x} one of them
+// (with an offset: {site:farm.y+1}).
 import fs from 'fs';
 import { CHECKS } from './checks.js';
 
@@ -22,6 +24,7 @@ export const STEPS = {
     walk: 'tester walks {dx, dz} from where it stands, or to "x y z"',
     snapshot: 'save andy\'s inventory, position, health and food under this label',
     anchor: 'take andy\'s current block as {x} {y} {z} again',
+    site: 'test world only: teleport andy, tester beside him, to a named site of tools/test-world/sites.json and take it as {x} {y} {z} ("farm", or {name, who: andy|tester|both}); does nothing on another world',
 };
 const STEP_OPTIONS = new Set(['timeout', 'repeat', 'optional', 'note', 'replyMs']);
 
@@ -95,11 +98,17 @@ export function select(tests, { names = [], tag = null } = {}) {
 }
 
 // expand fills templates in strings (deeply in objects and arrays).
-// ctx: {x, y, z, andy, tester}.
+// ctx: {x, y, z, andy, tester, sites: {name: {x, y, z}}}.
 export function expand(value, ctx) {
     if (typeof value === 'string') {
-        return value.replace(/\{(x|y|z)([+-]\d+)?\}|\{(andy|tester)\}/g, (m, axis, off, name) => {
+        return value.replace(/\{(x|y|z)([+-]\d+)?\}|\{(andy|tester)\}|\{site:([a-z0-9-]+)(?:\.([xyz])([+-]\d+)?)?\}/g, (m, axis, off, name, site, saxis, soff) => {
             if (name) return ctx[name] ?? m;
+            if (site) {
+                const s = ctx.sites?.[site];
+                if (!s) return m;
+                if (saxis) return String(s[saxis] + (soff ? Number(soff) : 0));
+                return `${s.x} ${s.y} ${s.z}`;
+            }
             if (ctx[axis] == null) return m;
             return String(ctx[axis] + (off ? Number(off) : 0));
         });
@@ -134,6 +143,7 @@ export function describeStep(step) {
     case 'walk': return `tester walks ${typeof v === 'string' ? 'to ' + v : JSON.stringify(v)}`;
     case 'snapshot': return `snapshot "${v}"`;
     case 'anchor': return 'take andy\'s position again';
+    case 'site': return `andy${typeof v === 'object' && v.who && v.who !== 'both' ? ` (${v.who})` : ''} to site ${typeof v === 'string' ? v : v.name}`;
     default: return JSON.stringify(step);
     }
 }
