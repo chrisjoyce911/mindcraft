@@ -22,6 +22,7 @@ What we've agreed to build next, after the current test round. Each numbered ite
 2. **Ore memory**: ores seen but not mined (wrong pickaxe, skipped) are saved with position and kind; "andy go get the diamonds you saw" goes there, crafting the needed pickaxe first. Collected ore is removed from memory.
 3. **Tool choice**: the cheapest pickaxe that can mine the block by default; the fastest when hurrying or mining a lot; iron/diamond only when the ore needs it.
 4. **Upgrade advice**: a model input that says an upgrade is due (e.g. 3+ iron and only a stone pickaxe, or remembered ore needing a better tier); andy upgrades before carrying on.
+5. **Torch supply** (user, 2026-11-10): torch = 1 stick + 1 coal *or charcoal* → 4 torches. Before a mine job, top up to ~16 torches (take from the home/`andy mine` chest first). While mining, craft whenever torches < 4 and coal + sticks/planks are carried (not once per job, as today's `triedTorches` does), and always collect coal near the tunnel. With no coal, make charcoal: smelt logs in a furnace (8 cobblestone, which he always has), fuelled by planks/logs; about 3 logs give 8 torches. If he runs out deep down, keep mining (coal is common down to Y 0) and refill from the next coal; never leave the staircase unlit.
 
 ## 2. Farm v3 (one retrain)
 
