@@ -2316,7 +2316,7 @@ export async function craftForTask(bot, item, count) {
     return !!(await craftRecipe(bot, item, count));
 }
 
-export async function mineOre(bot, ore, count=1, homeChest=null) {
+export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) {
     /**
      * Mine until count more of an ore's drop is collected, finding the ore
      * underground with the Laya mine task (a staircase down to the ore's
@@ -2327,6 +2327,7 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
      * @param {string} ore, one of coal, copper, iron, lapis, gold, redstone, diamond.
      * @param {number} count, how many of the ore's drop to collect.
      * @param {function} homeChest, optional: returns the home chest's [x, y, z] (the remembered place "home_chest"), or nothing.
+     * @param {object} progress, optional: {done}, raised by each drop collected (kept across a resumed job).
      * @returns {Promise<boolean>} true if it collected them.
      **/
     const info = MINE_ORES[ore];
@@ -2376,6 +2377,7 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
             sleep,
             log: msg => log(bot, msg),
             stepLog: `./bots/${bot.username}/logs/laya-mine.jsonl`,
+            progress,
         });
         log(bot, r.ok ? `Mined ${r.collected} ${info.drop}.` : `Stopped mining ${ore}: ${r.reason}.`);
         return r.ok;

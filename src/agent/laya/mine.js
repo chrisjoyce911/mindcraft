@@ -176,6 +176,8 @@ function cellsToDig(view, action) {
 //       goHome({x, y, z}) → bool, deposit([{name, count}]) → bool (true: all went in), isFood(name) → bool,
 //       chat(msg) (optional)
 //   sleep(ms), log(msg), stepLog (file path, or null)
+//   progress ({done}, optional): raised by each drop collected, so a job
+//   resumed after an interrupt knows how many are left
 export async function mineWithLaya(bot, oreName, count, deps) {
     const opts = { ...DEFAULTS, ...(deps.task || {}) };
     const v2 = opts.prompt === 'v2';
@@ -186,6 +188,8 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     const start = deps.inventory()[ore.drop] || 0;
     let deposited = 0; // of the ore's drop, in the home chest
     const got = () => (deps.inventory()[ore.drop] || 0) + deposited - start;
+    const progressBase = deps.progress?.done || 0;
+    const record = () => { if (deps.progress) deps.progress.done = progressBase + Math.max(0, got()); };
     let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, noTorchUntil = 0, noUnloadUntil = 0;
     let offPlan = 0; // blocks collecting has taken the bot away from the plan
     let walkFails = 0; // failed walks back to the plan in a row
@@ -211,6 +215,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         return await craft(TIER_PICKAXE[ore.tier], 1) && pickTier(deps.inventory()) >= ore.tier;
     };
     const finish = (ok, reason) => {
+        record();
         deps.log?.(summary(counters, got(), count, ore.drop));
         return { ok, reason, collected: got(), counters, entrance: plan?.entrance };
     };
@@ -256,6 +261,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
 
     for (let step = 0; step < maxSteps && !bot.interrupt_code; step++) {
         if (got() >= count) return finish(true, 'done');
+        record();
         const inv = deps.inventory();
         const torches = inv.torch || 0;
         if (step >= noTorchUntil && torches < opts.torch_low && (canMakeTorches(inv) || (!torches && dark >= 8))) {

@@ -5,6 +5,7 @@ import settings from './settings.js'
 import convoManager from './conversation.js';
 import { laya, taskSettings } from '../models/laya.js';
 import { llmOn } from './llm_gate.js';
+import { SAFETY_MODES } from './laya/director.js';
 import { LayaEater, summary as eatSummary } from './laya/eat.js';
 import { LayaDefender, summary as defendSummary } from './laya/defend.js';
 import { defendActions } from './laya/defend_actions.js';
@@ -421,16 +422,22 @@ async function execute(mode, agent, func, timeout=-1) {
     if (agent.self_prompter.isActive())
         agent.self_prompter.stopLoop();
     let interrupted_action = agent.actions.currentActionLabel;
+    // a safety mode goes on the job stack over an interrupted Laya job, and
+    // comes off when done: the director then resumes the job
+    const entry = SAFETY_MODES.has(mode.name) ? agent.director?.stack.pause(mode.name) : null;
     mode.active = true;
     let code_return = await agent.actions.runAction(`mode:${mode.name}`, async () => {
         await func();
     }, { timeout });
     mode.active = false;
+    if (entry) agent.director.stack.done(entry);
     console.log(`Mode ${mode.name} finished executing, code_return: ${code_return.message}`);
+    const job_waiting = !!agent.director?.stack.job();
 
     let should_reprompt = 
         interrupted_action && // it interrupted a previous action
         !agent.actions.resume_func && // there is no resume function
+        !job_waiting && // no Laya job waits to resume (the director resumes it)
         !agent.self_prompter.isActive() && // self prompting is not on
         !code_return.interrupted && // this mode action was not interrupted by something else
         llmOn(settings); // with the chat LLM off nobody is asked: a resumable job carries on by itself

@@ -28,6 +28,7 @@ const settings = {
 
     "load_memory": false, // load memory from previous session
     "init_message": "Respond with hello world and your name", // sends to all on spawn
+    "llm": true, // false: the chat LLM is never asked (player chat goes to the Laya command model only; src/agent/llm_gate.js)
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
     "speak": false,
@@ -152,6 +153,14 @@ const settings = {
                 "water_radius": 64,    // how far it looks for water when there's none to farm with
                 "keep_seeds": 16,      // seeds of each kind kept when emptying the pack into the home chest ("home_chest" place)
                 "log_steps": true      // bots/<name>/logs/laya-farm.jsonl
+            },
+            "director": {
+                "enabled": false,      // off: the director's rules decide (src/agent/laya/director.js); on: the served model
+                "server": "golaya",
+                "model": "director",
+                "prompt": "v1",        // the shared director spec's state text
+                "timeout_ms": 300,
+                "min_confidence": 0.5  // a less sure answer: the rules decide
             }
         }
     },

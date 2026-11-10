@@ -128,7 +128,10 @@ export class ActionManager {
             this.currentActionLabel = '';
             this.currentActionFn = null;
             clearTimeout(TIMEOUT);
-            this.cancelResume();
+            // An interrupt (a mode taking over) often throws out of the
+            // action (e.g. "Digging aborted"): keep its resume so the job
+            // carries on afterwards. Any other error ends it.
+            if (!this.agent.bot.interrupt_code) this.cancelResume();
             console.error("Code execution triggered catch:", err);
             // Log the full stack trace
             console.error(err.stack);
