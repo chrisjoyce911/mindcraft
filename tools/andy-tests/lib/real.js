@@ -1,3 +1,4 @@
+/* global process */
 // The real connections (mineflayer, socket.io), loaded only when used so
 // unit tests never load them.
 import { MindClient } from './mind.js';
@@ -19,6 +20,18 @@ export function realDeps(config) {
                 username: config.tester, agent: config.agent,
                 deps: { mineflayer, pathfinder, Vec3, findServer: getServer },
             });
+        },
+        makeWorld: async () => {
+            const [{ loadSites }, { TestWorld }, { realWorldDeps }] = await Promise.all([
+                import('../../test-world/lib/config.js'), import('../../test-world/lib/world.js'), import('../../test-world/lib/real.js'),
+            ]);
+            const tw = config.testWorld;
+            // log to stderr: stdout is the MCP channel
+            return new TestWorld({ config: tw, sites: loadSites(tw.sitesFile), deps: realWorldDeps({ log: line => process.stderr.write(line + '\n') }) });
+        },
+        makeBot: async () => {
+            const [{ Bot }, { realBotDeps }] = await Promise.all([import('../../test-world/lib/bot.js'), import('../../test-world/lib/real.js')]);
+            return new Bot({ config: config.testWorld, deps: realBotDeps() });
         },
     };
 }

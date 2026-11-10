@@ -100,6 +100,14 @@ export async function runStep(step, ctx) {
         }
         case 'snapshot': await s.snapshot(v); break;
         case 'anchor': await ctx.anchor(); break;
+        case 'site': {
+            const o = typeof v === 'string' ? { name: v } : v;
+            const r = await s.siteTp(o.name, { who: o.who || 'both' });
+            if (r.skipped) { out.push(`skipped: ${r.reason}`); break; }
+            out.push(`at ${r.at.x} ${r.at.y} ${r.at.z}`);
+            if ((o.who || 'both') !== 'tester') await ctx.anchor();
+            break;
+        }
         default: throw new Error(`unknown step ${JSON.stringify(step)}`);
         }
     }
@@ -151,6 +159,9 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
         deadline: started + timeout, t0: started, tAction: null, serverReplies: [], vars: { andy: session.config.agent, tester: session.config.tester },
     };
     ctx.anchor = async () => Object.assign(ctx.vars, await session.andyBlock());
+    if (session.onTestWorld?.()) {
+        try { ctx.vars.sites = (await session.testWorld()).sites?.sites; } catch { /* no sites: {site:…} stays as written */ }
+    }
 
     const finish = () => {
         result.ms = session.now() - started;

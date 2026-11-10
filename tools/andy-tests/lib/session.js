@@ -4,10 +4,13 @@
 import { Report } from './report.js';
 import { readLogs, brief } from './logs.js';
 import { brisbaneIso } from './time.js';
+import { useWorld } from './config.js';
+import { needsPlayer } from '../../test-world/lib/rcon.js';
 
 const realSleep = ms => new Promise(r => setTimeout(r, ms));
 const TIMELINE_MAX = 20000;
 const CHAT_MAX = 2000;
+const RCON_SETTLE_MS = 500;
 
 export function inventoryDiff(a = {}, b = {}) {
     const out = {};
@@ -22,7 +25,8 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
 export class Session {
     // deps: {makeMind() → MindClient-like, makeTester() → Tester-like,
-    // now(), sleep(ms)}. report: a Report, or created in config.reportDir
+    // makeWorld() → TestWorld-like and makeBot() → Bot-like (the local test
+    // world, optional), now(), sleep(ms)}. report: a Report, or created in config.reportDir
     // on first write.
     constructor({ config, deps, report = null, now = Date.now, sleep = realSleep }) {
         this.config = config;
@@ -36,6 +40,8 @@ export class Session {
         this.timeline = [];   // [{t, action, idle, pos, health, hunger, entities}]
         this.snapshots = {};
         this._settings = null;
+        this._world = null;
+        this._bot = null;
     }
 
     get report() {
@@ -76,6 +82,7 @@ export class Session {
             out.world = this.tester.server ? `${this.tester.server.host}:${this.tester.server.port} (${this.tester.server.version})` : 'connected';
             out.tester = this.tester.position();
         }
+        out.target = this.config.world;
         out.report = this.report.paths();
         return out;
     }
@@ -179,9 +186,156 @@ export class Session {
         return { sent: line, from: this.config.tester, replies: await this.waitChat(t, waitMs) };
     }
 
+    // serverCommand: on the test world over RCON (more reliable than chat,
+    // no length limit), except commands relative to tester (~ ^ @s), which
+    // tester types; elsewhere, or if RCON fails, tester types it.
     async serverCommand(cmd, waitMs = 1000) {
+        let rconError = null;
+        if (this.onTestWorld() && !needsPlayer(cmd)) {
+            try {
+                const reply = await (await this.testWorld()).command(cmd);
+                // RCON replies at once; give the change time to reach andy's
+                // and tester's clients (tester's chat commands wait anyway)
+                await this.sleep(Math.min(waitMs, RCON_SETTLE_MS));
+                return { command: cmd, via: 'rcon', replies: String(reply).split('\n').map(l => l.trim()).filter(Boolean) };
+            } catch (e) { rconError = e.message; }
+        }
         const tester = await this.ensureTester();
-        return { command: cmd, replies: await tester.command(cmd, waitMs) };
+        const out = { command: cmd, via: 'tester', replies: await tester.command(cmd, waitMs) };
+        if (rconError) out.rconError = rconError;
+        return out;
+    }
+
+    // ---- the local test world ----
+
+    onTestWorld() { return this.config.world === 'test'; }
+
+    async testWorld() {
+        if (!this.deps.makeWorld) throw new Error('The test world is not available in this session.');
+        if (!this._world) this._world = await this.deps.makeWorld();
+        return this._world;
+    }
+
+    async testBot() {
+        if (!this.deps.makeBot) throw new Error('The test bot is not available in this session.');
+        if (!this._bot) this._bot = await this.deps.makeBot();
+        return this._bot;
+    }
+
+    // useWorld switches the session between "settings" (your own world,
+    // settings.js) and "test" (the local test world), dropping connections
+    // to the old one.
+    useWorld(world) {
+        const old = this.config.world;
+        if (useWorld(this.config, world)) {
+            this.disconnect();
+            this._settings = null;
+        }
+        const c = this.config;
+        return { world: c.world, was: old, minecraft: `${c.host}:${c.port}`, mindserver: `http://localhost:${c.mindserverPort}` };
+    }
+
+    async worldStatus() {
+        const w = await this.testWorld();
+        const out = { target: this.config.world, ...(await w.status()) };
+        if (this.deps.makeBot) out.bot = (await this.testBot()).status();
+        return out;
+    }
+
+    async worldStart() {
+        const w = await this.testWorld();
+        const r = await w.start();
+        return { ...r, ...this.useWorld('test') };
+    }
+
+    async worldStop() {
+        this.tester?.close();
+        this.tester = null;
+        const r = await (await this.testWorld()).stop();
+        return r;
+    }
+
+    // worldReset puts the template world back. Andy is kicked when the server
+    // stops; if the test bot is running he is started again through the
+    // mindserver and this waits until he is back in game.
+    async worldReset({ andyTimeoutMs = 90000 } = {}) {
+        const w = await this.testWorld();
+        this.useWorld('test');
+        this.tester?.close();
+        this.tester = null;
+        const r = await w.reset();
+        const out = { ...r, world: 'test' };
+        const bot = this.deps.makeBot ? (await this.testBot()).status() : null;
+        if (bot?.running) {
+            const t0 = this.now();
+            try {
+                const mind = await this.ensureMind();
+                out.andy = await mind.restartAgent({ timeout: andyTimeoutMs, sleep: this.sleep });
+            } catch (e) {
+                out.andy = { inGame: false, error: e.message };
+            }
+            out.andyMs = this.now() - t0;
+        }
+        this.snapshots = {};
+        return out;
+    }
+
+    async botStart({ profiles, waitMs = 120000 } = {}) {
+        const bot = await this.testBot();
+        this.useWorld('test');
+        const r = bot.start(profiles ? { profiles } : {});
+        if (waitMs > 0) {
+            const t0 = this.now();
+            const w = await this.waitUntil(async () => {
+                try {
+                    const mind = await this.ensureMind();
+                    return mind.agentStatus()?.in_game ? mind.agentStatus() : null;
+                } catch { return null; }
+            }, { timeout: waitMs, poll: 1000 });
+            r.inGame = w.ok;
+            r.waitedMs = this.now() - t0;
+            if (!w.ok) r.note = `andy wasn't in game after ${Math.round(waitMs / 1000)} s; see ${r.log || bot.status().log}`;
+        }
+        return r;
+    }
+
+    async botStop() {
+        this.mind?.close();
+        this.mind = null;
+        return (await this.testBot()).stop();
+    }
+
+    sites() {
+        return this._world?.sites || null;
+    }
+
+    // siteTp teleports andy (and/or tester, beside him, 2 blocks east) to a
+    // named site of the test world. Off the test world it does nothing.
+    async siteTp(name, { who = 'both' } = {}) {
+        if (!this.onTestWorld()) return { skipped: true, reason: 'not the test world (use world_start or ANDY_WORLD=test)' };
+        const w = await this.testWorld();
+        const s = w.sites?.sites?.[name];
+        if (!s) throw new Error(`No site "${name}". Sites: ${Object.keys(w.sites?.sites || {}).join(', ')}.`);
+        const out = { site: name, at: { x: s.x, y: s.y, z: s.z }, replies: [] };
+        const cx = s.x + 0.5, cz = s.z + 0.5;
+        if (who === 'both' || who === 'andy') {
+            const r = await this.serverCommand(`/tp ${this.config.agent} ${cx} ${s.y} ${cz}`);
+            out.replies.push(...r.replies);
+            const near = await this.waitUntil(async () => {
+                const p = (await this.state()).gameplay?.position;
+                return p && Math.abs(p.x - cx) < 2 && Math.abs(p.z - cz) < 2 ? p : null;
+            }, { timeout: 10000, poll: 500 });
+            out.andy = near.ok ? near.value : null;
+            if (!near.ok) throw new Error(`andy didn't arrive at site ${name} (${s.x} ${s.y} ${s.z}): ${out.replies.join(' / ')}`);
+        }
+        if (who === 'both' || who === 'tester') {
+            const tester = await this.ensureTester();
+            const r = await this.serverCommand(`/tp ${this.config.tester} ${cx + (who === 'both' ? 2 : 0)} ${s.y} ${cz}`);
+            out.replies.push(...r.replies);
+            await this.sleep(500);
+            out.tester = tester.position();
+        }
+        return out;
     }
 
     // ---- moving tester ----

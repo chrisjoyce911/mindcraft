@@ -28,3 +28,8 @@ tasks/construction_tasks/train/**
 server_data*
 **/.DS_Store
 src/mindcraft-py/__pycache__/
+# test world (tools/test-world): data and secrets never committed
+tools/test-world/data/
+tools/test-world/*.secret
+tools/test-world/.env
+tools/test-world/bot-settings.local.json

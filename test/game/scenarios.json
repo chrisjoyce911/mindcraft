@@ -14,6 +14,11 @@
       ],
       "timeout": 30000,
       "description": "Puts tester beside andy in creative and locks the world to clear daytime. Also proves tester can run commands (cheats on).",
+      "setup": [
+        {
+          "site": "base"
+        }
+      ],
       "action": [
         {
           "tp": {
@@ -59,6 +64,9 @@
       "requires": [],
       "description": "Chat \"andy follow me\", tester walks 12 blocks east; andy must start following and end within 5 blocks of tester, having moved 6+ blocks.",
       "setup": [
+        {
+          "site": "base"
+        },
         {
           "tp": {
             "dx": 2
@@ -118,6 +126,9 @@
       "description": "Andy with only 3 oak logs is asked in chat for a wooden pickaxe: he makes planks, sticks, a crafting table and the pickaxe.",
       "setup": [
         {
+          "site": "base"
+        },
+        {
           "tp": {
             "dx": 2
           }
@@ -156,6 +167,9 @@
       "grace": 20000,
       "description": "With 2 oak logs, 3 cobblestone and a crafting table, chat \"andy make a stone pickaxe\".",
       "setup": [
+        {
+          "site": "base"
+        },
         {
           "tp": {
             "dx": 2
@@ -202,6 +216,9 @@
       "description": "With 8 cobblestone and a crafting table, chat \"andy make a furnace\".",
       "setup": [
         {
+          "site": "base"
+        },
+        {
           "tp": {
             "dx": 2
           }
@@ -239,11 +256,15 @@
         "home"
       ],
       "timeout": 120000,
+      "grace": 2000,
       "requires": [
         "farm"
       ],
       "description": "A chest 3 blocks east with a sign saying andy beside it. Starting a farm job makes andy look for a signed chest and adopt it. Only works while andy has NO home chest saved (a fresh start with load_memory false), so it runs before the other home chest tests.",
       "setup": [
+        {
+          "site": "base"
+        },
         {
           "tp": {
             "dx": 2
@@ -268,7 +289,6 @@
           "andy": "!stop"
         }
       ],
-      "grace": 2000,
       "checks": [
         {
           "type": "reply",
@@ -296,6 +316,9 @@
       "grace": 2000,
       "description": "A chest 3 blocks east of andy, tester beside it; !setHomeChest from tester saves that chest.",
       "setup": [
+        {
+          "site": "base"
+        },
         {
           "tp": {
             "dx": 2
@@ -331,6 +354,9 @@
       ],
       "description": "A chest 3 blocks west of andy, tester beside it; chat \"andy this is your chest\" (command model: home → !setHomeChest).",
       "setup": [
+        {
+          "site": "base"
+        },
         {
           "tp": {
             "dx": -2
@@ -371,6 +397,9 @@
       ],
       "description": "A 9x9 grass patch around andy with a row of 7 ripe wheat on wet farmland 2 blocks south and a water source beside it; andy has a hoe and 16 seeds. Chat \"andy farm wheat 5\": he harvests 5 wheat and stops.",
       "setup": [
+        {
+          "site": "farm"
+        },
         {
           "tp": {
             "dz": -6
@@ -448,6 +477,9 @@
       "description": "Andy on a 9x9 grass platform at Y 300 (no water within 64 blocks), a hoe and seeds, no bucket or iron. !layaFarm(\"wheat\", 5) must stop with \"No water near here\".",
       "setup": [
         {
+          "site": "dry"
+        },
+        {
           "cmd": "/clear {andy}"
         },
         {
@@ -514,11 +546,15 @@
         "farm"
       ],
       "timeout": 300000,
+      "grace": 2000,
       "requires": [
         "farm"
       ],
       "description": "The same dry sky platform, but andy has a water bucket: he digs a pond (farm log action pond) instead of giving up.",
       "setup": [
+        {
+          "site": "dry"
+        },
         {
           "cmd": "/clear {andy}"
         },
@@ -565,7 +601,6 @@
           "andy": "!stop"
         }
       ],
-      "grace": 2000,
       "checks": [
         {
           "type": "log",
@@ -605,6 +640,9 @@
       "grace": 20000,
       "description": "Chat \"andy go mine coal 5\" with a stone pickaxe, torches and bread: he ends with 5+ more coal. (Coal unloaded into a home chest doesn't show in his inventory.)",
       "setup": [
+        {
+          "site": "mine"
+        },
         {
           "tp": {
             "dx": 2
@@ -664,6 +702,9 @@
       ],
       "description": "!layaMine(\"iron\", 3) with the v2 mine plan: andy announces the entrance, stairs down (Y drops 4+ during the run) and gets 3 raw iron.",
       "setup": [
+        {
+          "site": "mine"
+        },
         {
           "tp": {
             "dx": 2
@@ -734,11 +775,15 @@
         "slow"
       ],
       "timeout": 900000,
+      "grace": 2000,
       "requires": [
         "mine"
       ],
       "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone (keeping 32) into the chest.",
       "setup": [
+        {
+          "site": "mine"
+        },
         {
           "tp": {
             "dx": 2
@@ -790,7 +835,6 @@
           "andy": "!stop"
         }
       ],
-      "grace": 2000,
       "checks": [
         {
           "type": "chest",
@@ -828,6 +872,9 @@
       "timeout": 150000,
       "description": "Andy follows tester; a husk (a zombie that doesn't burn in the locked daytime) is summoned 5 blocks east of him. He must kill it and go back to following (the interrupted job resumes). Sets difficulty easy.",
       "setup": [
+        {
+          "site": "base"
+        },
         {
           "tp": {
             "dx": 2
@@ -923,6 +970,9 @@
       "timeout": 150000,
       "description": "Andy has 8 bread and a strong hunger effect drains his food; when it falls he eats (auto-eat or the Laya eat model): bread goes down and food ends 15+.",
       "setup": [
+        {
+          "site": "base"
+        },
         {
           "tp": {
             "dx": 2

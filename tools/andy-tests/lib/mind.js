@@ -28,17 +28,8 @@ export class MindClient extends EventEmitter {
         this.socket?.close?.(); // a dropped socket still trying to reconnect
         this.socket = null;
         const socket = this.ioFactory(this.url, { reconnection: true, timeout: timeoutMs });
-        await new Promise((resolve, reject) => {
-            const timer = setTimeout(() => fail(new Error('timed out')), timeoutMs);
-            const fail = err => {
-                clearTimeout(timer);
-                socket.close?.();
-                reject(new Error(`Mindserver not reachable at ${this.url} (${err?.message || err}). Start Mindcraft (npm start in the mindcraft checkout; mindserver_port in settings.js).`));
-            };
-            socket.once('connect', () => { clearTimeout(timer); resolve(); });
-            socket.once('connect_error', fail);
-        });
-        this.socket = socket;
+        // listen before connecting: the mindserver sends agents-status as
+        // soon as a client connects
         socket.on('agents-status', agents => { this.agents = agents || []; this.emit('agents', this.agents); });
         socket.on('state-update', states => {
             const s = states?.[this.agent];
@@ -50,6 +41,17 @@ export class MindClient extends EventEmitter {
         socket.on('bot-output', (name, text) => {
             if (name === this.agent) this.emit('output', String(text), this.now());
         });
+        await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => fail(new Error('timed out')), timeoutMs);
+            const fail = err => {
+                clearTimeout(timer);
+                socket.close?.();
+                reject(new Error(`Mindserver not reachable at ${this.url} (${err?.message || err}). Start Mindcraft (npm start in the mindcraft checkout; mindserver_port in settings.js).`));
+            };
+            socket.once('connect', () => { clearTimeout(timer); resolve(); });
+            socket.once('connect_error', fail);
+        });
+        this.socket = socket;
         socket.emit('listen-to-agents');
         // socket.io reconnects by itself after a mindserver restart: listen again
         socket.io?.on?.('reconnect', () => socket.emit('listen-to-agents'));
@@ -96,6 +98,28 @@ export class MindClient extends EventEmitter {
                 if (res?.error) reject(new Error(res.error)); else resolve(res?.settings || {});
             });
         });
+    }
+
+    // restartAgent starts the agent again through the mindserver (after the
+    // world it was in restarted) and waits until it is in game.
+    async restartAgent({ timeout = 90000, poll = 1000, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+        if (!this.connected) throw new Error('Not connected to the mindserver.');
+        const start = this.now();
+        let tries = 0, lastTry = -Infinity;
+        for (;;) {
+            const a = this.agentStatus();
+            if (a?.in_game && tries > 0) return { inGame: true, tries, ms: this.now() - start };
+            // ask again every 30 s: a start right after a kick can die early
+            if (this.now() - lastTry >= 30000) {
+                this.socket.emit('start-agent', this.agent);
+                tries++;
+                lastTry = this.now();
+                await sleep(3000); // give the old status time to go
+                continue;
+            }
+            if (this.now() - start >= timeout) return { inGame: false, tries, ms: this.now() - start, status: a };
+            await sleep(poll);
+        }
     }
 
     close() {

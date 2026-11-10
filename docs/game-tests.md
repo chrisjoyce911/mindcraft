@@ -8,6 +8,8 @@ Repeatable in-game tests for the Mindcraft bot **andy**, in the user's own Minec
 
 A second player, **`tester`** (a mineflayer bot the harness runs), joins the same world. It runs the slash commands, says the chat lines (so a chat line goes through andy's normal chat handling with `tester` as the speaker) and reads chests. Andy's state comes from the mindserver.
 
+**The test world.** Instead of your own world, the tests can run on a local server that resets to a fixed template in about 10 seconds and has named sites (base, farm, dry, mine, cave): `npm run world:start`, `npm run world:bot`, `npm run game-test -- --world test --tag quick` (or `--reset` to reset it first), or the MCP tools `world_start`, `bot_start`, `world_reset`, `site_tp`. Every scenario starts with a `site` step there, and on the test world server commands go over RCON. See `docs/test-world.md`.
+
 ## What it needs from you
 
 - **A world open to LAN with cheats on** (Java 1.21.6; *Open to LAN → Allow Cheats: ON*). `tester` must be able to run `/give`, `/tp`, `/fill`, `/summon` and the rest. The `setup-world` test checks this. If the server says tester has no permission, run `/op tester` from your own player.
@@ -52,6 +54,7 @@ The tools connect on first use and stay connected until `disconnect`. If the wor
 | `list_tests` | the scenarios, by tag; `detail` adds the steps and checks |
 | `run_test` | one scenario; returns status, reason, every check, andy's replies, inventory change and the Laya log lines in the test's window |
 | `run_suite` | scenarios by `tag` and/or `names`; returns the summary and the report path |
+| `world_status`, `world_start`, `world_stop`, `world_reset`, `bot_start`, `bot_stop`, `use_world`, `site_tp` | the local test world and andy on it: see `docs/test-world.md` |
 
 **The session report.** Every tool call is appended to `bots/andy/logs/game-tests/<Brisbane time>.jsonl` and `.md` (one pair per MCP server start), so an ad-hoc session can be reviewed afterwards. `run_suite` writes its own report.
 
@@ -65,6 +68,8 @@ npm run game-test -- --list --tag quick -v  # with steps and checks
 npm run game-test -- --tag quick            # the quick tests (a few minutes)
 npm run game-test -- --tag full             # everything, in order
 npm run game-test -- farm-water eat         # these tests, in file order
+npm run game-test -- --world test --tag quick   # on the local test world
+npm run game-test -- --reset --tag quick        # reset the test world first
 ```
 
 Each test prints `PASS`, `FAIL`, `SKIP` or `ERROR` with its seconds and the reason, for example `FAIL  craft-furnace  42.0s  inventory: furnace +0, wanted ≥ +1`. The exit code is 0 when nothing failed, 1 on a failure, 2 when it can't connect.
@@ -100,7 +105,8 @@ Scenarios are data in `test/game/scenarios.json`, in suite order:
 - `waitLog`: a Laya log entry;
 - `tp`, `walk`: move tester;
 - `snapshot`: save andy's state under a label;
-- `anchor`: retake andy's position.
+- `anchor`: retake andy's position;
+- `site`: test world only, andy and tester to a named site, taken as `{x} {y} {z}` (does nothing on another world).
 
 Options on any step: `timeout`, `repeat`, `optional`, `replyMs`.
 

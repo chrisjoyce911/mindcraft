@@ -44,7 +44,15 @@
         "test": "node --test test/",
         "laya:check": "node src/models/laya_check.js",
         "game-test": "node tools/andy-tests/cli.js",
-        "game-test:mcp": "node tools/andy-tests/mcp.js"
+        "game-test:mcp": "node tools/andy-tests/mcp.js",
+        "world:start": "node tools/test-world/world.js start",
+        "world:stop": "node tools/test-world/world.js stop",
+        "world:reset": "node tools/test-world/world.js reset",
+        "world:status": "node tools/test-world/world.js status",
+        "world:template": "node tools/test-world/world.js template",
+        "world:sites": "node tools/test-world/world.js sites",
+        "world:rcon": "node tools/test-world/world.js rcon",
+        "world:bot": "node tools/test-world/bot.js"
     },
     "devDependencies": {
         "@eslint/js": "^9.13.0",

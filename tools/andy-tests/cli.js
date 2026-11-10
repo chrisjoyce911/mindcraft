@@ -10,7 +10,7 @@ import { runSuite } from './lib/runner.js';
 import { brisbane } from './lib/time.js';
 
 export function parseArgs(argv) {
-    const out = { names: [], tag: null, list: false, scenarios: null, verbose: false, help: false };
+    const out = { names: [], tag: null, list: false, scenarios: null, verbose: false, help: false, world: null, reset: false };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--list' || a === '-l') out.list = true;
@@ -18,6 +18,9 @@ export function parseArgs(argv) {
         else if (a.startsWith('--tag=')) out.tag = a.slice(6);
         else if (a === '--scenarios') out.scenarios = argv[++i];
         else if (a === '--verbose' || a === '-v') out.verbose = true;
+        else if (a === '--world') out.world = argv[++i];
+        else if (a.startsWith('--world=')) out.world = a.slice(8);
+        else if (a === '--reset') { out.reset = true; out.world ??= 'test'; }
         else if (a === '--help' || a === '-h') out.help = true;
         else if (a.startsWith('-')) throw new Error(`unknown option ${a}`);
         else out.names.push(a);
@@ -29,12 +32,14 @@ const HELP = `npm run game-test -- [names…] [--tag quick|full|<tag>] [--list] 
   --list       print the selected tests (no connection)
   --tag t      only tests tagged t (quick, full, craft, farm, mine, home, …)
   names        only these tests, in file order
-Env: ANDY_MC_PORT, ANDY_MINDSERVER_PORT, ANDY_BOT_DIR, ANDY_AGENT, ANDY_TESTER.`;
+  --world test use the local test world (npm run world:start, world:bot)
+  --reset      reset the test world to its template first (implies --world test)
+Env: ANDY_WORLD (test), ANDY_MC_PORT, ANDY_MINDSERVER_PORT, ANDY_BOT_DIR, ANDY_AGENT, ANDY_TESTER.`;
 
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     if (args.help) { console.log(HELP); return 0; }
-    const config = await loadConfig();
+    const config = await loadConfig(args.world ? { ...process.env, ANDY_WORLD: args.world } : process.env);
     const { tests, defaults } = loadScenarios(args.scenarios || config.scenarios);
     const picked = select(tests, { names: args.names, tag: args.tag });
     if (args.list) {
@@ -55,8 +60,13 @@ async function main() {
     process.on('SIGINT', () => { console.log('\ninterrupted'); session.disconnect(); process.exit(130); });
     console.log(`andy game tests — ${picked.length} test(s), ${brisbane()}`);
     try {
+        if (args.reset) {
+            console.log('resetting the test world…');
+            const r = await session.worldReset();
+            console.log(`test world reset in ${(r.ms / 1000).toFixed(1)}s${r.andy ? `, andy ${r.andy.inGame ? 'back in game' : 'NOT back: ' + (r.andy.error || 'timed out')}` : ' (no test bot running)'}`);
+        }
         const c = await session.connect();
-        console.log(`mindserver ${c.mindserver}, world ${c.world}`);
+        console.log(`mindserver ${c.mindserver}, world ${c.world}${config.world === 'test' ? ' (test world)' : ''}`);
     } catch (e) {
         console.error(`Cannot start: ${e.message}`);
         session.disconnect();
