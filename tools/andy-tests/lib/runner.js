@@ -1,0 +1,306 @@
+// The runner: one scenario at a time against a Session.
+//   1. skip when a Laya task it requires is disabled in andy's settings
+//   2. wait for andy to be idle (send !stop if he stays busy)
+//   3. take andy's block as {x} {y} {z}; run setup; snapshot "before"
+//   4. run the action steps, then wait for andy to be idle (unless wait: false)
+//   5. snapshot "after", read chests the checks name, collect chat, server
+//      replies and the laya log lines in the test's window; evaluate checks
+//   6. cleanup (always)
+import { expand, stepKind, coords, describeStep } from './scenarios.js';
+import { evaluate, describeCheck } from './checks.js';
+import { inventoryDiff } from './session.js';
+import { brief } from './logs.js';
+import { brisbane, brisbaneIso, clock } from './time.js';
+
+class StepFailed extends Error {}
+
+// Lost the world or the mindserver: an error, not a test failure, and the
+// rest of a suite can't run.
+const CONNECTION = /not reachable|No Minecraft world|isn't in game|isn't registered|not in the world|Not connected|No state from|could not join|was kicked/;
+export const isConnectionError = msg => CONNECTION.test(String(msg));
+
+function stateTest(spec, s) {
+    if (!s) return false;
+    const within = (v, { min, max }) => (min == null || v >= min) && (max == null || v <= max);
+    if (spec.stat) return within(spec.stat === 'health' ? s.gameplay?.health : s.gameplay?.hunger, spec);
+    if (spec.item) {
+        const inv = s.inventory?.counts || {};
+        const n = spec.item.split('|').reduce((a, k) => a + (inv[k] || 0), 0);
+        return within(n, spec);
+    }
+    if (spec.entity) return (s.nearby?.entityTypes || []).includes(spec.entity) === (spec.present !== false);
+    if (spec.action) return new RegExp(spec.action, 'i').test(s.action?.current || 'Idle');
+    if (spec.idle != null) return !!s.action?.isIdle === !!spec.idle;
+    throw new Error(`waitFor needs stat, item, entity, action or idle: ${JSON.stringify(spec)}`);
+}
+
+// runStep runs one (already expanded) step. ctx: {session, deadline, t0,
+// serverReplies, defaults, anchor()}.
+export async function runStep(step, ctx) {
+    const s = ctx.session;
+    const kind = stepKind(step);
+    const v = step[kind];
+    const left = () => Math.max(0, ctx.deadline - s.now());
+    const budget = def => Math.min(step.timeout ?? def, left());
+    const times = Math.max(1, step.repeat || 1);
+    const out = [];
+    for (let i = 0; i < times; i++) {
+        switch (kind) {
+        case 'cmd': {
+            const r = await s.serverCommand(v, step.replyMs ?? 800);
+            ctx.serverReplies.push(...r.replies);
+            out.push(...r.replies);
+            break;
+        }
+        case 'say': {
+            const r = await s.say(v, step.replyMs ?? 500);
+            out.push(...r.replies);
+            break;
+        }
+        case 'andy': {
+            const r = await s.command(v, step.replyMs ?? 500);
+            out.push(...r.replies);
+            break;
+        }
+        case 'wait': await s.sleep(Math.min(v, left())); break;
+        case 'waitIdle': {
+            const o = typeof v === 'object' ? v : {};
+            const r = await s.waitIdle({ timeout: budget(o.timeout ?? 120000), grace: o.grace ?? ctx.defaults.grace, settle: o.settle ?? ctx.defaults.settle });
+            if (r.timedOut) throw new StepFailed(`andy was still busy after ${Math.round(r.ms / 1000)}s`);
+            break;
+        }
+        case 'waitFor': {
+            const r = await s.waitUntil(() => stateTest(v, s.mind.state()), { timeout: budget(60000) });
+            if (!r.ok) throw new StepFailed(`timed out waiting for ${JSON.stringify(v)}`);
+            break;
+        }
+        case 'waitReply': {
+            const from = ctx.tAction ?? ctx.t0;
+            const rx = new RegExp(v, 'i');
+            const r = await s.waitUntil(() => s.chatSince(from).find(c => rx.test(c.text)), { timeout: budget(60000) });
+            if (!r.ok) throw new StepFailed(`andy never said /${v}/`);
+            out.push(r.value.text);
+            break;
+        }
+        case 'waitLog': {
+            const from = ctx.tAction ?? ctx.t0;
+            const r = await s.waitUntil(() => s.logs({ task: v.task, since: from, match: v.match, limit: 1 })[0], { timeout: budget(60000), poll: 1000 });
+            if (!r.ok) throw new StepFailed(`no laya-${v.task} entry matching ${JSON.stringify(v.match ?? {})}`);
+            break;
+        }
+        case 'tp': {
+            const r = typeof v === 'string' ? await s.tp(coords(v)) : await s.tp(v);
+            out.push(...(r.replies || []));
+            break;
+        }
+        case 'walk': {
+            const r = typeof v === 'string' ? await s.move({ ...coords(v), timeoutMs: budget(30000) }) : await s.move({ ...v, timeoutMs: budget(30000) });
+            out.push(`tester at ${r.position ? `${r.position.x} ${r.position.y} ${r.position.z}` : '?'}${r.walked === false ? ' (teleported)' : ''}`);
+            break;
+        }
+        case 'snapshot': await s.snapshot(v); break;
+        case 'anchor': await ctx.anchor(); break;
+        default: throw new Error(`unknown step ${JSON.stringify(step)}`);
+        }
+    }
+    return out;
+}
+
+async function runSteps(steps, ctx, record, part) {
+    for (const raw of steps) {
+        const step = expand(raw, ctx.vars);
+        const entry = { part, step: describeStep(step), at: clock(ctx.session.now()) };
+        record.push(entry);
+        try {
+            entry.out = await runStep(step, ctx);
+        } catch (e) {
+            entry.error = e.message;
+            if (isConnectionError(e.message)) throw e;
+            if (!step.optional) throw e instanceof StepFailed ? e : new StepFailed(`${part} step "${entry.step}": ${e.message}`);
+        }
+    }
+}
+
+const chestKeys = (checks, vars) => [...new Set(checks.filter(c => c.type === 'chest').map(c => expand(c.at, vars)))];
+
+async function readChests(session, keys) {
+    const items = {}, errors = {};
+    for (const k of keys) {
+        try {
+            const { x, y, z } = coords(k);
+            items[k] = (await session.chestContents(x, y, z)).items;
+        } catch (e) { errors[k] = e.message; }
+    }
+    return { items, errors };
+}
+
+// disabledTasks: the Laya tasks a test requires that andy's settings turn off.
+export function disabledTasks(requires = [], settings = {}) {
+    const tasks = settings?.decision_models?.tasks;
+    if (!tasks) return [];
+    return requires.filter(t => !tasks[t] || tasks[t].enabled === false);
+}
+
+export async function runTest(session, test, { defaults = {}, report = null } = {}) {
+    defaults = { timeout: 120000, grace: 5000, settle: 3000, ...defaults };
+    const started = session.now();
+    const timeout = test.timeout ?? defaults.timeout;
+    const result = { name: test.name, tags: test.tags || [], status: 'pass', started: brisbaneIso(started), ms: 0, reason: '', steps: [], checks: [] };
+    const ctx = {
+        session, defaults: { ...defaults, grace: test.grace ?? defaults.grace, settle: test.settle ?? defaults.settle },
+        deadline: started + timeout, t0: started, tAction: null, serverReplies: [], vars: { andy: session.config.agent, tester: session.config.tester },
+    };
+    ctx.anchor = async () => Object.assign(ctx.vars, await session.andyBlock());
+
+    const finish = () => {
+        result.ms = session.now() - started;
+        if (report) writeTest(report, test, result);
+        return result;
+    };
+
+    // 1. requirements
+    try {
+        const off = disabledTasks(test.requires, await session.agentSettings().catch(() => ({})));
+        if (off.length) {
+            result.status = 'skip';
+            result.reason = `Laya task${off.length > 1 ? 's' : ''} ${off.join(', ')} disabled in andy's settings (decision_models.tasks)`;
+            return finish();
+        }
+        // 2. andy idle before we start
+        let w = await session.waitIdle({ timeout: 60000, grace: 0, settle: 1000 });
+        if (w.timedOut) {
+            await session.command('!stop', 500);
+            w = await session.waitIdle({ timeout: 15000, grace: 0, settle: 1000 });
+            if (w.timedOut) throw new StepFailed('andy stayed busy before the test, even after !stop');
+        }
+        // 3. setup
+        await ctx.anchor();
+        result.anchor = { x: ctx.vars.x, y: ctx.vars.y, z: ctx.vars.z };
+        await runSteps(test.setup || [], ctx, result.steps, 'setup');
+        result.before = await session.snapshot('before');
+        const keys = chestKeys(test.checks, ctx.vars);
+        const needBefore = test.checks.some(c => c.type === 'chest' && c.delta);
+        const chestsBefore = needBefore ? (await readChests(session, keys)).items : {};
+
+        // 4. action
+        ctx.tAction = session.now();
+        await runSteps(test.action, ctx, result.steps, 'action');
+        if (test.wait !== false) {
+            result.waited = await session.waitIdle({ timeout: Math.max(0, ctx.deadline - session.now()), grace: ctx.defaults.grace, settle: ctx.defaults.settle });
+        } else result.waited = { idle: !!session.mind.state()?.action?.isIdle, timedOut: false };
+
+        // 5. checks
+        const final = await session.state();
+        result.after = await session.snapshot('after');
+        const chests = await readChests(session, keys);
+        const now = session.now();
+        const evalCtx = {
+            snapshots: session.snapshots,
+            chat: session.chatSince(ctx.tAction).map(c => c.text),
+            logs: session.logs({ since: ctx.t0, until: now, limit: 0, full: true }),
+            timeline: session.timelineSince(ctx.tAction, now),
+            waited: result.waited, final, chests: chests.items, chestErrors: chests.errors, chestsBefore,
+            serverReplies: ctx.serverReplies,
+            tester: session.tester?.position?.() || null,
+        };
+        result.checks = test.checks.map(c => {
+            const ec = expand(c, ctx.vars);
+            return { ...evaluate(ec, evalCtx), check: describeCheck(ec) };
+        });
+        result.replies = evalCtx.chat;
+        result.chests = chests.items;
+        result.inventoryChange = inventoryDiff(result.before.inventory, result.after.inventory);
+        result.logs = evalCtx.logs.map(e => brief(e, 200));
+        const failed = result.checks.filter(c => !c.ok);
+        if (failed.length) { result.status = 'fail'; result.reason = failed.map(c => `${c.type}: ${c.reason}`).join('; '); }
+        else result.reason = result.checks.map(c => c.reason).join('; ');
+    } catch (e) {
+        result.status = e instanceof StepFailed ? 'fail' : 'error';
+        result.reason = e.message;
+        result.replies = session.chatSince(ctx.tAction ?? ctx.t0).map(c => c.text);
+        try { result.logs = session.logs({ since: ctx.t0, limit: 0 }).map(e2 => brief(e2, 200)); } catch { /* */ }
+    } finally {
+        // 6. cleanup
+        if (test.cleanup?.length && result.status !== 'skip') {
+            ctx.deadline = session.now() + 60000;
+            try { await runSteps(test.cleanup, ctx, result.steps, 'cleanup'); } catch (e) { result.cleanupError = e.message; }
+        }
+    }
+    return finish();
+}
+
+export async function runSuite(session, tests, { defaults = {}, report = null, onResult = () => {}, onStart = () => {} } = {}) {
+    const results = [];
+    const started = session.now();
+    report?.event({ type: 'suite-start', tests: tests.map(t => t.name) });
+    let fatal = null;
+    for (const t of tests) {
+        if (fatal) {
+            const r = { name: t.name, tags: t.tags, status: 'error', ms: 0, reason: `not run: ${fatal}` };
+            results.push(r); onResult(r); continue;
+        }
+        onStart(t);
+        const r = await runTest(session, t, { defaults, report });
+        results.push(r);
+        onResult(r);
+        // lost the world or the mindserver: the rest can't run
+        if (r.status === 'error' && isConnectionError(r.reason)) fatal = r.reason;
+    }
+    const summary = {
+        pass: results.filter(r => r.status === 'pass').length,
+        fail: results.filter(r => r.status === 'fail').length,
+        error: results.filter(r => r.status === 'error').length,
+        skip: results.filter(r => r.status === 'skip').length,
+        ms: session.now() - started,
+    };
+    report?.event({ type: 'suite-end', summary });
+    if (report) writeSummary(report, results, summary);
+    return { summary, results: results.map(({ name, status, ms, reason }) => ({ name, status, seconds: +(ms / 1000).toFixed(1), reason })), report: report?.paths() };
+}
+
+// ---- report sections ----
+
+const fence = s => '```\n' + s + '\n```\n';
+
+export function writeTest(report, test, r) {
+    report.event({ type: 'test', ...r });
+    const lines = [`## ${r.status.toUpperCase()} ${r.name} (${(r.ms / 1000).toFixed(1)}s)`, ''];
+    if (test.description) lines.push(test.description, '');
+    lines.push(`- Started: ${r.started.replace('T', ' ').replace('+10:00', ' AEST')}`);
+    if (r.anchor) lines.push(`- Andy at: ${r.anchor.x} ${r.anchor.y} ${r.anchor.z}`);
+    lines.push(`- Result: ${r.reason || '—'}`);
+    if (r.cleanupError) lines.push(`- Cleanup error: ${r.cleanupError}`);
+    lines.push('');
+    if (r.steps.length) {
+        lines.push('| Part | At | Step | Output |', '|---|---|---|---|');
+        for (const s of r.steps) lines.push(`| ${s.part} | ${s.at} | \`${s.step.replace(/\|/g, '\\|')}\` | ${(s.error ? `**${s.error}**` : (s.out || []).join(' / ')).replace(/\|/g, '\\|').replace(/\n/g, ' ').slice(0, 300)} |`);
+        lines.push('');
+    }
+    if (r.checks.length) {
+        lines.push('Checks:', '');
+        for (const c of r.checks) lines.push(`- ${c.ok ? 'ok' : '**FAIL**'} ${c.check}: ${c.reason}`);
+        lines.push('');
+    }
+    if (r.replies?.length) lines.push('Andy said:', '', ...r.replies.map(l => `> ${l}`), '');
+    if (r.before && r.after) {
+        lines.push(`Inventory before: ${fmtInv(r.before.inventory)}`, '', `Inventory after: ${fmtInv(r.after.inventory)}`, '', `Change: ${fmtInv(r.inventoryChange, true)}`, '');
+    }
+    if (r.chests && Object.keys(r.chests).length) for (const [k, v] of Object.entries(r.chests)) lines.push(`Chest ${k}: ${fmtInv(v)}`, '');
+    if (r.logs?.length) {
+        const byTask = {};
+        for (const e of r.logs) (byTask[e.task] ||= []).push(e);
+        lines.push(`Laya log lines in the window: ${Object.entries(byTask).map(([t, l]) => `${t} ${l.length}`).join(', ')}`, '');
+        const show = r.logs.slice(-15).map(e => JSON.stringify(e).slice(0, 400)).join('\n');
+        lines.push(fence(show));
+    }
+    report.md(lines.join('\n') + '\n');
+}
+
+const fmtInv = (inv = {}, signed = false) => Object.entries(inv).map(([k, v]) => `${k} ${signed && v > 0 ? '+' : ''}${v}`).join(', ') || 'nothing';
+
+function writeSummary(report, results, s) {
+    const lines = [`## Summary`, '', `${s.pass} passed, ${s.fail} failed, ${s.error} errors, ${s.skip} skipped in ${(s.ms / 1000).toFixed(0)}s (finished ${brisbane()}).`, '', '| Test | Result | Seconds | Why |', '|---|---|---|---|'];
+    for (const r of results) lines.push(`| ${r.name} | ${r.status.toUpperCase()} | ${(r.ms / 1000).toFixed(1)} | ${(r.reason || '').replace(/\|/g, '\\|').slice(0, 200)} |`);
+    report.md(lines.join('\n') + '\n');
+}
+
