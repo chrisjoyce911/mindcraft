@@ -2,6 +2,7 @@ import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { NPCData } from './npc/data.js';
 import settings from './settings.js';
 import { llmOn } from './llm_gate.js';
+import { scrubMemory } from './memory_scrub.js';
 
 
 export class History {
@@ -34,7 +35,7 @@ export class History {
     async summarizeMemories(turns) {
         if (!llmOn(settings)) return; // settings.llm off: no memory summaries (the old memory stays)
         console.log("Storing memories...");
-        this.memory = await this.agent.prompter.promptMemSaving(turns);
+        this.memory = scrubMemory(await this.agent.prompter.promptMemSaving(turns));
 
         if (this.memory.length > 500) {
             this.memory = this.memory.slice(0, 500);

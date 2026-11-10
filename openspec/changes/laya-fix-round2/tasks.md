@@ -9,6 +9,6 @@
 - [x] 7. Unload failure backs off (unload_fail_steps 200); ore in sight with room is collected first.
 - [x] 8. Torches: a craft step waits for a late inventory before failing; materials taken 8 at a time; a failed torch place retries 3 moves on.
 - [x] 9. Collect filter: ore open to the air is collected down to collect_below_open (8) below; collect_below stays 4.
-- [ ] 10. Memory summary without finished requests.
+- [x] 10. Memory summary without requests or jobs (prompt + scrubMemory).
 - [ ] 11. `npm test` passes; merged into `laya-follow`.
 - [ ] 12. Full game suite with `llm` false; report.
