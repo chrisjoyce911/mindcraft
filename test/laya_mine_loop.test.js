@@ -280,9 +280,9 @@ test('canMakeTorches: coal or charcoal, and sticks or wood', () => {
 
 test('v2: ore far from the plan is left; ore chains never pull the bot away', async () => {
     // a line of ore going east from the plan's first branch, away from the mine
-    const blocks = { '2,20,3': 'iron_ore', '9,20,3': 'iron_ore', '16,20,3': 'iron_ore', '23,20,3': 'iron_ore' };
+    const blocks = { '2,20,3': 'iron_ore', '14,20,3': 'iron_ore', '26,20,3': 'iron_ore', '38,20,3': 'iron_ore' };
     // 4 steps: collect, walk back, tunnel to x 1, tunnel to x 2 (the next ore
-    // comes within 8 of the tunnel only after that)
+    // comes within 12 of the tunnel only after that)
     const { bot, deps, calls, w, inventory } = v2({ y: 20, steps: 4, blocks, decide: () => answer('collect') });
     const collected = [];
     deps.ores = names => [...w.m].filter(([, n]) => names.includes(n)).map(([k]) => {
@@ -297,7 +297,7 @@ test('v2: ore far from the plan is left; ore chains never pull the bot away', as
         return true;
     };
     await mineWithLaya(bot, 'iron', 4, deps);
-    assert.deepEqual(collected.map(o => o.x), [2], 'only the ore within 8 of the plan cell');
+    assert.deepEqual(collected.map(o => o.x), [2], 'only the ore within 12 of the plan cell');
     assert.deepEqual(calls.walks, [[0, 20, 0]], 'walks back to the plan');
     assert.deepEqual(calls.moves.slice(-2), [[1, 20, 0], [2, 20, 0]], 'and the plan goes on');
 });
@@ -323,4 +323,14 @@ test('v2: crafts a torch batch when low and it carries coal and sticks; backs of
     s = v2({ y: 20, steps: 5, craftOk: false, inv: { stone_pickaxe: 1, torch: 1, coal: 2, stick: 4, cobblestone: 10 } });
     await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.deepEqual(s.calls.crafted, ['torch'], 'a failed craft is not retried every step');
+});
+
+test('v2: a stair step with no floor: a detour, then the staircase goes on from there (no walk back)', async () => {
+    // down E from (0, 60, 0) lands on (1, 59, 0): no floor under it
+    const { bot, deps, calls } = v2({ y: 60, steps: 6, blocks: { '1,58,0': 'air', '1,57,0': 'air' } });
+    const r = await mineWithLaya(bot, 'iron', 1, deps);
+    assert.deepEqual(calls.walks, [], 'never walks back to the cell without a floor');
+    assert.ok(r.counters.abandoned >= 1);
+    assert.equal(calls.moves.length, 6, 'every step moves on');
+    assert.ok(calls.moves.at(-1)[1] <= 55, 'and down: ' + JSON.stringify(calls.moves));
 });

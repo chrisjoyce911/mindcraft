@@ -366,7 +366,7 @@
       "requires": [
         "command"
       ],
-      "description": "A chest 3 blocks west of andy, tester beside it; chat \"andy this is your chest\" (command model: home → !setHomeChest).",
+      "description": "A chest 3 blocks west of andy, tester beside it; chat \"andy this is your chest\" (command model: home → !setHomeChest, reply \"That's my chest now.\"); andy then remembers home_chest at that chest.",
       "setup": [
         {
           "site": "base"
@@ -392,8 +392,14 @@
       "checks": [
         {
           "type": "reply",
-          "match": "Home chest set at {x-3} {y} {z}",
-          "note": "only !setHomeChest prints this line; an LLM saying it set the chest doesn't count"
+          "match": "That's my chest now|Home chest set at {x-3} {y} {z}",
+          "note": "the command model's home command replies \"That's my chest now.\"; !setHomeChest run by the LLM prints the other line"
+        },
+        {
+          "type": "place",
+          "name": "home_chest",
+          "at": "{x-3} {y} {z}",
+          "note": "the chest itself must be saved: a reply alone doesn't count"
         }
       ]
     },

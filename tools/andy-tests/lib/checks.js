@@ -6,6 +6,7 @@
 //   waited: {idle, timedOut} (the wait after the action), final: andy's last state,
 //   chests: {"x y z": {item: count}}, chestsBefore: same, serverReplies: [lines],
 //   tester: {x, y, z}, blocks: {blockKey: {count, center} | {error}} }
+//   (final.places: andy's remembered places {name: [x, y, z]})
 import { matches, matchValue } from './logs.js';
 
 // count: items matching a name, "a|b" alternatives or "/regex/".
@@ -132,6 +133,16 @@ export const CHECKS = {
         if (c.none) return hit ? { ok: false, reason: `the server said "${hit}"` } : { ok: true, reason: `server never said /${c.match}/` };
         return hit ? { ok: true, reason: `"${hit}"` } : { ok: false, reason: `server never said /${c.match}/ (said: ${(ctx.serverReplies || []).slice(-4).map(l => `"${l}"`).join(', ') || 'nothing'}). Are cheats on for tester?` };
     },
+    // {name, at: "x y z"}: andy remembers the place name at exactly at (at
+    // the end of the test), e.g. the home chest a chat message set
+    place(c, ctx) {
+        const places = ctx.final?.places;
+        if (!places) return { ok: false, reason: "andy's places were not read" };
+        const p = places[c.name];
+        if (!Array.isArray(p)) return { ok: false, reason: `no place ${c.name} (places: ${Object.keys(places).join(', ') || 'none'})` };
+        const got = p.map(Math.floor).join(' ');
+        return got === c.at ? { ok: true, reason: `${c.name} at ${got}` } : { ok: false, reason: `${c.name} at ${got}, wanted ${c.at}` };
+    },
     // {block (name or /regex/), near: "andy" (default) | "x y z", radius (6),
     // min (1), max}: blocks of that kind within radius at the end of the
     // action (read before cleanup), e.g. the water of a pond andy made
@@ -172,6 +183,7 @@ export function describeCheck(c) {
     case 'noEntity': return `no ${c.entity} near andy at the end`;
     case 'actionSeen': return c.final ? `andy is doing /${c.match}/ at the end` : `andy's action /${c.match}/ is seen`;
     case 'serverReply': return c.none ? `the server never replies /${c.match}/` : `the server replies /${c.match}/`;
+    case 'place': return `andy remembers ${c.name} at ${c.at}`;
     case 'block': return `${c.block} blocks within ${c.radius ?? 6} of ${c.near || 'andy'} at the end: ${range() || '≥ 1'}`;
     default: return JSON.stringify(c);
     }

@@ -139,6 +139,7 @@ Options on any step: `timeout`, `repeat`, `optional`, `replyMs`, `idleFail`.
 - `actionSeen`: or `final`;
 - `serverReply`: or `none` for must not;
 - `block`: blocks of a kind (`block`: a name or `/regex/`) within `radius` (6) of andy (or `near: "x y z"`), counted when the action ends, before cleanup; `min` (1) / `max`.
+- `place`: andy remembers the place `name` (e.g. `home_chest`) at exactly `at` (`"x y z"`, placeholders allowed) at the end, read from the mindserver state's `places`.
 
 Any check may carry a `note` saying why it's there.
 

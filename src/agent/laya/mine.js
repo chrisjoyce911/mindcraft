@@ -45,7 +45,7 @@ import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, H
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
-    keep_blocks: 32, unload_retry_steps: 50, collect_range: 8, collect_budget: 24 };
+    keep_blocks: 32, unload_retry_steps: 50, collect_range: 12, collect_budget: 24 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
@@ -339,17 +339,19 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             }
         }
         else if (MOVES.has(kind)) {
-            if (s.plan && action !== s.plan) {
-                // A detour round an unsafe plan step: give up that segment.
-                entry.abandoned = plan.segment?.type;
-                plan.abandon();
-                counters.abandoned++;
-            }
+            const detour = s.plan && action !== s.plan;
             const { dig, target, dir } = cellsToDig(view, action);
             ok = true;
             for (const c of dig) ok = await deps.dig(...worldCell(bx, by, bz, c)) && ok;
             if (ok) ok = await deps.moveTo(...worldCell(bx, by, bz, target));
             if (ok) { heading = dir; dark++; }
+            if (detour) {
+                // A detour round an unsafe plan step: give up that segment; a
+                // staircase goes on from where the detour took the bot.
+                entry.abandoned = plan.segment?.type;
+                plan.abandon(ok ? feetOf() : null);
+                counters.abandoned++;
+            }
             if (!ok && pickTier(deps.inventory()) < ore.tier) ok = await ensurePickaxe(); // the pickaxe broke
         } else if (kind === 'torch') {
             const spots = [];

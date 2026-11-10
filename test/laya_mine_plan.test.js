@@ -133,3 +133,41 @@ test('diamond: never plans below the lowest height', () => {
     assert.ok(out.every(r => !r.feet || r.feet.y >= -59));
     assert.ok(out.some(r => r.segment === 'shaft'));
 });
+
+test('a detour off the staircase: the staircase carries on from where the bot stands', () => {
+    // the scene at 176 67 142: down E has no floor, the bot detours down S
+    const plan = createPlan({ x: 0, y: 70, z: 0, heading: 'E' }, iron);
+    assert.equal(plan.next({ x: 0, y: 70, z: 0 }).step, 'down E');
+    plan.abandon({ x: 0, y: 69, z: 1 });
+    const r = plan.next({ x: 0, y: 69, z: 1 });
+    assert.equal(r.walk, undefined, 'no walk back to the vetoed cell');
+    assert.deepEqual([r.step, r.segment, r.target], ['down E', 'stair', { x: 1, y: 68, z: 1 }]);
+    // a detour off a shift's step goes on from there too
+    plan.abandon(); // no restart: the shift
+    assert.equal(plan.next({ x: 0, y: 69, z: 1 }).segment, 'shift');
+    plan.abandon({ x: -1, y: 69, z: 1 });
+    assert.deepEqual(plan.next({ x: -1, y: 69, z: 1 }).target, { x: 0, y: 68, z: 1 });
+});
+
+test('detours with no stair step between end the plan after max_shifts; a stair step resets the count', () => {
+    let plan = createPlan({ x: 0, y: 70, z: 0, heading: 'E' }, iron, { max_shifts: 2 });
+    let feet = { x: 0, y: 70, z: 0 };
+    for (let i = 0; i < 3; i++) {
+        const r = plan.next(feet);
+        assert.ok(r.step, JSON.stringify(r));
+        feet = { x: feet.x, y: feet.y, z: feet.z + 1 }; // detour sideways, no stair step
+        plan.abandon(feet);
+    }
+    assert.equal(plan.next(feet).done, 'the staircase is blocked');
+    // a stair step between detours: never blocked
+    plan = createPlan({ x: 0, y: 70, z: 0, heading: 'E' }, iron, { max_shifts: 2 });
+    feet = { x: 0, y: 70, z: 0 };
+    for (let i = 0; i < 6; i++) {
+        const r = plan.next(feet);
+        feet = r.target; // one stair step done
+        assert.equal(plan.next(feet).segment, 'stair');
+        feet = { x: feet.x, y: feet.y, z: feet.z + 1 };
+        plan.abandon(feet);
+    }
+    assert.ok(plan.next(feet).step);
+});

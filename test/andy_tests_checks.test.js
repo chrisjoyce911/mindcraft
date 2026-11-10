@@ -97,3 +97,12 @@ test('describeCheck reads as a sentence', () => {
     assert.equal(describeCheck({ type: 'inventory', item: 'coal', min: 5 }), "andy's coal changes by ≥ 5");
     assert.equal(describeCheck({ type: 'reply', match: 'Harvested' }), 'andy says /Harvested/');
 });
+
+test('place: andy remembers the place at exactly that block', () => {
+    const ctx = { final: { places: { home_chest: [163, 70, 169], spawn: [0, 64, 0] } } };
+    assert.equal(evaluate({ type: 'place', name: 'home_chest', at: '163 70 169' }, ctx).ok, true);
+    assert.match(evaluate({ type: 'place', name: 'home_chest', at: '166 70 169' }, ctx).reason, /at 163 70 169, wanted 166 70 169/);
+    assert.match(evaluate({ type: 'place', name: 'home', at: '1 2 3' }, ctx).reason, /no place home \(places: home_chest, spawn\)/);
+    assert.equal(evaluate({ type: 'place', name: 'home_chest', at: '1 2 3' }, { final: {} }).ok, false);
+    assert.equal(describeCheck({ type: 'place', name: 'home_chest', at: '1 2 3' }), 'andy remembers home_chest at 1 2 3');
+});

@@ -23,8 +23,10 @@
 // elsewhere (after collecting ore off the line, after a branch, after
 // unloading at home). plan.abandon() gives up the rest of the current branch
 // or main tunnel (a main tunnel abandoned ends that level: the staircase
-// continues from where it stopped); for a staircase it shifts the staircase
-// one block to the right instead, up to max_shifts times in a row.
+// continues from where it stopped); for a staircase it continues the
+// staircase from where the bot's detour took it (plan.abandon(feet)), or
+// without one shifts it one block to the right, up to max_shifts times with
+// no stair step done in between (then the plan ends).
 
 import { OFFSET, MIN_Y, rightOf, leftOf, backOf } from './mine_state.js';
 
@@ -65,10 +67,14 @@ export function createPlan(start, band, options = {}) {
             yield s;
             at = stopped(s);
             if (!s.abandoned) continue;
+            if (s.k > 0) shifts = 0; // stair steps were done since the last one
             if (++shifts > o.max_shifts) return null;
+            // From where the detour took the bot: never back to the cell
+            // that failed (a detour, a walk back, the same veto, ...).
+            if (s.restart) { at = s.restart; continue; }
             const sh = seg('shift', 'tunnel', rightOf(dir), at, 1);
             yield sh;
-            at = stopped(sh);
+            at = sh.abandoned && sh.restart ? sh.restart : stopped(sh);
         }
         return at;
     }
@@ -139,11 +145,13 @@ export function createPlan(start, band, options = {}) {
             }
         },
 
-        // abandon gives up the rest of the current segment (a staircase
-        // shifts right).
-        abandon() {
+        // abandon gives up the rest of the current segment. restart
+        // ({x, y, z}, optional): where the bot stands after its detour; a
+        // staircase carries on from there (else it shifts right).
+        abandon(restart = null) {
             if (!current) return;
             current.abandoned = true;
+            if (restart) current.restart = { x: restart.x, y: restart.y, z: restart.z };
             advance();
         },
 
