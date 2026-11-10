@@ -333,6 +333,17 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         reused = deps.mines?.find(f) || null;
         let msg;
         if (reused) {
+            // the saved mine must still be there: its first plan cell dug
+            const e = reused.entrance;
+            const probe = createPlan({ ...e, heading: reused.heading }, ore, { ...planOpts, surface: !!reused.surface });
+            const open = c => ['A', 'O'].includes(cellOf(deps.blockAt(c.x, c.y, c.z), [])) && cellOf(deps.blockAt(c.x, c.y + 1, c.z), []) === 'A';
+            if (!probe.skipDug(open, 1)) {
+                logStep({ reuse: e, outcome: 'gone' });
+                deps.mines.forget?.(e);
+                reused = null;
+            }
+        }
+        if (reused) {
             // the same layout from the same entrance: walk through what is dug
             const e = reused.entrance;
             heading = reused.heading;

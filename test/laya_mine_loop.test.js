@@ -504,3 +504,14 @@ test('v2.1: a stop with rule low-health takes the heal path, not "needs a pickax
     const { decide } = await import('../src/agent/laya/mine_state.js');
     assert.ok(decide);
 });
+
+test('v2: a saved mine that is not there any more (a reset world) is forgotten and a new one starts', async () => {
+    let saved = [{ entrance: { x: 0, y: 60, z: 0 }, heading: 'E', surface: false, ores: ['coal'] }];
+    const store = { find: () => saved[0] || null, save: rec => { saved = [rec]; }, forget: () => { saved = []; } };
+    const s = v2({ y: 60, steps: 2 });
+    s.deps.mines = store;
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.reused, false);
+    assert.match(s.calls.chat[0], /iron mine starts at 0 60 0/);
+    assert.deepEqual(saved[0].ores, ['iron']);
+});

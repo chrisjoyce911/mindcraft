@@ -35,8 +35,11 @@ export function upsertMine(mines, rec) {
 // mineStore wraps load/save into find(feet) and save(rec); never throws.
 export function mineStore({ load, save }, range = REUSE_RANGE) {
     const read = () => { try { const v = load(); return Array.isArray(v) ? v : []; } catch { return []; } };
+    const key = e => `${e.x},${e.y},${e.z}`;
     return {
         find: feet => nearestMine(read(), feet, range),
         save: rec => { try { save(upsertMine(read(), rec)); } catch { /* memory is a nicety */ } },
+        // forget drops a mine that isn't there any more (a new world, filled in)
+        forget: entrance => { try { save(read().filter(m => m?.entrance && key(m.entrance) !== key(entrance))); } catch { /* nicety */ } },
     };
 }
