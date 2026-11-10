@@ -88,6 +88,7 @@ export function createPlan(start, band, options = {}) {
             const s = seg('stair', ty < at.y ? 'down' : 'up', dir, at, Math.abs(ty - at.y));
             yield s;
             at = stopped(s);
+            if (s.stopAt) return s.stopAt; // the descent stops here: this is the level
             if (!s.abandoned) continue;
             if (s.k > 0) shifts = 0; // stair steps were done since the last one
             if (++shifts > o.max_shifts) return null;
@@ -178,6 +179,17 @@ export function createPlan(start, band, options = {}) {
             current.abandoned = true;
             if (restart) current.restart = { x: restart.x, y: restart.y, z: restart.z };
             advance();
+        },
+
+        // stopDescent ends a staircase where the bot stands (feet): the
+        // level's grid starts there (e.g. the ground below is a cave).
+        // Returns whether it did (only on a staircase going down).
+        stopDescent(feet) {
+            if (!current || current.type !== 'stair' || current.kind !== 'down') return false;
+            current.abandoned = true;
+            current.stopAt = { x: feet.x, y: feet.y, z: feet.z };
+            advance();
+            return true;
         },
 
         // torchWall is the wall a torch goes on: the left of the direction of

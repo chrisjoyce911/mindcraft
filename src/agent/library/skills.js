@@ -2316,6 +2316,17 @@ export async function craftForTask(bot, item, count) {
     return !!(await craftRecipe(bot, item, count));
 }
 
+// eatBestFood eats the most filling safe food carried (rotten flesh last);
+// returns whether it ate.
+const HARMFUL_FOOD = new Set(['pufferfish', 'poisonous_potato', 'spider_eye', 'suspicious_stew']);
+export async function eatBestFood(bot) {
+    const foods = bot.registry.foodsByName || {};
+    const points = i => i.name === 'rotten_flesh' ? -1 : (foods[i.name].foodPoints || 0);
+    const item = bot.inventory.items().filter(i => foods[i.name] && !HARMFUL_FOOD.has(i.name)).sort((a, b) => points(b) - points(a))[0];
+    if (!item) return false;
+    try { await bot.equip(item, 'hand'); await bot.consume(); return true; } catch { return false; }
+}
+
 export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) {
     /**
      * Mine until count more of an ore's drop is collected, finding the ore
@@ -2374,6 +2385,7 @@ export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) 
             // the home chest and its neighbours, as the farm task uses them
             ...packDeps(bot, homeChest),
             chat: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
+            eat: () => eatBestFood(bot),
             sleep,
             log: msg => log(bot, msg),
             stepLog: `./bots/${bot.username}/logs/laya-mine.jsonl`,

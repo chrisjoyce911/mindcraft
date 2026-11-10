@@ -43,13 +43,13 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching,
+import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug,
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
     keep_blocks: 32, unload_retry_steps: 50, collect_range: 12, collect_budget: 24, collect_below: 4,
-    walk_restart: 2 };
+    walk_restart: 2, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
@@ -159,6 +159,24 @@ export function openSky(blockAt, f, height = 64) {
     return true;
 }
 
+// dropBelow counts the air under a cell (x, y, z) the bot would stand in:
+// from its floor down, or, when the floor is one block thick, from under
+// that floor (a thin floor over a cave). Unloaded blocks count as solid.
+export function dropBelow(blockAt, x, y, z, max = 8) {
+    const empty = yy => { const b = blockAt(x, yy, z); return !!b && b.boundingBox === 'empty'; };
+    const start = empty(y - 1) ? y - 1 : y - 2;
+    let n = 0;
+    while (n < max && empty(start - n)) n++;
+    return n;
+}
+
+// moveFeet is where a move leaves the bot's feet.
+export function moveFeet(action, bx, by, bz) {
+    const [kind, dir] = action.split(' ');
+    const [dx, dz] = OFFSET[dir];
+    return { x: bx + dx, y: by + { tunnel: 0, down: -1, up: 1 }[kind], z: bz + dz };
+}
+
 // worldCell turns a view cell [layer, dx, dz] into world coordinates.
 const worldCell = (bx, by, bz, [l, dx, dz]) => [bx + dx, by + FEET - l, bz + dz];
 
@@ -204,6 +222,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, noTorchUntil = 0, noUnloadUntil = 0;
     let offPlan = 0; // blocks collecting has taken the bot away from the plan
     let walkFails = 0; // failed walks back to the plan in a row
+    let floorVetoes = 0; // "no floor" or drop vetoes in a row
     const failedOre = new Set(); // ore blocks a collect failed on
     const oreKey = o => `${o.x},${o.y},${o.z}`;
     const oresNear = range => deps.ores ? deps.ores(ore.blocks, range) : [deps.nearestOre(ore.blocks, range)].filter(Boolean);
@@ -258,6 +277,32 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         return outcome;
     };
 
+    // heal (rule "heal"): hurt, so no more digging down: eat until food
+    // eat_to, retreat up the staircase from hostiles, and wait to regenerate.
+    // With no food it stops and asks for some.
+    const heal = async feet => {
+        counters.rules.heal = (counters.rules.heal || 0) + 1;
+        const hostiles = deps.hostiles?.() ?? 0;
+        const entry = { rule: 'heal', action: 'heal', source: 'rules', why: 'heal', pos: feet,
+            health: Math.round(bot.health ?? 20), food: bot.food ?? 20, hostiles };
+        let ate = 0;
+        while (!bot.interrupt_code && (bot.food ?? 20) < opts.eat_to && ate < 8 && deps.eat && await deps.eat().catch(() => false)) ate++;
+        let retreated = false;
+        if (hostiles > 0 && plan) retreated = await walkTo(plan.entrance);
+        if ((bot.food ?? 20) < opts.eat_to) {
+            logStep({ ...entry, ate, retreated, outcome: 'stopped' });
+            const msg = "I'm hurt and I have no food, so I've stopped mining. Can someone bring me food?";
+            deps.chat?.(msg);
+            return finish(false, 'hurt with no food');
+        }
+        for (let i = 0; i < opts.heal_wait_s && !bot.interrupt_code && (bot.health ?? 20) <= opts.heal_health; i++) {
+            if (!retreated && plan && (deps.hostiles?.() ?? 0) > 0) retreated = await walkTo(plan.entrance);
+            await deps.sleep(1000);
+        }
+        logStep({ ...entry, ate, retreated, health_after: Math.round(bot.health ?? 20), outcome: 'done' });
+        return null;
+    };
+
     let plan = null;
     const planOpts = Object.fromEntries(Object.keys(PLAN_DEFAULTS).filter(k => opts[k] != null).map(k => [k, opts[k]]));
     if (!await ensurePickaxe()) return finish(false, `needs a ${TIER_PICKAXE[ore.tier]}`);
@@ -281,7 +326,13 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         }
         const feet = feetOf();
         const { x: bx, y: by, z: bz } = feet;
-        const view = readView(deps.blockAt, bx, by, bz, ore.blocks);
+        if (plan && (bot.health ?? 20) <= opts.heal_health) {
+            const stop = await heal(feet);
+            if (stop) return stop;
+            await deps.sleep?.(0);
+            continue;
+        }
+        let view = readView(deps.blockAt, bx, by, bz, ore.blocks);
 
         let pn = plan ? plan.next(feet) : null;
         if (pn?.done) return finish(false, `plan: ${pn.done}`);
@@ -332,7 +383,20 @@ export async function mineWithLaya(bot, oreName, count, deps) {
                 hostiles: Math.min(HOSTILES_CAP, deps.hostiles?.() ?? 0), valuables: valuables(inv2) });
         }
 
-        const rule = decide(s);
+        // A move onto a drop (more than max_drop air under the cell, also
+        // under a one-block floor) is unsafe like "no floor": the rules
+        // answer with that move's floor taken away in their view.
+        const isDrop = a => MOVES.has(a.split(' ')[0])
+            && dropBelow(deps.blockAt, ...Object.values(moveFeet(a, bx, by, bz))) > opts.max_drop;
+        const dropped = [];
+        let rule = decide(s);
+        while (MOVES.has(rule.action.split(' ')[0]) && isDrop(rule.action) && dropped.length < 12) {
+            dropped.push(rule.action);
+            view = view.map(l => l.map(r => r.slice()));
+            const [l, dx, dz] = dug(rule.action).floor;
+            view[l][2 + dz][2 + dx] = 'A';
+            rule = decide({ ...s, view }); // the state text keeps the world as read
+        }
         let action = rule.action, source = 'rules', why = null;
         const entry = { rule: rule.action, pos: feet, state: state(s) };
         let r = null;
@@ -344,7 +408,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         else {
             const top = r.answers.Action.top;
             Object.assign(entry, { model: top, p: r.answers.Action.topProbability, hazard: r.answers.Hazard?.probability, ms: r.ms });
-            const veto = unsafe(view, top);
+            const veto = unsafe(view, top) || (isDrop(top) ? 'drop' : '');
             if (!r.answers.Action.confident) why = 'low-confidence';
             else if (veto) { why = 'veto'; counters.vetoes[veto] = (counters.vetoes[veto] || 0) + 1; entry.veto = veto; }
             else if (top === 'collect' && !s.seen) why = 'nothing-seen';
@@ -379,6 +443,21 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         if (source === 'model') counters.model++;
         else counters.rules[why] = (counters.rules[why] || 0) + 1;
         Object.assign(entry, { action, source, why });
+        if (dropped.length) entry.drops = dropped;
+
+        // Floor vetoes in a row on the staircase: the ground below is a cave
+        // or a drop, so the descent stops here and the level starts.
+        const planFloor = s.plan && MOVES.has(s.plan.split(' ')[0]) && (unsafe(s.view, s.plan) === 'no floor' || isDrop(s.plan));
+        const floorVeto = entry.veto === 'no floor' || entry.veto === 'drop' || dropped.length > 0 || planFloor;
+        floorVetoes = floorVeto ? floorVetoes + 1 : 0;
+        if (plan && floorVetoes >= opts.floor_vetoes && s.plan?.startsWith('down') && plan.stopDescent(feet)) {
+            floorVetoes = 0;
+            counters.rules['stop-descent'] = (counters.rules['stop-descent'] || 0) + 1;
+            logStep({ ...entry, action: 'stop-descent', outcome: 'done' });
+            deps.log?.(`The ground below is hollow: the ${oreName} mine's level starts here at Y ${by}.`);
+            await deps.sleep?.(0);
+            continue;
+        }
 
         let ok = false;
         const kind = action.split(' ')[0];

@@ -370,3 +370,49 @@ test('pickUpDrop: waits for the drop, fetches a left item, and says when it neve
     assert.equal(fetched, 3);
     assert.equal(await pickUpDrop({ count: () => 6, before: 5, findItem: () => null, fetch: async () => {}, sleep }), true);
 });
+
+test('dropBelow: air under the floor, and under a one-block floor over a cave', async () => {
+    const { dropBelow } = await import('../src/agent/laya/mine.js');
+    const w = fakeWorld(20, { '1,19,0': 'air', '1,18,0': 'air', '2,18,0': 'air', '2,17,0': 'air', '2,16,0': 'air', '2,15,0': 'air' });
+    assert.equal(dropBelow(w.blockAt, 0, 20, 0), 0);
+    assert.equal(dropBelow(w.blockAt, 1, 20, 0), 2);
+    assert.equal(dropBelow(w.blockAt, 2, 20, 0), 4, 'a thin floor over 4 air');
+});
+
+test('v2 heal: hurt, so eat to 18, wait to regenerate, then go on (rule heal)', async () => {
+    const s = v2({ y: 20, steps: 3 });
+    s.bot.health = 6; s.bot.food = 12;
+    let ate = 0;
+    s.deps.eat = async () => { ate++; s.bot.food = Math.min(20, s.bot.food + 4); return true; };
+    s.deps.sleep = async ms => { if (ms >= 1000) s.bot.health += 1; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(ate, 2, 'food 12 → 20');
+    assert.equal(s.bot.health, 9);
+    assert.equal(r.counters.rules.heal, 1);
+    assert.ok(s.calls.moves.length >= 1, 'then mining goes on');
+});
+
+test('v2 heal: hurt with no food: stop and ask; hostiles: retreat up the staircase', async () => {
+    const s = v2({ y: 60, steps: 5 });
+    s.bot.health = 4; s.bot.food = 16;
+    s.deps.eat = async () => false;
+    s.deps.hostiles = () => 1;
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, 'hurt with no food');
+    assert.match(s.calls.chat.at(-1), /no food/);
+    assert.deepEqual(s.calls.walks.at(-1), [0, 60, 0], 'back to the entrance');
+});
+
+test('v2: never steps onto a drop; two floor vetoes on the staircase start the level there', async () => {
+    // a cave under the plan's tunnel east at Y 20: the rules go another way
+    let s = v2({ y: 20, steps: 1, blocks: { '1,18,0': 'air', '1,17,0': 'air', '1,16,0': 'air', '1,15,0': 'air' } });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.notDeepEqual(s.calls.moves[0], [1, 20, 0]);
+    // staircase east from Y 60 with a hollow under every next stair cell
+    const blocks = {};
+    for (let x = 1; x <= 4; x++) for (let z = -3; z <= 3; z++) for (let y = 50; y <= 57; y++) blocks[`${x},${y},${z}`] = "air";
+    s = v2({ y: 60, steps: 4, blocks });
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.counters.rules['stop-descent'], 1);
+});
