@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mineWithLaya, pickOre, oreSafe, canMakeTorches } from '../src/agent/laya/mine.js';
+import { mineWithLaya, pickOre, oreSafe, canMakeTorches, pickUpDrop } from '../src/agent/laya/mine.js';
 import { ORES } from '../src/agent/laya/mine_state.js';
 
 const EMPTY = new Set(['air', 'torch', 'lava', 'water']);
@@ -333,4 +333,40 @@ test('v2: a stair step with no floor: a detour, then the staircase goes on from 
     assert.ok(r.counters.abandoned >= 1);
     assert.equal(calls.moves.length, 6, 'every step moves on');
     assert.ok(calls.moves.at(-1)[1] <= 55, 'and down: ' + JSON.stringify(calls.moves));
+});
+
+test('pickOre: not more than collect_below under the plan cell', () => {
+    const w = fakeWorld(20);
+    const opts = { feet: { x: 0, y: 20, z: 0 }, anchor: { x: 0, y: 20, z: 0 }, range: 12, budget: 24, blockAt: w.blockAt, below: 4 };
+    assert.equal(pickOre([{ x: 3, y: 15, z: 0 }], opts), null, '5 below');
+    assert.deepEqual(pickOre([{ x: 3, y: 15, z: 0 }, { x: 3, y: 16, z: 0 }], opts), { x: 3, y: 16, z: 0 });
+    assert.deepEqual(pickOre([{ x: 3, y: 26, z: 0 }], opts), { x: 3, y: 26, z: 0 }, 'above is fine');
+});
+
+test('v2: the walk back fails twice: the plan starts again from where the bot stands', async () => {
+    const { bot, deps, calls, w, inventory } = v2({ y: 20, steps: 6, blocks: { '2,20,3': 'iron_ore' } });
+    deps.collect = async () => {
+        w.m.set('2,20,3', 'air');
+        inventory.raw_iron = (inventory.raw_iron || 0) + 1;
+        bot.entity.position = { x: 2.5, y: 20, z: 3.5 };
+        return true;
+    };
+    const moveTo = deps.moveTo;
+    deps.moveTo = async (x, y, z, ms) => (ms ? (calls.walks.push([x, y, z]), false) : moveTo(x, y, z)); // walks back fail
+    const r = await mineWithLaya(bot, 'iron', 5, deps);
+    assert.deepEqual(calls.walks, [[0, 20, 0], [0, 20, 0]], 'two tries, then no more walking back');
+    assert.equal(r.counters.restarts, 1);
+    assert.ok(calls.logs.some(l => /starting it again from 2 20 3/.test(l)));
+    assert.ok(calls.moves.some(([x, y, z]) => x === 3 && y === 20 && z === 3), 'the new plan tunnels on from there: ' + JSON.stringify(calls.moves));
+});
+
+test('pickUpDrop: waits for the drop, fetches a left item, and says when it never came', async () => {
+    let n = 5, fetched = 0;
+    const sleep = async () => {};
+    assert.equal(await pickUpDrop({ count: () => n, before: 5, findItem: () => ({}), fetch: async () => { fetched++; n = 6; }, sleep }), true);
+    assert.equal(fetched, 1);
+    n = 5; fetched = 0;
+    assert.equal(await pickUpDrop({ count: () => n, before: 5, findItem: () => ({}), fetch: async () => { fetched++; }, sleep, tries: 3 }), false, 'drop left lying');
+    assert.equal(fetched, 3);
+    assert.equal(await pickUpDrop({ count: () => 6, before: 5, findItem: () => null, fetch: async () => {}, sleep }), true);
 });

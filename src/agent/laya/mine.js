@@ -17,9 +17,12 @@
 // failed craft), and a pickaxe again if it breaks.
 //
 // Ore in sight is collected only when it is safe and near the mine: within
-// collect_range of the plan cell (v2; of the bot with v1), with no water or
+// collect_range of the plan cell (v2; of the bot with v1) and at most
+// collect_below blocks below it (so the bot can climb back), with no water or
 // lava touching it or on the way there, and at most collect_budget blocks of
-// collecting away from the plan before it walks back. It stops when it has count more of the ore's
+// collecting away from the plan before it walks back. When the walk back to
+// the plan fails walk_restart times in a row, the plan starts again from
+// where the bot stands. It stops when it has count more of the ore's
 // drop, after max_steps steps, after max_failures failed steps in a row, or
 // when trapped.
 //
@@ -45,7 +48,8 @@ import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, H
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
-    keep_blocks: 32, unload_retry_steps: 50, collect_range: 12, collect_budget: 24 };
+    keep_blocks: 32, unload_retry_steps: 50, collect_range: 12, collect_budget: 24, collect_below: 4,
+    walk_restart: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
@@ -110,14 +114,31 @@ export function oreSafe(blockAt, feet, ore) {
 // pickOre chooses the ore to collect from ores ([{x, y, z}], nearest
 // first): the nearest within range of anchor (the plan cell) and of sight
 // (SEEN_RANGE) of feet, not skipped, within the off-plan budget left, and
-// safe. It returns it or null.
-export function pickOre(ores, { feet, anchor, range, budget, blockAt, skip = () => false }) {
+// safe, and at most below blocks under anchor. It returns it or null.
+export function pickOre(ores, { feet, anchor, range, budget, blockAt, below = Infinity, skip = () => false }) {
     for (const o of ores) {
         const d = dist(feet, o);
-        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || skip(o)) continue;
+        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || anchor.y - o.y > below || skip(o)) continue;
         if (oreSafe(blockAt, feet, o)) return o;
     }
     return null;
+}
+
+// pickUpDrop makes sure a dug ore's drop reached the pack: count() is how
+// many of the drop it carries, before the count before digging; findItem()
+// is a dropped item entity near the ore (or null) and fetch(item) walks onto
+// it. It waits for the drop, fetches it up to tries times, and returns
+// whether the count went up.
+export async function pickUpDrop({ count, before, findItem, fetch, sleep, tries = 3, wait = 250 }) {
+    for (let i = 0; i <= tries; i++) {
+        if (count() > before) return true;
+        await sleep(wait);
+        if (count() > before) return true;
+        if (i === tries) break;
+        const item = findItem();
+        if (item) await fetch(item).catch(() => {});
+    }
+    return count() > before;
 }
 
 // canMakeTorches: coal or charcoal and sticks, or wood to make sticks from.
@@ -167,6 +188,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     const got = () => (deps.inventory()[ore.drop] || 0) + deposited - start;
     let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, noTorchUntil = 0, noUnloadUntil = 0;
     let offPlan = 0; // blocks collecting has taken the bot away from the plan
+    let walkFails = 0; // failed walks back to the plan in a row
     const failedOre = new Set(); // ore blocks a collect failed on
     const oreKey = o => `${o.x},${o.y},${o.z}`;
     const oresNear = range => deps.ores ? deps.ores(ore.blocks, range) : [deps.nearestOre(ore.blocks, range)].filter(Boolean);
@@ -221,11 +243,11 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     };
 
     let plan = null;
+    const planOpts = Object.fromEntries(Object.keys(PLAN_DEFAULTS).filter(k => opts[k] != null).map(k => [k, opts[k]]));
     if (!await ensurePickaxe()) return finish(false, `needs a ${TIER_PICKAXE[ore.tier]}`);
 
     if (v2) {
         const f = feetOf();
-        const planOpts = Object.fromEntries(Object.keys(PLAN_DEFAULTS).filter(k => opts[k] != null).map(k => [k, opts[k]]));
         plan = createPlan({ ...f, heading }, ore, planOpts);
         const msg = `The ${oreName} mine starts at ${f.x} ${f.y} ${f.z}, heading ${heading}.`;
         deps.log?.(msg);
@@ -251,6 +273,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         const anchor = pn?.walk || feet;
         const near = pickOre(oresNear(SEEN_RANGE), { feet, anchor, blockAt: deps.blockAt,
             range: plan ? opts.collect_range : SEEN_RANGE, budget: plan ? opts.collect_budget - offPlan : Infinity,
+            below: plan ? opts.collect_below : Infinity,
             skip: o => failedOre.has(oreKey(o)) });
         const seen = near ? Math.max(1, Math.ceil(Math.hypot(near.x - bx, near.y - by, near.z - bz))) : 0;
         const inv2 = deps.inventory();
@@ -266,7 +289,20 @@ export async function mineWithLaya(bot, oreName, count, deps) {
                     const ok = await walkTo(pn.walk);
                     logStep({ walk: pn.walk, segment: pn.segment, pos: feet, state: state(s), outcome: ok ? 'done' : 'failed' });
                     failures = ok ? 0 : failures + 1;
+                    walkFails = ok ? 0 : walkFails + 1;
                     if (!ok) counters.failures++;
+                    if (walkFails >= opts.walk_restart) {
+                        // can't get back (e.g. down a hole after ore): the
+                        // mine starts again from here
+                        const f = feetOf();
+                        plan = createPlan({ ...f, heading }, ore, planOpts);
+                        walkFails = 0; failures = 0; offPlan = 0;
+                        counters.restarts = (counters.restarts || 0) + 1;
+                        logStep({ restart: f, outcome: 'restarted' });
+                        deps.log?.(`Couldn't get back to the mine: starting it again from ${f.x} ${f.y} ${f.z}.`);
+                        await deps.sleep?.(0);
+                        continue;
+                    }
                     if (failures >= opts.max_failures) return finish(false, `${failures} steps failed in a row`);
                     await deps.sleep?.(0);
                     continue;

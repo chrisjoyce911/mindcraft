@@ -7,7 +7,7 @@ import { laya, taskSettings } from "../../models/laya.js";
 import { followWithLaya } from "../laya/follow.js";
 import { runCraft, settle } from "../laya/craft.js";
 import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
-import { mineWithLaya } from "../laya/mine.js";
+import { mineWithLaya, pickUpDrop } from "../laya/mine.js";
 import { ORES as MINE_ORES } from "../laya/mine_state.js";
 import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
@@ -2352,7 +2352,7 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
             },
             ores: (blocks, range) => world.getNearestBlocks(bot, blocks, range, 32).map(b => b.position),
             craft: (item, n) => craftForTask(bot, item, n),
-            collect: (blocks, n, o) => collectOreAt(bot, o, blocks),
+            collect: (blocks, n, o) => collectOreAt(bot, o, blocks, info.drop),
             dig: async (x, y, z) => {
                 const b = bot.blockAt(new Vec3(x, y, z));
                 if (!b || b.boundingBox === 'empty') return true;
@@ -2387,8 +2387,8 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
 // collectOreAt digs one ore block at o ({x, y, z}) for the Laya mine task
 // and picks up its drop. The way there keeps out of water and lava (they cost
 // a lot to the pathfinder) and never makes fluid flow. It returns true when
-// the block is gone.
-async function collectOreAt(bot, o, names, ms = 30000) {
+// the drop is in the pack (block broken but drop left lying: false).
+async function collectOreAt(bot, o, names, drop, ms = 30000) {
     const block = o && bot.blockAt(new Vec3(o.x, o.y, o.z));
     if (!block || !names.includes(block.name)) return false;
     const prev = bot.pathfinder.movements;
@@ -2410,9 +2410,23 @@ async function collectOreAt(bot, o, names, ms = 30000) {
         if (bot.entity.position.distanceTo(block.position.offset(0.5, 0.5, 0.5)) > 5) return false;
         await bot.tool.equipForBlock(block);
         if (!block.canHarvest(bot.heldItem ? bot.heldItem.type : null)) return false;
+        const count = () => world.getInventoryCounts(bot)[drop] || 0;
+        const before = count();
         await bot.dig(block);
-        await pickupNearbyItems(bot);
-        return bot.blockAt(block.position)?.name !== block.name;
+        const at = block.position.offset(0.5, 0.5, 0.5);
+        const got = await pickUpDrop({
+            count, before,
+            findItem: () => bot.nearestEntity(e => e.name === 'item' && e.position.distanceTo(at) < 4),
+            fetch: async item => {
+                const stop = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
+                try {
+                    await Promise.race([bot.pathfinder.goto(new pf.goals.GoalNear(item.position.x, item.position.y, item.position.z, 0.5)), stop]);
+                } catch { bot.pathfinder.setGoal(null); }
+            },
+            sleep: t => new Promise(r => setTimeout(r, t)),
+        });
+        if (!got) log(bot, `Broke ${block.name} but couldn't pick up the ${drop}${bot.inventory.emptySlotCount() ? '' : ' (my pack is full)'}.`);
+        return got;
     } finally {
         clearTimeout(timer);
         if (prev) bot.pathfinder.setMovements(prev);
