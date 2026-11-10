@@ -324,3 +324,13 @@ test('v2: crafts a torch batch when low and it carries coal and sticks; backs of
     await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.deepEqual(s.calls.crafted, ['torch'], 'a failed craft is not retried every step');
 });
+
+test('v2: a stair step with no floor: a detour, then the staircase goes on from there (no walk back)', async () => {
+    // down E from (0, 60, 0) lands on (1, 59, 0): no floor under it
+    const { bot, deps, calls } = v2({ y: 60, steps: 6, blocks: { '1,58,0': 'air', '1,57,0': 'air' } });
+    const r = await mineWithLaya(bot, 'iron', 1, deps);
+    assert.deepEqual(calls.walks, [], 'never walks back to the cell without a floor');
+    assert.ok(r.counters.abandoned >= 1);
+    assert.equal(calls.moves.length, 6, 'every step moves on');
+    assert.ok(calls.moves.at(-1)[1] <= 55, 'and down: ' + JSON.stringify(calls.moves));
+});
