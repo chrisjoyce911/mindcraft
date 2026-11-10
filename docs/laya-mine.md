@@ -24,6 +24,7 @@ With `prompt: "v2"` (the default) the bot digs an orderly mine (`src/agent/laya/
 
 Following the plan:
 - The plan's next step goes to the model as the `Plan` line. Ore in sight, lava and water, and a due torch still come first.
+- **Collecting ore** only counts ore within `collect_range` (8) blocks of the plan cell, with no water or lava touching it or on the straight way there, while the collecting since leaving the plan stays within `collect_budget` (24) blocks. Ore further off is ignored (it isn't in the `Seen` line), so the bot can't chain ore to ore away from the mine. The way to the ore avoids fluids. An ore block whose collect failed isn't tried again in that job.
 - After collecting ore off the line, at the end of a branch and after unloading, the bot walks back (the pathfinder, through the dug mine) to where it left the plan.
 - When the plan step is unsafe, the bot takes the safe detour the model or rule gives, and the plan abandons the rest of that branch or main tunnel (an abandoned main tunnel ends its level: the staircase continues from there). An unsafe staircase step shifts the staircase one block to the right; after `max_shifts` (3) shifts in a row the plan ends.
 - A move the model answers that isn't the plan step, while the plan step is safe, is overruled (`off-plan`).
@@ -35,7 +36,7 @@ Each v2 request also asks **Unload** ("I should go and empty my pack into the ho
 
 - **The rule (laya-go `rules.Unload`):** never with no home chest known or with lava or water touching the bot; yes with 2 or fewer free slots, with 6 or fewer free slots and home within 24 blocks, or with 4 or more valuables while hurt (health 8 or less), hungry (food 6 or less) or with 2 or more hostile mobs near.
 - **A completely full pack** (0 free slots) always unloads, whatever the model says, when a home chest is known.
-- When unloading fails, it doesn't try again for `unload_retry_steps` (50) steps.
+- It uses the home chest and the chests touching it (`pack_actions.depositAtHome`, as the farm does). When they fill up after something went in, the unload is **partial**: not a failed step, but it doesn't try again for `unload_retry_steps` (50) steps. Neither does a failed unload.
 
 ## What it does
 
@@ -93,7 +94,7 @@ It never digs straight down.
 
 It crafts what it needs through `skills.craftForTask`, which uses the Laya craft task's `runCraft` when present, otherwise `craftRecipe`:
 - **A pickaxe:** stone for iron, copper and lapis; iron for gold, redstone and diamond. It crafts one before starting, when the model stops for a weak pickaxe, and when the pickaxe breaks.
-- **Torches:** `torch_batch` of them when they run out with 8 or more dark blocks.
+- **Torches:** `torch_batch` of them whenever it has fewer than `torch_low` (4) and carries coal or charcoal and sticks (or wood for them), or none are left after 8 or more dark blocks. After a failed craft it waits `torch_retry_steps` (50) steps.
 
 ## Settings
 
@@ -104,7 +105,8 @@ It crafts what it needs through `skills.craftForTask`, which uses the Laya craft
 | `prompt` | `v2` | v2: the mine plan and unloading; v1: roams as the model and rules say |
 | `timeout_ms`, `min_confidence` | 300, 0.4 | |
 | `max_steps`, `max_failures` | 2000, 4 | without a setting, 2000 for v2 and 300 for v1 |
-| `torch_batch` | 4 | |
+| `torch_batch`, `torch_low`, `torch_retry_steps` | 4, 4, 50 | torches crafted at a time; craft when fewer; steps to wait after a failed craft |
+| `collect_range`, `collect_budget` | 8, 24 | v2: ore collected only within this of the plan cell; blocks of collecting off the plan before walking back |
 | `main_length`, `branch_every`, `branch_length` | 32, 3, 16 | the grid at each level |
 | `level_gap`, `next_shaft` | 4, 40 | between levels; the next column to the right |
 | `keep_blocks` | 32 | throwaway blocks kept when unloading |

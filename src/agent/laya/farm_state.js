@@ -310,9 +310,21 @@ export function decide(s) {
     return d('wait', NONE, NONE, 'wait');
 }
 
-// pondCell names the nearest dry ground cell other than the bot's own, or
-// null.
-export function pondCell(grid) {
-    const p = nearestDry(grid);
+// pondCell names the nearest dry ground cell other than the bot's own (and
+// not skipped: skip(cellName) → bool), or null.
+export function pondCell(grid, skip = () => false) {
+    const p = BY_DISTANCE.slice(1).find(q => grid[q.z][q.x] === 'L' && !skip(cellName(q.x, q.z)));
     return p ? cellName(p.x, p.z) : null;
+}
+
+// besideHole reports whether water poured at a cell ({x, z}) could run off:
+// a side cell holds water or its ground is lower (a hole, a drop).
+export function besideHole(s, cell) {
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = cell.x + dx, z = cell.z + dz;
+        if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) continue;
+        if (s.grid[z][x] === 'W') return true;
+        if (s.ys && s.ys[z][x] < s.ys[cell.z][cell.x]) return true;
+    }
+    return false;
 }

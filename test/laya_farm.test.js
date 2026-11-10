@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFarm, state, questions, targetOptions, cellName, parseCellName, carried, herds } from '../src/agent/laya/farm_state.js';
 import { farmWithLaya, veto, needed, summary } from '../src/agent/laya/farm.js';
-import { floods } from '../src/agent/laya/farm_actions.js';
+import { floods, until, pourInto } from '../src/agent/laya/farm_actions.js';
 import { setSettings } from '../src/agent/settings.js';
 import { taskSettings } from '../src/models/laya.js';
 import rootSettings from '../settings.js';
@@ -421,4 +421,60 @@ test('laya:check asks the farm sample of the task prompt', () => {
     assert.ok(loadSample('farm', 'v2').questions.Unload);
     assert.equal(loadSample('farm', 'v1').state, golden.state);
     assert.equal(rootSettings.decision_models.tasks.farm.prompt, 'v2');
+});
+
+// ---- v2 bug fixes: buckets, checked actions, no endless failures ----
+
+const fakeVec = (x, y, z) => ({ x, y, z, offset: (a, b, c) => fakeVec(x + a, y + b, z + c) });
+
+test('until: polls until the condition holds or time runs out', async () => {
+    let n = 0;
+    const sleep = async () => { n++; };
+    assert.equal(await until(() => n >= 3, 1500, sleep), true);
+    assert.equal(await until(() => false, 300, sleep), false);
+});
+
+test('pourInto: looks at the hole and uses the bucket as an item, then checks for water', async () => {
+    const calls = [];
+    const world = new Map();
+    const bot = {
+        lookAt: async p => calls.push(['look', p.x, p.y, p.z]),
+        activateItem: () => { calls.push(['use']); world.set('5,63,7', 'water'); },
+        activateBlock: () => calls.push(['activateBlock']),
+        blockAt: p => ({ name: world.get(`${p.x},${p.y},${p.z}`) ?? 'air' }),
+    };
+    assert.equal(await pourInto(bot, fakeVec(5, 63, 7)), true);
+    assert.deepEqual(calls, [['look', 5.5, 63.05, 7.5], ['use']]);
+    bot.activateItem = () => {}; // nothing placed
+    world.clear();
+    assert.equal(await pourInto(bot, fakeVec(5, 63, 7)), false);
+});
+
+test('pond veto: not beside a hole or water', () => {
+    const s = plateau([]);
+    s.ys[3][4] = Y0 - 1; // a hole dug at E0 N1
+    assert.equal(veto(s, 'pond', cellName(3, 3), 'water_bucket'), 'beside-hole');
+    assert.equal(veto(s, 'pond', cellName(2, 3), 'water_bucket'), null);
+    s.grid[6][6] = 'W';
+    assert.equal(veto(s, 'pond', cellName(6, 5), 'water_bucket'), 'beside-hole');
+});
+
+test('failed steps: banned on that cell, then stops after max_bad in a row', async () => {
+    const carry = [{ item: 'hoe', count: 1 }, { item: 'water_bucket', count: 1 }, { item: 'wheat_seeds', count: 3 }];
+    const { deps, calls, bot, said } = setupV2(Array(40).fill(reply('pond', 'W1 N1', 'water_bucket')),
+        { situation: plateau(carry), task: { max_steps_open: 40 } });
+    deps.act = async (action, target, item) => { calls.act.push([action, target, item]); return false; };
+    const c = await farmWithLaya(bot, { crop: 'any' }, deps);
+    assert.equal(c.reason, 'stuck');
+    assert.equal(calls.act.filter(([a, t]) => a === 'pond' && t === 'W1 N1').length, 1, 'the failed cell is not tried again');
+    assert.equal(calls.act.length, 6, 'max_bad failed steps in a row');
+    assert.equal(new Set(calls.act.map(([, t]) => t)).size, 6, 'each on another cell');
+    assert.match(said.at(-1), /keep failing to pond/);
+});
+
+test('vetoed steps: banned, the rules answer instead', async () => {
+    const { deps, calls, bot } = setup([reply('till', 'E0 S0', 'hoe'), reply('till', 'E0 S0', 'hoe'), reply('till', 'E0 S0', 'hoe')]);
+    const c = await farmWithLaya(bot, 60000, deps);
+    assert.deepEqual(c.vetoes, { 'not-tillable': 1 }, 'vetoed once, then banned');
+    assert.equal(calls.act.length, 2, 'the rules act instead');
 });

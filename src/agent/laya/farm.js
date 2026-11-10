@@ -14,6 +14,9 @@
 // It never waits forever: when there is no water to farm with it looks for
 // water within water_radius and walks there, or says so and stops; after
 // wait_limit waits (or unsure answers) in a row with nothing growing it stops.
+// It never repeats a failed step forever: a vetoed or failed action is banned
+// on that cell for ban_steps steps (the rules answer instead), and after
+// max_bad vetoed or failed steps in a row it stops.
 // With prompt v2 and a home chest known it empties its pack there when Unload
 // says so (or the pack is full) and walks back.
 //
@@ -23,11 +26,11 @@
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { questions, questionsV2, state as farmState, stateV2, parseCellName, decide as rulesDecide, hasWater, growing,
-    farmValuables, pondCell, CROPS, NONE, PRODUCE, CROP_OF, FARM_CROPS, POND, FIND_WATER } from './farm_state.js';
+    farmValuables, pondCell, besideHole, CROPS, NONE, PRODUCE, CROP_OF, FARM_CROPS, POND, FIND_WATER } from './farm_state.js';
 import { pack, homeDistance, unloadRule, wantUnload, depositList, isTool } from './pack.js';
 
 const DEFAULTS = { prompt: 'v1', step_ms: 500, max_steps: 400, max_misses: 5, log_steps: true, min_confidence: 0.5,
-    wait_limit: 20, water_radius: 64, keep_seeds: 16, unload_retry_steps: 50 };
+    wait_limit: 20, water_radius: 64, keep_seeds: 16, unload_retry_steps: 50, ban_steps: 20, max_bad: 6 };
 
 export const NO_WATER = 'No water near here — take me to water or give me a water bucket.';
 
@@ -63,7 +66,7 @@ export function veto(s, action, target, item) {
     case 'plant': return code === 'F' || code === 'D' ? (SEEDS.includes(item) ? null : 'not-a-seed') : 'not-farmland';
     case 'till': return code === 'G' || code === 'L' ? null : 'not-tillable';
     case 'water': return code === 'D' ? null : 'not-dry-farmland';
-    case POND: return code === 'L' ? null : 'not-dry-ground';
+    case POND: return code !== 'L' ? 'not-dry-ground' : besideHole(s, cell) ? 'beside-hole' : null;
     case 'bone_meal': return growing ? null : 'not-growing';
     default: return 'unknown-action';
     }
@@ -187,6 +190,14 @@ export async function farmWithLaya(bot, goal, deps) {
 
     let origin = deps.position?.() || null;
     let misses = 0, steps = 0, waits = 0, noUnloadUntil = 0, warnedFull = false, wentForWater = false;
+    let bad = 0; // vetoed or failed steps in a row
+    const banned = new Map(); // 'action target' → the step its ban ends
+    const isBanned = (a, t) => (banned.get(`${a} ${t}`) ?? 0) > steps;
+    // badStep bans the action on its cell; it returns true when it's time to stop.
+    const badStep = (a, t) => {
+        banned.set(`${a} ${t}`, steps + opts.ban_steps);
+        return ++bad >= opts.max_bad;
+    };
 
     // findWater walks to water within water_radius, or says there's none.
     // It returns true when farming can carry on.
@@ -281,6 +292,15 @@ export async function farmWithLaya(bot, goal, deps) {
             action = 'wait'; target = NONE; item = NONE; source = 'low-confidence';
             Object.assign(entry, { model_action: r.answers.Action.top, p: r.answers.Action.topProbability, ms: r.ms });
         }
+        // A banned answer (it failed or was vetoed just now): the rules'
+        // answer instead, or wait.
+        if (action !== 'wait' && isBanned(action, target)) {
+            entry.banned = `${action} ${target}`;
+            const ruled = rulesDecide(s);
+            if (ruled.action !== 'wait' && !isBanned(ruled.action, ruled.target)) ({ action, target, item } = ruled);
+            else [action, target, item] = ['wait', NONE, NONE];
+            source = 'banned';
+        }
         Object.assign(entry, { action, target, item, source });
 
         // No water to farm with and nothing growing: with a water bucket make
@@ -288,7 +308,7 @@ export async function farmWithLaya(bot, goal, deps) {
         // say so and stop.
         const dry = !hasWater(s.grid) && !growing(s.grid);
         if (action === 'wait' && dry && has(s, 'water_bucket')) {
-            const pond = pondCell(s.grid);
+            const pond = pondCell(s.grid, c => isBanned(POND, c) || besideHole(s, parseCellName(c)));
             if (pond) [action, target, item, entry.source] = [POND, pond, 'water_bucket', 'dry'];
         }
         if (action === FIND_WATER || (action === 'wait' && dry)) {
@@ -300,6 +320,7 @@ export async function farmWithLaya(bot, goal, deps) {
 
         if (action === 'wait') {
             waits++;
+            bad = 0;
             logStep({ ...entry, outcome: source === 'low-confidence' ? 'low-confidence' : 'wait' });
             if (waits >= opts.wait_limit && !growing(s.grid)) {
                 say('Nothing to farm here and nothing growing; stopping.');
@@ -333,6 +354,10 @@ export async function farmWithLaya(bot, goal, deps) {
         if (reason) {
             counters.vetoes[reason] = (counters.vetoes[reason] || 0) + 1;
             logStep({ ...entry, outcome: 'veto', veto: reason });
+            if (badStep(action, target)) {
+                say(`I keep failing to ${action} here; stopping.`);
+                return finish('stuck');
+            }
             await deps.sleep(opts.step_ms);
             continue;
         }
@@ -347,6 +372,11 @@ export async function farmWithLaya(bot, goal, deps) {
             entry.harvested = got;
         }
         logStep({ ...entry, outcome: ok ? 'done' : 'failed' });
+        if (ok) bad = 0;
+        else if (badStep(action, target)) {
+            say(`I keep failing to ${action} here; stopping.`);
+            return finish('stuck');
+        }
         if (g.count != null && counters.harvested >= g.count) {
             say(`Harvested ${counters.harvested} ${g.crop === 'any' ? 'crops' : g.crop}.`);
             return finish('count reached');

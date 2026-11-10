@@ -5,7 +5,7 @@ import Vec3 from 'vec3';
 import settings from "../../../settings.js";
 import { laya, taskSettings } from "../../models/laya.js";
 import { followWithLaya } from "../laya/follow.js";
-import { runCraft } from "../laya/craft.js";
+import { runCraft, settle } from "../laya/craft.js";
 import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
 import { mineWithLaya } from "../laya/mine.js";
 import { ORES as MINE_ORES } from "../laya/mine_state.js";
@@ -109,7 +109,16 @@ export async function craftRecipe(bot, itemName, num=1) {
     const requiredIngredients = mc.ingredientsFromPrismarineRecipe(recipe); //Items required to use the recipe once.
     const craftLimit = mc.calculateLimitingResource(inventory, requiredIngredients);
     
-    await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
+    const times = Math.min(craftLimit.num, num);
+    const before = world.getInventoryCounts(bot)[itemName] || 0;
+    await bot.craft(recipe, times, craftingTable);
+    // The inventory updates a moment after the craft: wait for the result (and
+    // an empty crafting grid) so the next step doesn't read a stale inventory
+    // or start a craft mineflayer stalls on (updateSlot timeout).
+    const want = before + (recipe.result?.count || 1) * times;
+    const gridEmpty = () => craftingTable || [0, 1, 2, 3, 4].every(i => !bot.inventory.slots[i]);
+    if (!await settle(() => (world.getInventoryCounts(bot)[itemName] || 0) >= want && gridEmpty()))
+        console.log(`craftRecipe: ${itemName} still short of ${want} after waiting`);
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     if (placedTable) {
@@ -1019,7 +1028,7 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
         log(bot, `You cannot give items to yourself.`);
         return false;
     }
-    let player = bot.players[username].entity
+    let player = bot.players[username]?.entity
     if (!player) {
         log(bot, `Could not find ${username}.`);
         return false;
@@ -1322,7 +1331,7 @@ export async function goToPlayer(bot, username, distance=3) {
 
     bot.modes.pause('self_defense');
     bot.modes.pause('cowardice');
-    let player = bot.players[username].entity
+    let player = bot.players[username]?.entity
     if (!player) {
         log(bot, `Could not find ${username}.`);
         return false;
@@ -1394,9 +1403,11 @@ export async function followPlayer(bot, username, distance=4) {
      * @example
      * await skills.followPlayer(bot, "player");
      **/
-    let player = bot.players[username].entity
-    if (!player)
+    let player = bot.players[username]?.entity
+    if (!player) {
+        log(bot, `Could not find ${username}.`);
         return false;
+    }
 
     const layaTask = taskSettings('follow');
     if (layaTask)
@@ -2337,11 +2348,9 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
                 const b = world.getNearestBlocks(bot, blocks, range, 1)[0];
                 return b ? b.position : null;
             },
+            ores: (blocks, range) => world.getNearestBlocks(bot, blocks, range, 32).map(b => b.position),
             craft: (item, n) => craftForTask(bot, item, n),
-            collect: async (blocks, n) => {
-                const near = world.getNearestBlocks(bot, blocks, 16, 1)[0];
-                return near ? await collectBlock(bot, near.name, n) : false;
-            },
+            collect: (blocks, n, o) => collectOreAt(bot, o, blocks),
             dig: async (x, y, z) => {
                 const b = bot.blockAt(new Vec3(x, y, z));
                 if (!b || b.boundingBox === 'empty') return true;
@@ -2359,16 +2368,8 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
                 return Math.floor(p.x) === x && Math.floor(p.z) === z && Math.abs(Math.floor(p.y) - y) <= 1;
             },
             place: (item, x, y, z, placeOn = 'bottom') => placeBlock(bot, item, x, y, z, placeOn, true),
-            freeSlots: () => bot.inventory.emptySlotCount(),
-            hostiles: () => Object.values(bot.entities).filter(e => e !== bot.entity && mc.isHostile(e) && e.position
-                && e.position.distanceTo(bot.entity.position) <= 16).length,
-            home: () => {
-                const p = typeof homeChest === 'function' ? homeChest() : homeChest;
-                return Array.isArray(p) && p.length === 3 ? { x: p[0], y: p[1], z: p[2] } : null;
-            },
-            goHome: async h => !!(await goToPosition(bot, h.x, h.y, h.z, 2)),
-            deposit: items => depositInChestAt(bot, homeChestBlock(bot, homeChest), items),
-            isFood: name => !!bot.registry.foodsByName?.[name],
+            // the home chest and its neighbours, as the farm task uses them
+            ...packDeps(bot, homeChest),
             chat: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
             sleep,
             log: msg => log(bot, msg),
@@ -2381,43 +2382,38 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
     }
 }
 
-// homeChestBlock finds the chest at (or right next to) the remembered home
-// chest position.
-function homeChestBlock(bot, homeChest) {
-    const p = typeof homeChest === 'function' ? homeChest() : homeChest;
-    if (!Array.isArray(p)) return null;
-    const at = new Vec3(Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2]));
-    for (const d of [[0, 0, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]) {
-        const b = bot.blockAt(at.offset(...d));
-        if (b && (b.name === 'chest' || b.name === 'trapped_chest' || b.name === 'barrel')) return b;
-    }
-    return world.getNearestBlock(bot, 'chest', 6);
-}
-
-// depositInChestAt puts the listed items ([{name, count}]) in a chest block.
-async function depositInChestAt(bot, chest, items) {
-    if (!chest) {
-        log(bot, `There's no chest at the home chest place.`);
-        return false;
-    }
-    let container;
+// collectOreAt digs one ore block at o ({x, y, z}) for the Laya mine task
+// and picks up its drop. The way there keeps out of water and lava (they cost
+// a lot to the pathfinder) and never makes fluid flow. It returns true when
+// the block is gone.
+async function collectOreAt(bot, o, names, ms = 30000) {
+    const block = o && bot.blockAt(new Vec3(o.x, o.y, o.z));
+    if (!block || !names.includes(block.name)) return false;
+    const prev = bot.pathfinder.movements;
+    const m = new pf.Movements(bot);
+    m.liquidCost = 100;
+    m.dontCreateFlow = true;
+    m.allowParkour = false;
+    m.maxDropDown = 3;
+    m.infiniteLiquidDropdownDistance = false;
+    let timer;
     try {
-        container = await bot.openContainer(chest);
-        for (const { name, count } of items) {
-            let left = count;
-            for (const item of bot.inventory.items().filter(i => i.name === name)) {
-                const n = Math.min(left, item.count);
-                if (n <= 0) break;
-                await container.deposit(item.type, null, n);
-                left -= n;
-            }
+        bot.pathfinder.setMovements(m);
+        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); });
+        try {
+            await Promise.race([bot.pathfinder.goto(new pf.goals.GoalLookAtBlock(block.position, bot.world, { reach: 4 })), timeout]);
+        } catch {
+            bot.pathfinder.setGoal(null);
         }
-        return true;
-    } catch (err) {
-        log(bot, `Couldn't put things in the home chest: ${err.message}`);
-        return false;
+        if (bot.entity.position.distanceTo(block.position.offset(0.5, 0.5, 0.5)) > 5) return false;
+        await bot.tool.equipForBlock(block);
+        if (!block.canHarvest(bot.heldItem ? bot.heldItem.type : null)) return false;
+        await bot.dig(block);
+        await pickupNearbyItems(bot);
+        return bot.blockAt(block.position)?.name !== block.name;
     } finally {
-        container?.close();
+        clearTimeout(timer);
+        if (prev) bot.pathfinder.setMovements(prev);
     }
 }
 

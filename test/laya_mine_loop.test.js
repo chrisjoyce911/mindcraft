@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mineWithLaya } from '../src/agent/laya/mine.js';
+import { mineWithLaya, pickOre, oreSafe, canMakeTorches } from '../src/agent/laya/mine.js';
 import { ORES } from '../src/agent/laya/mine_state.js';
 
 const EMPTY = new Set(['air', 'torch', 'lava', 'water']);
@@ -256,4 +256,71 @@ test('v2: the model decides Unload when sure; a completely full pack always unlo
     s = v2({ y: 20, steps: 2, free: 0, decide: withUnload(0.95) });
     await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.equal(s.calls.home.length, 0, 'no home chest known');
+});
+
+// ---- v2 bug fixes: bounded, safe collecting; partial unloads; torch batches ----
+
+test('pickOre: near the plan, within budget, away from water and lava', () => {
+    const w = fakeWorld(20, { '3,20,4': 'water' });
+    const opts = { feet: { x: 0, y: 20, z: 0 }, anchor: { x: 0, y: 20, z: 0 }, range: 8, budget: 24, blockAt: w.blockAt };
+    assert.deepEqual(pickOre([{ x: 12, y: 20, z: 0 }, { x: 2, y: 20, z: 1 }], opts), { x: 2, y: 20, z: 1 }, 'the far one is past range');
+    assert.equal(pickOre([{ x: 3, y: 20, z: 3 }], opts), null, 'water touches the ore');
+    assert.equal(pickOre([{ x: 6, y: 20, z: 7 }], opts), null, 'water on the way');
+    assert.equal(pickOre([{ x: 5, y: 20, z: 0 }], { ...opts, budget: 4 }), null, 'past the budget');
+    assert.equal(pickOre([{ x: 5, y: 20, z: 0 }], { ...opts, skip: () => true }), null);
+    assert.equal(oreSafe(w.blockAt, { x: 0, y: 20, z: 0 }, { x: 5, y: 20, z: 0 }), true);
+});
+
+test('canMakeTorches: coal or charcoal, and sticks or wood', () => {
+    assert.equal(canMakeTorches({ coal: 1, stick: 1 }), true);
+    assert.equal(canMakeTorches({ charcoal: 2, oak_log: 1 }), true);
+    assert.equal(canMakeTorches({ coal: 3, cobblestone: 5 }), false);
+    assert.equal(canMakeTorches({ stick: 3, spruce_planks: 5 }), false);
+});
+
+test('v2: ore far from the plan is left; ore chains never pull the bot away', async () => {
+    // a line of ore going east from the plan's first branch, away from the mine
+    const blocks = { '2,20,3': 'iron_ore', '9,20,3': 'iron_ore', '16,20,3': 'iron_ore', '23,20,3': 'iron_ore' };
+    // 4 steps: collect, walk back, tunnel to x 1, tunnel to x 2 (the next ore
+    // comes within 8 of the tunnel only after that)
+    const { bot, deps, calls, w, inventory } = v2({ y: 20, steps: 4, blocks, decide: () => answer('collect') });
+    const collected = [];
+    deps.ores = names => [...w.m].filter(([, n]) => names.includes(n)).map(([k]) => {
+        const [x, y, z] = k.split(',').map(Number);
+        return { x, y, z };
+    }).sort((a, b) => Math.hypot(a.x - bot.entity.position.x, a.z - bot.entity.position.z) - Math.hypot(b.x - bot.entity.position.x, b.z - bot.entity.position.z));
+    deps.collect = async (names, n, o) => {
+        collected.push(o);
+        w.m.set(`${o.x},${o.y},${o.z}`, 'air');
+        inventory.raw_iron = (inventory.raw_iron || 0) + 1;
+        bot.entity.position = { x: o.x + 0.5, y: o.y, z: o.z + 0.5 };
+        return true;
+    };
+    await mineWithLaya(bot, 'iron', 4, deps);
+    assert.deepEqual(collected.map(o => o.x), [2], 'only the ore within 8 of the plan cell');
+    assert.deepEqual(calls.walks, [[0, 20, 0]], 'walks back to the plan');
+    assert.deepEqual(calls.moves.slice(-2), [[1, 20, 0], [2, 20, 0]], 'and the plan goes on');
+});
+
+test('v2: a full home chest after taking some is a partial unload, not a failure', async () => {
+    const inv = { stone_pickaxe: 1, torch: 5, cobblestone: 50, raw_iron: 2, andesite: 10 };
+    const { bot, deps, calls } = v2({ y: 20, steps: 4, free: 0, home: { x: 0, y: 20, z: 10 }, inv });
+    deps.deposit = async items => {
+        calls.deposited.push(items);
+        deps.inventory = (orig => () => ({ ...orig(), andesite: 0 }))(deps.inventory);
+        return false; // full after the andesite
+    };
+    const r = await mineWithLaya(bot, 'iron', 1, deps);
+    assert.equal(calls.home.length, 1, 'no unload again straight away');
+    assert.equal(r.counters.failures, 0);
+    assert.ok(calls.logs.some(l => /home chest is full/.test(l)));
+});
+
+test('v2: crafts a torch batch when low and it carries coal and sticks; backs off after a failure', async () => {
+    let s = v2({ y: 20, steps: 3, inv: { stone_pickaxe: 1, torch: 2, coal: 2, stick: 4, cobblestone: 10 } });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.deepEqual(s.calls.crafted, ['torch'], 'once: then it has 6');
+    s = v2({ y: 20, steps: 5, craftOk: false, inv: { stone_pickaxe: 1, torch: 1, coal: 2, stick: 4, cobblestone: 10 } });
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.deepEqual(s.calls.crafted, ['torch'], 'a failed craft is not retried every step');
 });

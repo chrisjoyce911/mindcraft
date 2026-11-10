@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCraft, check, plan } from '../src/agent/laya/craft.js';
+import { runCraft, check, plan, settle } from '../src/agent/laya/craft.js';
 import { situation } from '../src/agent/laya/craft_state.js';
 
 const answer = (action, item, count, p = 0.9) => ({
@@ -103,4 +103,14 @@ test('plan: the recipe rules pick the next step', () => {
     assert.deepEqual(plan(s({ wooden_pickaxe: 1 }, 'iron_ingot', 2)), { action: 'gather', item: 'cobblestone', count: 3 });
     assert.deepEqual(plan(s({ oak_log: 3 }, 'log', 13)), { action: 'gather', item: 'log', count: 10 });
     assert.equal(plan(s({ oak_log: 13 }, 'log', 13)), null);
+});
+
+test('settle: waits for the crafted items to show, then a quiet time', async () => {
+    let t = 0, planks = 4;
+    const sleep = async ms => { t += ms; if (t >= 200) planks = 12; };
+    assert.equal(await settle(() => planks >= 12, { sleep }), true);
+    assert.ok(t >= 200 + 150, 'waited for the update and the quiet time');
+    t = 0;
+    assert.equal(await settle(() => false, { ms: 500, sleep }), false, 'gives up after ms');
+    assert.equal(t, 650);
 });
