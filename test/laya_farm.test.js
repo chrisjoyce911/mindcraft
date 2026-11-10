@@ -449,3 +449,32 @@ test('pourInto: looks at the hole and uses the bucket as an item, then checks fo
     world.clear();
     assert.equal(await pourInto(bot, fakeVec(5, 63, 7)), false);
 });
+
+test('pond veto: not beside a hole or water', () => {
+    const s = plateau([]);
+    s.ys[3][4] = Y0 - 1; // a hole dug at E0 N1
+    assert.equal(veto(s, 'pond', cellName(3, 3), 'water_bucket'), 'beside-hole');
+    assert.equal(veto(s, 'pond', cellName(2, 3), 'water_bucket'), null);
+    s.grid[6][6] = 'W';
+    assert.equal(veto(s, 'pond', cellName(6, 5), 'water_bucket'), 'beside-hole');
+});
+
+test('failed steps: banned on that cell, then stops after max_bad in a row', async () => {
+    const carry = [{ item: 'hoe', count: 1 }, { item: 'water_bucket', count: 1 }, { item: 'wheat_seeds', count: 3 }];
+    const { deps, calls, bot, said } = setupV2(Array(40).fill(reply('pond', 'W1 N1', 'water_bucket')),
+        { situation: plateau(carry), task: { max_steps_open: 40 } });
+    deps.act = async (action, target, item) => { calls.act.push([action, target, item]); return false; };
+    const c = await farmWithLaya(bot, { crop: 'any' }, deps);
+    assert.equal(c.reason, 'stuck');
+    assert.equal(calls.act.filter(([a, t]) => a === 'pond' && t === 'W1 N1').length, 1, 'the failed cell is not tried again');
+    assert.equal(calls.act.length, 6, 'max_bad failed steps in a row');
+    assert.equal(new Set(calls.act.map(([, t]) => t)).size, 6, 'each on another cell');
+    assert.match(said.at(-1), /keep failing to pond/);
+});
+
+test('vetoed steps: banned, the rules answer instead', async () => {
+    const { deps, calls, bot } = setup([reply('till', 'E0 S0', 'hoe'), reply('till', 'E0 S0', 'hoe'), reply('till', 'E0 S0', 'hoe')]);
+    const c = await farmWithLaya(bot, 60000, deps);
+    assert.deepEqual(c.vetoes, { 'not-tillable': 1 }, 'vetoed once, then banned');
+    assert.equal(calls.act.length, 2, 'the rules act instead');
+});
