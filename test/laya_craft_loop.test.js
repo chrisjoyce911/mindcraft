@@ -114,3 +114,19 @@ test('settle: waits for the crafted items to show, then a quiet time', async () 
     assert.equal(await settle(() => false, { ms: 500, sleep }), false, 'gives up after ms');
     assert.equal(t, 650);
 });
+
+test('a failed extra step after the goal is carried still counts as done (director-b recheck 22:05)', async () => {
+    // the stone pickaxe is made, then the model asks for planks and that fails
+    const w = fakeWorld({ cobblestone: 109, stick: 2, oak_log: 1 }, { near: { table: true }, script: [answer('craft', 'stone_pickaxe', 1), answer('craft', 'planks', 1)] });
+    w.deps.act.craft = async (g, t) => {
+        w.calls.push(['craft', g, t]);
+        if (g === 'stone_pickaxe') { w.inv.cobblestone -= 3; w.inv.stick -= 2; w.inv.stone_pickaxe = 1; return true; }
+        return false;
+    };
+    const r = await runCraft('stone_pickaxe', 1, w.deps);
+    assert.deepEqual(r, { ok: true, reason: 'done', steps: 2 });
+    // without the goal carried, a failed step still fails
+    const w2 = fakeWorld({ cobblestone: 1 }, { script: [answer('craft', 'planks', 1)] });
+    w2.deps.act.craft = async () => false;
+    assert.equal((await runCraft('stone_pickaxe', 1, w2.deps)).ok, false);
+});

@@ -542,3 +542,27 @@ test('headingToward and a surface mine facing the ore in sight', async () => {
     assert.deepEqual(s.calls.moves[0], [-1, 59, 0], 'the staircase goes down towards the ore');
     assert.equal(r.ok, true, 'and collects it from the mine');
 });
+
+test('mine memory: the blocks andy dug mark his mine; solid again (a reset world) means gone', async () => {
+    let saved = [];
+    const store = { find: () => saved[0] || null, save: rec => { saved = [rec]; }, forget: () => { saved = []; } };
+    let s = v2({ y: 60, steps: 3 });
+    s.deps.mines = store;
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(saved[0].dug.length, 3, 'the first 3 blocks dug');
+    const marks = saved[0].dug;
+    // a reset world where the first stair cell happens to be open air, but andy's dug blocks are stone
+    s = v2({ y: 60, steps: 1, blocks: { '1,59,0': 'air', '1,60,0': 'air' } });
+    s.deps.mines = store;
+    for (const c of marks) if (!(c.x === 1 && (c.y === 59 || c.y === 60))) s.w.m.set(`${c.x},${c.y},${c.z}`, 'stone');
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.reused, false);
+    assert.match(s.calls.chat[0], /iron mine starts at/);
+});
+
+test('ensurePickaxe trusts the inventory, not the craft report', async () => {
+    const s = v2({ y: 20, steps: 1, inv: { torch: 5, cobblestone: 10 } });
+    s.deps.craft = async item => { s.inventory[item] = 1; return false; }; // made it, reported failure
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.notEqual(r.reason, 'needs a stone_pickaxe');
+});

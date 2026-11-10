@@ -275,7 +275,8 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     };
     const ensurePickaxe = async () => {
         if (pickTier(deps.inventory()) >= ore.tier) return true;
-        return await craft(TIER_PICKAXE[ore.tier], 1) && pickTier(deps.inventory()) >= ore.tier;
+        await craft(TIER_PICKAXE[ore.tier], 1);
+        return pickTier(deps.inventory()) >= ore.tier; // the inventory decides, not the craft's report
     };
     const finish = (ok, reason) => {
         record();
@@ -360,7 +361,10 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             const e = reused.entrance;
             const probe = createPlan({ ...e, heading: reused.heading }, ore, { ...planOpts, surface: !!reused.surface });
             const open = c => ['A', 'O'].includes(cellOf(deps.blockAt(c.x, c.y, c.z), [])) && cellOf(deps.blockAt(c.x, c.y + 1, c.z), []) === 'A';
-            if (!probe.skipDug(open, 1)) {
+            // the blocks andy dug for it must be air (a reset world, a filled
+            // mine: gone); older records without them: the first plan cell
+            const dugGone = reused.dug?.length && reused.dug.some(c => cellOf(deps.blockAt(c.x, c.y, c.z), []) !== 'A');
+            if (dugGone || (!reused.dug?.length && !probe.skipDug(open, 1))) {
                 logStep({ reuse: e, outcome: 'gone' });
                 deps.mines.forget?.(e);
                 reused = null;
@@ -563,7 +567,13 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             const detour = s.plan && action !== s.plan;
             const { dig, target, dir } = cellsToDig(view, action);
             ok = true;
-            for (const c of dig) ok = await deps.dig(...worldCell(bx, by, bz, c)) && ok;
+            for (const c of dig) {
+                const w = worldCell(bx, by, bz, c);
+                const dugIt = await deps.dig(...w);
+                ok = dugIt && ok;
+                // the first blocks dug mark the mine as andy's (mine memory)
+                if (dugIt && plan && mineRec && (mineRec.dug ||= []).length < 3) mineRec.dug.push({ x: w[0], y: w[1], z: w[2] });
+            }
             if (ok) ok = await deps.moveTo(...worldCell(bx, by, bz, target));
             if (ok) { heading = dir; dark++; if (plan) addMineCell(feetOf()); }
             if (detour) {
