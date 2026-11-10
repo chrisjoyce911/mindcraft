@@ -413,8 +413,16 @@ test('v2: never steps onto a drop; two floor vetoes on the staircase start the l
     const blocks = {};
     for (let x = 1; x <= 4; x++) for (let z = -3; z <= 3; z++) for (let y = 50; y <= 57; y++) blocks[`${x},${y},${z}`] = "air";
     s = v2({ y: 60, steps: 4, blocks });
-    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
-    assert.equal(r.counters.rules['stop-descent'], 1);
+    let r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.counters.rules['stop-descent'], undefined, 'above the iron band: no level at Y 59');
+    assert.ok(r.counters.rules['shift-stair'] >= 1, 'the staircase shifts and goes on down');
+    // inside the band (coal from Y 60, a short grid, then the staircase between levels over a hollow)
+    const hollow = {};
+    for (let x = 4; x <= 9; x++) for (let z = -3; z <= 3; z++) for (let y = 50; y <= 57; y++) hollow[`${x},${y},${z}`] = 'air';
+    s = v2({ y: 60, steps: 30, blocks: hollow });
+    Object.assign(s.deps.task, { main_length: 3, branch_every: 3, branch_length: 1 });
+    r = await mineWithLaya(s.bot, 'coal', 1, s.deps);
+    assert.equal(r.counters.rules['stop-descent'], 1, 'in the band: the level starts over the hollow');
 });
 
 test('mine memory: nearestMine, upsertMine, mineStore', async () => {
