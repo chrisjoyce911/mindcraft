@@ -67,7 +67,14 @@ The user's first trial was a savanna plateau far from water: every cell was `L` 
 
 ## Unloading (v2)
 
-With a home chest known (`!rememberHere("home_chest")` next to the chest) the bot unloads when the model is sure Unload is true, or the rule says so when it isn't sure (laya-go `pack.Unload`: free ≤ 2; free ≤ 6 with home within 24; 4+ valuables when hurt, hungry or among 2+ mobs), and always when no slot is free. It walks to the chest, puts in everything except tools, buckets, bone meal, food and up to `keep_seeds` (16) of each seed (carrots and potatoes count as seeds; wheat and beetroot all go), walks back to where it was farming and carries on. With a full pack and no home chest it says so once.
+**Setting the home chest** (`src/agent/laya/home_chest.js`), the chest block's exact position saved as `home_chest`:
+- `!setHomeChest`: the chest (chest, trapped chest or barrel) nearest the player who spoke last, within 8 blocks;
+- in chat, "andy this is your chest" (the command game's `home` command) runs `!setHomeChest`: "That's my chest now.";
+- a sign with the bot's name on or next to a chest within 32 blocks: when no home chest is saved, the bot adopts it and says so.
+
+A full home chest spills into the chests touching it (the other half of a double chest, chests beside, above or below).
+
+With a home chest known the bot unloads when the model is sure Unload is true, or the rule says so when it isn't sure (laya-go `pack.Unload`: free ≤ 2; free ≤ 6 with home within 24; 4+ valuables when hurt, hungry or among 2+ mobs), and always when no slot is free. It walks to the chest, puts in everything except tools, buckets, bone meal, food and up to `keep_seeds` (16) of each seed (carrots and potatoes count as seeds; wheat and beetroot all go), walks back to where it was farming and carries on. With a full pack and no home chest it says so once.
 
 ## Safety
 

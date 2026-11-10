@@ -1,6 +1,16 @@
 import * as skills from '../library/skills.js';
 import settings from '../settings.js';
 import { parseGoal as parseFarmGoal } from '../laya/farm.js';
+import { nearestChestTo } from '../laya/pack_actions.js';
+
+// homeChestAdopter lets a Laya task save a chest marked by a sign with the
+// bot's name as the home chest (when none is saved), telling the player.
+function homeChestAdopter(agent) {
+    return {
+        remember: c => agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z),
+        say: msg => agent.openChat(msg),
+    };
+}
 import convoManager from '../conversation.js';
 
 
@@ -151,7 +161,7 @@ export const actionsList = [
             const progress = { harvested: 0 }; // kept across resumes after a fight
             return runLayaAction('layaFarm', () => () => skills.farmWithLayaModel(agent.bot,
                 { crop: goal.crop, count: goal.count, progress, minutes: end == null ? null : Math.max(0.1, (end - Date.now()) / 60000) },
-                () => agent.memory_bank.recallPlace('home_chest')))(agent);
+                () => agent.memory_bank.recallPlace('home_chest'), homeChestAdopter(agent)))(agent);
         }
     },
     {
@@ -200,6 +210,18 @@ export const actionsList = [
         perform: runAsAction(async (agent, distance) => {
             await skills.moveAway(agent.bot, distance);
         })
+    },
+    {
+        name: '!setHomeChest',
+        description: 'Make the chest next to the player who spoke last (or next to you) your home chest, where Laya mining and farming empty a full pack.',
+        perform: async function (agent) {
+            const speaker = agent.last_speaker && agent.bot.players?.[agent.last_speaker]?.entity;
+            const at = (speaker || agent.bot.entity).position;
+            const c = nearestChestTo(agent.bot, at);
+            if (!c) return "I can't see a chest near you.";
+            agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z);
+            return `Home chest set at ${c.x} ${c.y} ${c.z}.`;
+        }
     },
     {
         name: '!rememberHere',

@@ -35,7 +35,9 @@ The model answers five questions:
 | come | `!goToPlayer(speaker, 2)` |
 | stop / stay | `!stop` / `!stay(-1)` |
 | gather | `!layaGather(item, n)`, or `!collectBlocks` without the craft task's commands. No count said: 8. |
-| mine | `!layaMine(item, n)` if it exists, else `!layaGather`, else `!collectBlocks(ore block)`. No count: 4. |
+| mine | `!layaMine(ore, n)` for an ore (`iron`, `coal`, …) if it exists, else `!layaGather`, else `!collectBlocks(ore block)`. No count: `!layaMine(ore)` (until stopped) when `!layaMine`'s count is optional, else 4. |
+| farm | (v2) `!layaFarm(crop, n)`; no count: `!layaFarm(crop)`, farming until stopped; no crop: `"any"`. Without `!layaFarm`: the LLM. |
+| home | `!setHomeChest`: the chest next to the speaker becomes the home chest; "That's my chest now." (or why not) |
 | craft | `!layaCraft(item, n)`, else `!craftRecipe`. A tool without a tier: the best tier the inventory allows. |
 | give | `!givePlayer(speaker, item, n)` with the largest matching carried stack. "All" gives the whole stack; "everything" gives every stack. Asking for more than it has gives what it has ("I only have 3 bread"). Not carried: "I don't have any …". |
 | attack | `!attack(mob)`; "defend me" / "kill it" attacks the nearest hostile mob |
@@ -58,6 +60,7 @@ Every decision is logged to `bots/<name>/logs/laya-command.jsonl`: the state, th
 |---|---|---|
 | `enabled` | false | off: every message goes to the LLM as before |
 | `server`, `model` | `golaya`, `command-a` | |
+| `prompt` | `v1` | `v2` adds the `farm` command and the crop items (`carrots`, `potatoes`, `beetroot`): use it with a command v2 model |
 | `timeout_ms` | 500 | |
 | `min_confidence` | 0.6 | Command's top probability needed to act |
 | `addressed_min`, `ignore_below` | 0.5, 0.15 | see above |

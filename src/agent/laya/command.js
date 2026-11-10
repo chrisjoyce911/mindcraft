@@ -10,7 +10,7 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { state, QUESTIONS, resolve, carried, FOODS, NONE } from './command_state.js';
+import { state, questionsFor, resolve, carried, FOODS, NONE } from './command_state.js';
 
 export const DEFAULTS = {
     min_confidence: 0.6,   // Command's top probability to act on it
@@ -22,6 +22,7 @@ export const DEFAULTS = {
     mine_count: 4,
     craft_count: 1,
     farm_max: 640,         // the most a farm count asks for
+    prompt: 'v1',          // v2: the farm command and crops (a command v2 model)
     no_llm: false,         // true: reply with a canned line instead of asking the LLM
     log_decisions: true,
 };
@@ -56,6 +57,8 @@ function countOf(answer, fallback) {
 
 // plan turns a decide() result into what to do:
 //   {kind: 'run', lines: [...], say}  run these command lines in order
+//                                    (confirm {when, say}: say that instead
+//                                    of a result matching when)
 //   {kind: 'reply', text}             answer without a command
 //   {kind: 'llm', reason}             let the LLM handle the message
 //   {kind: 'ignore'}                  the message is for someone else
@@ -116,6 +119,9 @@ export function plan(r, ctx) {
             const n = Math.min(o.farm_max, countOf(count, o.farm_max));
             return run([`!layaFarm(${q(crop)}, ${n})`], `Farming until I've harvested ${n} ${what}.`);
         }
+        case 'home': // "this is your chest": the chest by the speaker
+            if (!has('!setHomeChest')) return { kind: 'llm', reason: 'no-home-command' };
+            return { kind: 'run', lines: ['!setHomeChest'], confirm: { when: /^Home chest set/, say: "That's my chest now." } };
         case 'craft': {
             if (item === NONE) return { kind: 'reply', text: "I don't know how to make that." };
             const n = Math.min(64, countOf(count, o.craft_count));
@@ -176,7 +182,7 @@ export async function handleCommand(message, deps) {
     const o = { ...DEFAULTS, ...(deps.task || {}) };
     const text = state(deps.bot.username, deps.speaker, message);
     if (!text) return false;
-    const r = await deps.client.decide('command', text, QUESTIONS);
+    const r = await deps.client.decide('command', text, questionsFor(o.prompt));
     const carry = carried(deps.bot);
     const p = plan(r, { speaker: deps.speaker, carry, has: deps.has, arity: deps.arity, nearestHostile: deps.nearestHostile, opts: o });
     const entry = { state: text, kind: p.kind, reason: p.reason, lines: p.lines, ms: r?.ms };
@@ -196,7 +202,9 @@ export async function handleCommand(message, deps) {
             if (p.say) deps.say(p.say);
             for (const line of p.lines) {
                 const res = await deps.execute(line);
-                if (res) deps.say(res);
+                // confirm: a short reply instead of the command's own when it worked
+                if (res && p.confirm?.when.test(res)) deps.say(p.confirm.say);
+                else if (res) deps.say(res);
             }
             return true;
     }

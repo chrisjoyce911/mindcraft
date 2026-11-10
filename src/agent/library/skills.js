@@ -2368,7 +2368,7 @@ export async function mineOre(bot, ore, count=1) {
     }
 }
 
-export async function farmWithLayaModel(bot, goal=5, homeChest=null) {
+export async function farmWithLayaModel(bot, goal=5, homeChest=null, adopt=null) {
     /**
      * Farm nearby with the Laya "farm" decision model (src/agent/laya/farm.js):
      * harvest, replant, till, water, bone meal and breed, making a hoe, seeds
@@ -2378,6 +2378,7 @@ export async function farmWithLayaModel(bot, goal=5, homeChest=null) {
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {number|object} goal, minutes to farm, or {crop, count, minutes}: crop wheat, carrots, potatoes, beetroot or any; count of the crop to harvest (null: until stopped).
      * @param {function} homeChest, optional: returns the home chest's [x, y, z] (the remembered place "home_chest"), or nothing.
+     * @param {object} adopt, optional {remember([x, y, z]), say(msg)}: saves a chest marked by a sign with the bot's name as the home chest when none is saved.
      * @returns {Promise<boolean>} true if farming ran.
      **/
     const task = taskSettings('farm');
@@ -2392,7 +2393,7 @@ export async function farmWithLayaModel(bot, goal=5, homeChest=null) {
     try {
         await farmWithLaya(bot, { crop: g.crop || 'any', count: g.count ?? null, progress: g.progress, ms: g.minutes == null ? null : g.minutes * 60000 }, {
             client: laya, task, ...farmDeps(bot, task.water_radius ?? 64),
-            pack: packDeps(bot, homeChest),
+            pack: packDeps(bot, homeChest, adopt),
             inventory: () => world.getInventoryCounts(bot),
             say: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
             now: () => Date.now(), sleep, log: msg => log(bot, msg),

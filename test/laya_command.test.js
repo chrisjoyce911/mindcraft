@@ -148,3 +148,18 @@ test('plan: farm a count, until stopped, and open-ended mining', () => {
     assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: 'any' }), fixedMine).lines, ['!layaMine("iron", 4)'], 'count required: the default count');
     assert.deepEqual(plan(answer({ command: 'mine', item: 'stone', count: '8' }), ctx({ has: n => n === '!layaMine' })).lines, ['!collectBlocks("stone", 8)'], 'stone is no ore');
 });
+
+test('home command: !setHomeChest, a short reply when it worked', async () => {
+    const homeCtx = ctx({ has: n => n === '!setHomeChest' });
+    const p = plan(answer({ command: 'home' }), homeCtx);
+    assert.deepEqual(p.lines, ['!setHomeChest']);
+    assert.equal(plan(answer({ command: 'home' }), ctx()).kind, 'llm');
+    for (const [result, want] of [['Home chest set at 1 64 2.', "That's my chest now."], ["I can't see a chest near you.", "I can't see a chest near you."]]) {
+        const said = [];
+        await handleCommand('andy this is your chest', {
+            client: { decide: async () => answer({ command: 'home' }) }, task: { log_decisions: false }, bot: { username: 'andy', inventory: { items: () => [] } },
+            speaker: 'chrisjoyce911', has: n => n === '!setHomeChest', execute: async () => result, say: t => said.push(t),
+        });
+        assert.deepEqual(said, [want]);
+    }
+});

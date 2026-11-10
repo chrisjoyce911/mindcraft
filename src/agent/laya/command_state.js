@@ -4,11 +4,13 @@
 // turns the Item kind into a Minecraft item with the bot's inventory.
 // test/laya_command.test.js checks it all against laya-go's fixtures.
 
-export const VERSION = 'v1';
+export const VERSION = 'v1'; // the default; v2 adds farm (settings decision_models.tasks.command.prompt)
 export const MAX_MESSAGE = 120;
 export const NONE = 'none';
 
 export const COMMANDS = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'give', 'attack', 'store', 'eat', 'inventory', 'chat'];
+// COMMANDS_V2: prompt v2's, v1's with farm after mine.
+export const COMMANDS_V2 = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'farm', 'give', 'attack', 'store', 'eat', 'inventory', 'chat'];
 export const TIERS = ['wooden', 'stone', 'iron', 'diamond', NONE];
 export const COUNTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '16', '20', '24', '32', '48', '64', 'all', 'any'];
 export const CROPS = ['wheat', 'carrots', 'potatoes', 'beetroot'];
@@ -65,14 +67,26 @@ export const KINDS = [
     { key: 'wool', gather: 'white_wool', craft: '', carried: suffix('_wool') },
 ];
 
-// ITEMS: the Item question's options (laya-go generate.ItemOptions).
-export const ITEMS = (() => {
-    const o = [...KINDS.map(k => k.key), ...TOOLS, ...ARMOR];
+// KINDS_V2: prompt v2's kinds, v1's and the three new crops.
+export const KINDS_V2 = [...KINDS,
+    { key: 'carrots', gather: 'carrot', craft: '', carried: is('carrot') },
+    { key: 'potatoes', gather: 'potato', craft: '', carried: is('potato') },
+    { key: 'beetroot', gather: 'beetroot', craft: '', carried: is('beetroot') },
+];
+
+const itemOptions = kinds => {
+    const o = [...kinds.map(k => k.key), ...TOOLS, ...ARMOR];
     for (const m of MOBS) if (!o.includes(m)) o.push(m);
     return [...o, NONE];
-})();
+};
 
-const kindOf = key => KINDS.find(k => k.key === key);
+// ITEMS: the Item question's options (laya-go generate.ItemOptions); v2's
+// ITEMS_V2.
+export const ITEMS = itemOptions(KINDS);
+export const ITEMS_V2 = itemOptions(KINDS_V2);
+
+// kindOf: any version's kind (laya-go KindOf).
+const kindOf = key => KINDS_V2.find(k => k.key === key);
 
 // normalize is laya-go's generate.Normalize: lower case, apostrophes
 // dropped, anything but a–z, 0–9 and _ as a space, spaces collapsed, cut to
@@ -107,6 +121,16 @@ export const QUESTIONS = {
     Tier: { criteria: TIERS.slice(), instructions: 'Which tier?', type: 'choice' },
     Count: { criteria: COUNTS.slice(), instructions: 'How many?', type: 'choice' },
 };
+
+// QUESTIONS_V2: prompt v2's (the same wording, v2's options).
+export const QUESTIONS_V2 = {
+    ...QUESTIONS,
+    Command: { ...QUESTIONS.Command, criteria: COMMANDS_V2.slice() },
+    Item: { ...QUESTIONS.Item, criteria: ITEMS_V2.slice() },
+};
+
+// questionsFor returns prompt version v's questions (v1 unless 'v2').
+export const questionsFor = v => (v === 'v2' ? QUESTIONS_V2 : QUESTIONS);
 
 // bestTier: the tier a tool without one is made in (laya-go BestTier).
 export function bestTier(carry) {
