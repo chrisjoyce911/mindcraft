@@ -152,7 +152,8 @@ test('runSuite summarises and stops when the mindserver is gone', async () => {
     const out = await runSuite(session, tests, { defaults, report, onResult: r => seen.push(r.status) });
     assert.deepEqual(seen, ['pass', 'fail', 'error', 'error']);
     assert.match(out.results[3].reason, /not run: .*not reachable/);
-    assert.deepEqual({ ...out.summary, ms: 0 }, { pass: 1, fail: 1, error: 2, skip: 0, ms: 0 });
+    assert.deepEqual({ ...out.summary, ms: 0, share: undefined }, { pass: 1, fail: 1, error: 2, skip: 0, ms: 0, share: undefined });
+    assert.ok(out.summary.share.total);
     assert.match(report.text, /## Summary\n\n1 passed, 1 failed, 2 errors, 0 skipped/);
     assert.deepEqual(report.events.map(e => e.type), ['suite-start', 'test', 'test', 'test', 'suite-end']);
 });

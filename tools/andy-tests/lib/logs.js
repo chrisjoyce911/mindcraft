@@ -4,7 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 
-export const TASKS = ['command', 'craft', 'defend', 'eat', 'farm', 'follow', 'mine'];
+export const TASKS = ['command', 'craft', 'defend', 'director', 'eat', 'farm', 'follow', 'mine'];
 const TAIL_BYTES = 4 * 1024 * 1024; // only the last 4 MB of a big log is read
 
 export function parseLines(text, task) {
