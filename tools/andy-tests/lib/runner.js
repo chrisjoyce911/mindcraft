@@ -10,6 +10,7 @@ import { expand, stepKind, coords, describeStep } from './scenarios.js';
 import { evaluate, describeCheck, blockKey } from './checks.js';
 import { inventoryDiff } from './session.js';
 import { brief } from './logs.js';
+import { modelShare, addShares, shareBrief, shareTable } from './share.js';
 import { brisbane, brisbaneIso, clock } from './time.js';
 
 class StepFailed extends Error {}
@@ -248,6 +249,10 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
 
     const finish = () => {
         result.ms = session.now() - started;
+        if (result.status !== 'skip') {
+            // model share: the model's decisions versus the rules' in the window
+            try { result.share = modelShare(session.logs({ since: ctx.t0, until: session.now(), limit: 0, full: true })); } catch { /* no logs */ }
+        }
         if (result.status !== 'skip' && !result.via) {
             let logs = [];
             try { logs = session.logs({ task: 'command', since: ctx.tAction ?? ctx.t0, limit: 0, full: true }); } catch { /* no logs */ }
@@ -355,11 +360,12 @@ export async function runSuite(session, tests, { defaults = {}, report = null, o
         skip: results.filter(r => r.status === 'skip').length,
         ms: session.now() - started,
     };
+    summary.share = addShares(results.map(r => r.share));
     report?.event({ type: 'suite-end', summary });
     if (report) writeSummary(report, results, summary);
     const table = summaryRows(results);
     if (report?.json) report.json({ started: brisbaneIso(started), finished: brisbaneIso(session.now()), world: session.config.world || 'settings', summary, tests: table });
-    return { summary, results: table.map(({ test, result, seconds, via, command, reason }) => ({ name: test, status: result, seconds, via, command, reason })), report: report?.paths() };
+    return { summary, results: table.map(({ test, result, seconds, via, command, reason, share }) => ({ name: test, status: result, seconds, via, command, reason, share })), report: report?.paths() };
 }
 
 // summaryRows: the machine-readable per-test summary (stable keys, diffed by
@@ -369,6 +375,7 @@ export function summaryRows(results) {
     return results.map(r => ({
         test: r.name, result: r.status, seconds: +((r.ms || 0) / 1000).toFixed(1),
         via: r.via ?? (r.status === 'skip' ? 'skip' : 'none'), ...(r.command ? { command: r.command } : {}), reason: r.reason || '',
+        ...(r.share ? { share: r.share } : {}),
     }));
 }
 
@@ -384,6 +391,7 @@ export function writeTest(report, test, r) {
     if (r.anchor) lines.push(`- Andy at: ${r.anchor.x} ${r.anchor.y} ${r.anchor.z}`);
     lines.push(`- Result: ${r.reason || '—'}`);
     if (r.via) lines.push(`- Via: ${r.via}${r.command ? ` (${r.command})` : ''}`);
+    if (r.share) lines.push(`- Model share: ${shareBrief(r.share)}`);
     if (r.cleanupError) lines.push(`- Cleanup error: ${r.cleanupError}`);
     lines.push('');
     if (r.steps.length) {
@@ -391,6 +399,7 @@ export function writeTest(report, test, r) {
         for (const s of r.steps) lines.push(`| ${s.part} | ${s.at} | \`${s.step.replace(/\|/g, '\\|')}\` | ${(s.error ? `**${s.error}**` : (s.out || []).join(' / ')).replace(/\|/g, '\\|').replace(/\n/g, ' ').slice(0, 300)} |`);
         lines.push('');
     }
+    if (r.share?.total?.decisions) lines.push('Model share (Laya decisions in the window):', '', shareTable(r.share), '');
     if (r.checks.length) {
         lines.push('Checks:', '');
         for (const c of r.checks) lines.push(`- ${c.ok ? 'ok' : '**FAIL**'} ${c.check}: ${c.reason}`);
@@ -415,8 +424,9 @@ export function writeTest(report, test, r) {
 const fmtInv = (inv = {}, signed = false) => Object.entries(inv).map(([k, v]) => `${k} ${signed && v > 0 ? '+' : ''}${v}`).join(', ') || 'nothing';
 
 function writeSummary(report, results, s) {
-    const lines = [`## Summary`, '', `${s.pass} passed, ${s.fail} failed, ${s.error} errors, ${s.skip} skipped in ${(s.ms / 1000).toFixed(0)}s (finished ${brisbane()}).`, '', '| Test | Result | Seconds | Via | Why |', '|---|---|---|---|---|'];
-    for (const r of results) lines.push(`| ${r.name} | ${r.status.toUpperCase()} | ${((r.ms || 0) / 1000).toFixed(1)} | ${r.via || '—'}${r.command ? ` \`${r.command.replace(/\|/g, '\\|')}\`` : ''} | ${(r.reason || '').replace(/\|/g, '\\|').slice(0, 200)} |`);
+    const lines = [`## Summary`, '', `${s.pass} passed, ${s.fail} failed, ${s.error} errors, ${s.skip} skipped in ${(s.ms / 1000).toFixed(0)}s (finished ${brisbane()}).`, '', '| Test | Result | Seconds | Via | Model share | Why |', '|---|---|---|---|---|---|'];
+    for (const r of results) lines.push(`| ${r.name} | ${r.status.toUpperCase()} | ${((r.ms || 0) / 1000).toFixed(1)} | ${r.via || '—'}${r.command ? ` \`${r.command.replace(/\|/g, '\\|')}\`` : ''} | ${r.share ? shareBrief(r.share) : '—'} | ${(r.reason || '').replace(/\|/g, '\\|').slice(0, 200)} |`);
+    if (s.share) lines.push('', '### Model share, all tests', '', shareTable(s.share));
     report.md(lines.join('\n') + '\n');
 }
 

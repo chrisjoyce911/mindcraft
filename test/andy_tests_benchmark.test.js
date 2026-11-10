@@ -82,7 +82,9 @@ test('runTest records via from laya-command.jsonl, and the summary row has it', 
     assert.equal(r.status, 'pass', r.reason);
     assert.equal(r.via, 'llm');
     assert.match(report.text, /- Via: llm \(chat → LLM\)/);
-    assert.deepEqual(summaryRows([r]), [{ test: 'farm-water', result: 'pass', seconds: +(r.ms / 1000).toFixed(1), via: 'llm', command: 'chat → LLM', reason: r.reason }]);
+    const { share, ...row } = summaryRows([r])[0];
+    assert.deepEqual(row, { test: 'farm-water', result: 'pass', seconds: +(r.ms / 1000).toFixed(1), via: 'llm', command: 'chat → LLM', reason: r.reason });
+    assert.deepEqual(share.tasks.command, { decisions: 1, model: 0, rules: 1, veto: 0, fallback: 1 }, 'the LLM hand-off is a fallback');
 });
 
 test('block check: counted near andy before cleanup; a failed count is a fail', async () => {
@@ -123,7 +125,7 @@ test('runSuite writes the JSON summary; Report names files <name>-<stamp>', asyn
     assert.deepEqual(report.summary.tests.map(t => [t.test, t.result, t.via]), [['a', 'pass', 'direct'], ['b', 'fail', 'direct']]);
     assert.equal(report.summary.summary.pass, 1);
     assert.equal(out.results[1].via, 'direct');
-    assert.match(report.text, /\| Test \| Result \| Seconds \| Via \| Why \|/);
+    assert.match(report.text, /\| Test \| Result \| Seconds \| Via \| Model share \| Why \|/);
 
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'andy-report-'));
     const rep = new Report(dir, { name: 'baseline-v1', now: () => Date.parse('2026-11-10T04:05:06Z') });
