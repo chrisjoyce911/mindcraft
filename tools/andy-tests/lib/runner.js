@@ -140,8 +140,12 @@ export async function runStep(step, ctx) {
                 const st = await s.settleAfterRestart({ watchMs: step.settleMs ?? 10000 });
                 if (st.stopped) out.push(`andy started ${st.saw.join(', ') || 'something'} by himself after the restart: stopped`);
             }
-            // the template has no player data: tester joins in survival
+            // the template has no player data: tester joins in survival. He
+            // left with the old server, so rejoin first (over RCON the
+            // command would find no player).
+            await s.ensureTester();
             const g = await s.serverCommand(`/gamemode creative ${ctx.vars.tester}`, 800);
+            if (g.replies.some(l => /No player was found/i.test(l))) throw new StepFailed(`tester isn't back in the world after the reset: ${g.replies.join(' / ')}`);
             out.push(...g.replies);
             break;
         }

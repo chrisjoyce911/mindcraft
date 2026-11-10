@@ -182,6 +182,11 @@ test('reset step: test world only; andy must come back; tester back in creative'
     assert.ok(b.world.commands.includes('/gamemode creative tester'));
     assert.match(r2.steps[0].out[0], /reset in 9\.0s, andy back in 3\.0s/);
 
+    b.world.onCommand = cmd => (cmd.startsWith('/gamemode') ? ['No player was found'] : []);
+    const r4 = await runTest(b.session, t, { defaults });
+    assert.match(r4.reason, /tester isn't back in the world after the reset: No player was found/);
+    b.world.onCommand = () => [];
+
     b.session.worldReset = () => Promise.resolve({ ms: 9000, andy: { inGame: false, error: 'timed out' } });
     const r3 = await runTest(b.session, t, { defaults });
     assert.equal(r3.status, 'fail');
