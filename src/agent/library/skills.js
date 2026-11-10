@@ -2220,6 +2220,10 @@ async function layaGatherBlocks(bot, g, n) {
     return countOf(bot, g) > before;
 }
 
+// TAKE_IN_BULK: materials the craft task takes at least TAKE_MIN of at once.
+export const TAKE_IN_BULK = new Set(['planks', 'log', 'stick', 'coal', 'charcoal', 'cobblestone']);
+const TAKE_MIN = 8;
+
 function layaCraftDeps(bot) {
     return {
         client: laya,
@@ -2247,7 +2251,9 @@ function layaCraftDeps(bot) {
             craft: async (g, times) => {
                 const before = countOf(bot, g);
                 await craftRecipe(bot, realName(bot, g), times);
-                return countOf(bot, g) > before;
+                // the inventory can show the craft late ("craft stick failed"
+                // with the sticks made): wait for it before calling it failed
+                return countOf(bot, g) > before || await settle(() => countOf(bot, g) > before, { ms: 3000, quiet: 0 });
             },
             smelt: async (g, n) => {
                 const before = countOf(bot, g);
@@ -2269,7 +2275,9 @@ function layaCraftDeps(bot) {
                     name = c.containerItems().find(i => layaGeneric(i.name) === g)?.name ?? g;
                     await c.close();
                 }
-                return await takeFromChest(bot, name, n);
+                // materials in one withdrawal, not one at a time (planks x1 ×4)
+                const bulk = TAKE_IN_BULK.has(g) ? Math.max(n, TAKE_MIN) : n;
+                return await takeFromChest(bot, name, bulk);
             },
             store: async (name, n) => {
                 const total = bot.inventory.items().filter(i => i.name === name).reduce((s, i) => s + i.count, 0);

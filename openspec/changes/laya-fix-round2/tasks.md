@@ -7,7 +7,7 @@
 - [x] 5. Mine memory: save and resume mines; tests.
 - [x] 6. Home chest: block `rememberHere("home_chest")` off a chest, drop a home without a chest; tests.
 - [x] 7. Unload failure backs off (unload_fail_steps 200); ore in sight with room is collected first.
-- [ ] 8. Torches: sticks, plank withdrawal, place back-off.
+- [x] 8. Torches: a craft step waits for a late inventory before failing; materials taken 8 at a time; a failed torch place retries 3 moves on.
 - [ ] 9. Collect filter: open ore below collect_below.
 - [ ] 10. Memory summary without finished requests.
 - [ ] 11. `npm test` passes; merged into `laya-follow`.

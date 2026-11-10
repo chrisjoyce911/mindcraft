@@ -43,13 +43,13 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug, cellOf,
+import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug, cellOf, TORCH_EVERY,
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
     keep_blocks: 32, unload_retry_steps: 50, unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4,
-    walk_restart: 2, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
+    walk_restart: 2, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
@@ -531,7 +531,9 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             const [dx, dz] = OFFSET[{ N: 'S', S: 'N', E: 'W', W: 'E' }[heading]];
             for (const [x, z] of [[dx, dz], ...Object.values(OFFSET)]) if (view[FEET][2 + z][2 + x] === 'A') spots.push([x, 0, z, 'bottom']);
             for (const [x, y, z, on] of spots) if ((ok = await deps.place('torch', bx + x, by + y, bz + z, on))) break;
-            if (ok) dark = 0;
+            // placed: dark again from 0; failed: try again a few moves on,
+            // not at once in the same spot
+            dark = ok ? 0 : Math.min(dark, TORCH_EVERY - opts.torch_place_retry);
         } else if (kind === 'block') {
             const item = THROWAWAY.find(n => (deps.inventory()[n] || 0) > 0);
             ok = !!item;

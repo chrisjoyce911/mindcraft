@@ -472,3 +472,12 @@ test('v2: ore in sight with room in the pack is collected before unloading; a fa
     assert.equal(s.calls.home.length, 1);
     assert.ok(s.calls.moves.length > 5, 'mining went on');
 });
+
+test('a failed torch place waits a few moves before trying again', async () => {
+    const s = v2({ y: 20, steps: 14, inv: { stone_pickaxe: 1, torch: 5, cobblestone: 10 } });
+    s.deps.place = async (item, x, y, z, on) => { s.calls.placed.push([item, x, y, z, on]); return false; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    // 8 moves, a failed torch, 3 moves, a failed torch, 2 moves
+    assert.equal(r.counters.steps.torch, 2);
+    assert.equal(r.counters.steps.tunnel, 12);
+});
