@@ -148,6 +148,17 @@ export function canMakeTorches(inv) {
     return fuel > 0 && wood;
 }
 
+// openSky reports whether nothing solid is above feet (up to 64 blocks):
+// the mine starts at the surface, so the staircase goes surface_depth down
+// before any branch.
+export function openSky(blockAt, f, height = 64) {
+    for (let dy = 2; dy <= height; dy++) {
+        const b = blockAt(f.x, f.y + dy, f.z);
+        if (b && b.boundingBox !== 'empty') return false;
+    }
+    return true;
+}
+
 // worldCell turns a view cell [layer, dx, dz] into world coordinates.
 const worldCell = (bx, by, bz, [l, dx, dz]) => [bx + dx, by + FEET - l, bz + dz];
 
@@ -253,7 +264,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
 
     if (v2) {
         const f = feetOf();
-        plan = createPlan({ ...f, heading }, ore, planOpts);
+        plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface: openSky(deps.blockAt, f) });
         const msg = `The ${oreName} mine starts at ${f.x} ${f.y} ${f.z}, heading ${heading}.`;
         deps.log?.(msg);
         deps.chat?.(msg);
@@ -301,7 +312,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
                         // can't get back (e.g. down a hole after ore): the
                         // mine starts again from here
                         const f = feetOf();
-                        plan = createPlan({ ...f, heading }, ore, planOpts);
+                        plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface: openSky(deps.blockAt, f) });
                         walkFails = 0; failures = 0; offPlan = 0;
                         counters.restarts = (counters.restarts || 0) + 1;
                         logStep({ restart: f, outcome: 'restarted' });
