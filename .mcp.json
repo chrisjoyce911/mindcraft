@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "andy": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["tools/andy-tests/mcp.js"],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,986 @@
+{
+  "defaults": {
+    "timeout": 120000,
+    "grace": 6000,
+    "settle": 3000
+  },
+  "tests": [
+    {
+      "name": "setup-world",
+      "tags": [
+        "quick",
+        "full",
+        "setup"
+      ],
+      "timeout": 30000,
+      "description": "Puts tester beside andy in creative and locks the world to clear daytime. Also proves tester can run commands (cheats on).",
+      "action": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/gamemode creative {tester}"
+        },
+        {
+          "cmd": "/time set day"
+        },
+        {
+          "cmd": "/gamerule doDaylightCycle false"
+        },
+        {
+          "cmd": "/weather clear"
+        },
+        {
+          "cmd": "/gamerule doWeatherCycle false"
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Set the time"
+        },
+        {
+          "type": "serverReply",
+          "match": "doDaylightCycle.*false|now set to"
+        }
+      ]
+    },
+    {
+      "name": "follow",
+      "tags": [
+        "quick",
+        "full",
+        "follow"
+      ],
+      "timeout": 90000,
+      "requires": [],
+      "description": "Chat \"andy follow me\", tester walks 12 blocks east; andy must start following and end within 5 blocks of tester, having moved 6+ blocks.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        }
+      ],
+      "action": [
+        {
+          "say": "andy follow me"
+        },
+        {
+          "waitFor": {
+            "action": "followPlayer"
+          },
+          "timeout": 30000
+        },
+        {
+          "walk": {
+            "dx": 12
+          }
+        },
+        {
+          "wait": 8000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "actionSeen",
+          "match": "followPlayer"
+        },
+        {
+          "type": "near",
+          "max": 5
+        },
+        {
+          "type": "position",
+          "axis": "dist",
+          "min": 6
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop"
+        }
+      ]
+    },
+    {
+      "name": "craft-wooden-pickaxe",
+      "tags": [
+        "quick",
+        "full",
+        "craft"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "Andy with only 3 oak logs is asked in chat for a wooden pickaxe: he makes planks, sticks, a crafting table and the pickaxe.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} oak_log 3"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy make a wooden pickaxe"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "wooden_pickaxe",
+          "min": 1
+        },
+        {
+          "type": "idle"
+        }
+      ]
+    },
+    {
+      "name": "craft-stone-pickaxe",
+      "tags": [
+        "quick",
+        "full",
+        "craft"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "With 2 oak logs, 3 cobblestone and a crafting table, chat \"andy make a stone pickaxe\".",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} oak_log 2"
+        },
+        {
+          "cmd": "/give {andy} cobblestone 3"
+        },
+        {
+          "cmd": "/give {andy} crafting_table 1"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy make a stone pickaxe"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "stone_pickaxe",
+          "min": 1
+        },
+        {
+          "type": "idle"
+        }
+      ]
+    },
+    {
+      "name": "craft-furnace",
+      "tags": [
+        "quick",
+        "full",
+        "craft"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "With 8 cobblestone and a crafting table, chat \"andy make a furnace\".",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} cobblestone 8"
+        },
+        {
+          "cmd": "/give {andy} crafting_table 1"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy make a furnace"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "furnace",
+          "min": 1
+        },
+        {
+          "type": "idle"
+        }
+      ]
+    },
+    {
+      "name": "home-chest-sign",
+      "tags": [
+        "full",
+        "home"
+      ],
+      "timeout": 120000,
+      "requires": [
+        "farm"
+      ],
+      "description": "A chest 3 blocks east with a sign saying andy beside it. Starting a farm job makes andy look for a signed chest and adopt it. Only works while andy has NO home chest saved (a fresh start with load_memory false), so it runs before the other home chest tests.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} chest"
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z+1} oak_sign{front_text:{messages:[\"{andy}\",\"\",\"\",\"\"]}}"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaFarm(\"wheat\", 1)"
+        },
+        {
+          "waitReply": "Found my name on a sign",
+          "timeout": 60000
+        },
+        {
+          "andy": "!stop"
+        }
+      ],
+      "grace": 2000,
+      "checks": [
+        {
+          "type": "reply",
+          "match": "chest at {x+3} {y} {z} is my home chest"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z+1} air"
+        }
+      ]
+    },
+    {
+      "name": "home-chest-command",
+      "tags": [
+        "quick",
+        "full",
+        "home"
+      ],
+      "timeout": 30000,
+      "grace": 2000,
+      "description": "A chest 3 blocks east of andy, tester beside it; !setHomeChest from tester saves that chest.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} chest"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!setHomeChest"
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "Home chest set at {x+3} {y} {z}"
+        }
+      ]
+    },
+    {
+      "name": "home-chest-chat",
+      "tags": [
+        "quick",
+        "full",
+        "home"
+      ],
+      "timeout": 30000,
+      "grace": 2000,
+      "requires": [
+        "command"
+      ],
+      "description": "A chest 3 blocks west of andy, tester beside it; chat \"andy this is your chest\" (command model: home → !setHomeChest).",
+      "setup": [
+        {
+          "tp": {
+            "dx": -2
+          }
+        },
+        {
+          "cmd": "/setblock {x-3} {y} {z} chest"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy this is your chest"
+        },
+        {
+          "waitReply": "my chest now|Home chest set",
+          "timeout": 20000
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "my chest now|Home chest set at {x-3} {y} {z}"
+        }
+      ]
+    },
+    {
+      "name": "farm-water",
+      "tags": [
+        "full",
+        "farm",
+        "slow"
+      ],
+      "timeout": 600000,
+      "grace": 20000,
+      "requires": [
+        "farm",
+        "command"
+      ],
+      "description": "A 9x9 grass patch around andy with a row of 7 ripe wheat on wet farmland 2 blocks south and a water source beside it; andy has a hoe and 16 seeds. Chat \"andy farm wheat 5\": he harvests 5 wheat and stops.",
+      "setup": [
+        {
+          "tp": {
+            "dz": -6
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/fill {x-4} {y-2} {z-4} {x+4} {y-2} {z+4} dirt"
+        },
+        {
+          "cmd": "/fill {x-4} {y-1} {z-4} {x+4} {y-1} {z+4} grass_block"
+        },
+        {
+          "cmd": "/fill {x-4} {y} {z-4} {x+4} {y+3} {z+4} air"
+        },
+        {
+          "cmd": "/fill {x-3} {y-1} {z+2} {x+3} {y-1} {z+2} farmland[moisture=7]"
+        },
+        {
+          "cmd": "/fill {x-3} {y} {z+2} {x+3} {y} {z+2} wheat[age=7]"
+        },
+        {
+          "cmd": "/setblock {x} {y-1} {z+3} water"
+        },
+        {
+          "cmd": "/give {andy} wooden_hoe"
+        },
+        {
+          "cmd": "/give {andy} wheat_seeds 16"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy farm wheat 5"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "wheat",
+          "min": 5
+        },
+        {
+          "type": "reply",
+          "match": "Harvested"
+        },
+        {
+          "type": "log",
+          "task": "farm",
+          "match": "\"harvest\""
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "farm-no-water",
+      "tags": [
+        "full",
+        "farm"
+      ],
+      "timeout": 300000,
+      "requires": [
+        "farm"
+      ],
+      "description": "Andy on a 9x9 grass platform at Y 300 (no water within 64 blocks), a hoe and seeds, no bucket or iron. !layaFarm(\"wheat\", 5) must stop with \"No water near here\".",
+      "setup": [
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/fill {x-4} 299 {z-4} {x+4} 299 {z+4} dirt"
+        },
+        {
+          "cmd": "/fill {x-4} 300 {z-4} {x+4} 300 {z+4} grass_block"
+        },
+        {
+          "cmd": "/fill {x-4} 301 {z-4} {x+4} 304 {z+4} air"
+        },
+        {
+          "cmd": "/tp {andy} {x} 301 {z}"
+        },
+        {
+          "tp": "{x} 301 {z-4}"
+        },
+        {
+          "cmd": "/give {andy} wooden_hoe"
+        },
+        {
+          "cmd": "/give {andy} wheat_seeds 16"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaFarm(\"wheat\", 5)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "No water near here"
+        },
+        {
+          "type": "reply",
+          "match": "Harvested",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/tp {andy} {x} {y} {z}"
+        },
+        {
+          "cmd": "/tp {tester} {x+2} {y} {z}"
+        },
+        {
+          "cmd": "/fill {x-4} 299 {z-4} {x+4} 304 {z+4} air"
+        }
+      ]
+    },
+    {
+      "name": "farm-bucket",
+      "tags": [
+        "full",
+        "farm"
+      ],
+      "timeout": 300000,
+      "requires": [
+        "farm"
+      ],
+      "description": "The same dry sky platform, but andy has a water bucket: he digs a pond (farm log action pond) instead of giving up.",
+      "setup": [
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/fill {x-4} 299 {z-4} {x+4} 299 {z+4} dirt"
+        },
+        {
+          "cmd": "/fill {x-4} 300 {z-4} {x+4} 300 {z+4} grass_block"
+        },
+        {
+          "cmd": "/fill {x-4} 301 {z-4} {x+4} 304 {z+4} air"
+        },
+        {
+          "cmd": "/tp {andy} {x} 301 {z}"
+        },
+        {
+          "tp": "{x} 301 {z-4}"
+        },
+        {
+          "cmd": "/give {andy} wooden_hoe"
+        },
+        {
+          "cmd": "/give {andy} wheat_seeds 16"
+        },
+        {
+          "cmd": "/give {andy} water_bucket"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaFarm(\"wheat\", 1)"
+        },
+        {
+          "waitLog": {
+            "task": "farm",
+            "match": "\"pond\""
+          },
+          "timeout": 180000
+        },
+        {
+          "wait": 3000
+        },
+        {
+          "andy": "!stop"
+        }
+      ],
+      "grace": 2000,
+      "checks": [
+        {
+          "type": "log",
+          "task": "farm",
+          "match": "\"pond\""
+        },
+        {
+          "type": "reply",
+          "match": "No water near here",
+          "none": true
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/tp {andy} {x} {y} {z}"
+        },
+        {
+          "cmd": "/tp {tester} {x+2} {y} {z}"
+        },
+        {
+          "cmd": "/fill {x-4} 299 {z-4} {x+4} 304 {z+4} air"
+        }
+      ]
+    },
+    {
+      "name": "mine-coal",
+      "tags": [
+        "full",
+        "mine",
+        "slow"
+      ],
+      "timeout": 1200000,
+      "grace": 20000,
+      "description": "Chat \"andy go mine coal 5\" with a stone pickaxe, torches and bread: he ends with 5+ more coal. (Coal unloaded into a home chest doesn't show in his inventory.)",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} stone_pickaxe"
+        },
+        {
+          "cmd": "/give {andy} torch 16"
+        },
+        {
+          "cmd": "/give {andy} bread 8"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy go mine coal 5"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "coal",
+          "min": 5
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/tp {andy} {x} {y} {z}"
+        },
+        {
+          "cmd": "/tp {tester} {x+2} {y} {z}"
+        }
+      ]
+    },
+    {
+      "name": "mine-iron-staircase",
+      "tags": [
+        "full",
+        "mine",
+        "slow"
+      ],
+      "timeout": 1800000,
+      "requires": [
+        "mine"
+      ],
+      "description": "!layaMine(\"iron\", 3) with the v2 mine plan: andy announces the entrance, stairs down (Y drops 4+ during the run) and gets 3 raw iron.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} stone_pickaxe"
+        },
+        {
+          "cmd": "/give {andy} torch 32"
+        },
+        {
+          "cmd": "/give {andy} bread 8"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaMine(\"iron\", 3)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "iron mine starts at"
+        },
+        {
+          "type": "position",
+          "axis": "y",
+          "during": "min",
+          "max": -4
+        },
+        {
+          "type": "inventory",
+          "item": "raw_iron",
+          "min": 3
+        },
+        {
+          "type": "log",
+          "task": "mine",
+          "min": 5
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/tp {andy} {x} {y} {z}"
+        },
+        {
+          "cmd": "/tp {tester} {x+2} {y} {z}"
+        }
+      ]
+    },
+    {
+      "name": "unload-home-chest",
+      "tags": [
+        "full",
+        "mine",
+        "home",
+        "slow"
+      ],
+      "timeout": 900000,
+      "requires": [
+        "mine"
+      ],
+      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone (keeping 32) into the chest.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} chest"
+        },
+        {
+          "andy": "!setHomeChest"
+        },
+        {
+          "waitReply": "Home chest set",
+          "timeout": 15000
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} stone_pickaxe"
+        },
+        {
+          "cmd": "/give {andy} torch 16"
+        },
+        {
+          "cmd": "/give {andy} bread 4"
+        },
+        {
+          "cmd": "/give {andy} cobblestone 64",
+          "repeat": 31,
+          "replyMs": 300
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaMine(\"coal\", 2)"
+        },
+        {
+          "waitFor": {
+            "item": "cobblestone",
+            "max": 200
+          },
+          "timeout": 600000
+        },
+        {
+          "wait": 3000
+        },
+        {
+          "andy": "!stop"
+        }
+      ],
+      "grace": 2000,
+      "checks": [
+        {
+          "type": "chest",
+          "at": "{x+3} {y} {z}",
+          "item": "cobblestone",
+          "min": 640,
+          "delta": true
+        },
+        {
+          "type": "inventory",
+          "item": "cobblestone",
+          "max": -640
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/tp {andy} {x} {y} {z}"
+        },
+        {
+          "cmd": "/tp {tester} {x+2} {y} {z}"
+        }
+      ]
+    },
+    {
+      "name": "defend",
+      "tags": [
+        "quick",
+        "full",
+        "defend"
+      ],
+      "timeout": 150000,
+      "description": "Andy follows tester; a husk (a zombie that doesn't burn in the locked daytime) is summoned 5 blocks east of him. He must kill it and go back to following (the interrupted job resumes). Sets difficulty easy.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!followPlayer(\"{tester}\", 3)"
+        },
+        {
+          "waitFor": {
+            "action": "followPlayer"
+          },
+          "timeout": 15000
+        },
+        {
+          "snapshot": "following"
+        },
+        {
+          "anchor": true
+        },
+        {
+          "cmd": "/summon husk {x+5} {y} {z}"
+        },
+        {
+          "waitFor": {
+            "entity": "husk"
+          },
+          "timeout": 10000,
+          "optional": true
+        },
+        {
+          "waitFor": {
+            "entity": "husk",
+            "present": false
+          },
+          "timeout": 90000
+        },
+        {
+          "wait": 6000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Summoned"
+        },
+        {
+          "type": "noEntity",
+          "entity": "husk"
+        },
+        {
+          "type": "actionSeen",
+          "match": "self_defense|defend|attack|mode:",
+          "after": "following"
+        },
+        {
+          "type": "actionSeen",
+          "match": "followPlayer",
+          "final": true
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=husk,distance=..64]"
+        }
+      ]
+    },
+    {
+      "name": "eat",
+      "tags": [
+        "quick",
+        "full",
+        "eat"
+      ],
+      "timeout": 150000,
+      "description": "Andy has 8 bread and a strong hunger effect drains his food; when it falls he eats (auto-eat or the Laya eat model): bread goes down and food ends 15+.",
+      "setup": [
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} bread 8"
+        },
+        {
+          "cmd": "/effect give {andy} hunger 60 100"
+        }
+      ],
+      "action": [
+        {
+          "waitFor": {
+            "stat": "hunger",
+            "max": 16
+          },
+          "timeout": 60000
+        },
+        {
+          "cmd": "/effect clear {andy} hunger"
+        },
+        {
+          "snapshot": "hungry"
+        },
+        {
+          "waitFor": {
+            "item": "bread",
+            "max": 7
+          },
+          "timeout": 60000
+        },
+        {
+          "wait": 4000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "bread",
+          "max": -1
+        },
+        {
+          "type": "stat",
+          "field": "hunger",
+          "min": 15
+        }
+      ],
+      "cleanup": [
+        {
+          "cmd": "/effect clear {andy}"
+        }
+      ]
+    }
+  ]
+}
