@@ -112,12 +112,19 @@ const settings = {
             "mine": {
                 "enabled": false,      // off: !layaMine collects the nearest ore blocks
                 "server": "golaya",
-                "model": "mine-a",
+                "model": "mine-p",     // a mine prompt v2 model (mine-a is v1)
+                "prompt": "v2",        // v2 follows the mine plan below and unloads at home; v1 roams (mine-a)
                 "timeout_ms": 300,
                 "min_confidence": 0.4,
-                "max_steps": 300,      // steps before giving up
+                "max_steps": 2000,     // steps before giving up (300 suits v1)
                 "max_failures": 4,     // failed steps in a row before giving up
                 "torch_batch": 4,      // torches crafted when they run out
+                "main_length": 32,     // v2 plan: main tunnel length at each level
+                "branch_every": 3,     // a branch each side every 3 blocks of the main tunnel
+                "branch_length": 16,   // each branch's length
+                "level_gap": 4,        // the staircase goes this far down between levels
+                "next_shaft": 40,      // below the ore's band, a new column this far to the right climbs back up
+                "keep_blocks": 32,     // throwaway blocks kept when emptying the pack into the home chest ("home_chest" place)
                 "log_steps": true      // bots/<name>/logs/laya-mine.jsonl
             },
             "command": {

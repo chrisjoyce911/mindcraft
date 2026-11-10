@@ -2303,15 +2303,17 @@ export async function craftForTask(bot, item, count) {
     return !!(await craftRecipe(bot, item, count));
 }
 
-export async function mineOre(bot, ore, count=1) {
+export async function mineOre(bot, ore, count=1, homeChest=null) {
     /**
      * Mine until count more of an ore's drop is collected, finding the ore
-     * underground with the Laya mine task (stairs down to the ore's height,
-     * branch tunnels, torches, blocking lava) and crafting the pickaxe and
-     * torches it needs. Without the task it collects the nearest ore blocks.
+     * underground with the Laya mine task (a staircase down to the ore's
+     * height and a branch mine there, torches, blocking lava) and crafting the
+     * pickaxe and torches it needs. Without the task it collects the nearest
+     * ore blocks.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {string} ore, one of coal, copper, iron, lapis, gold, redstone, diamond.
      * @param {number} count, how many of the ore's drop to collect.
+     * @param {function} homeChest, optional: returns the home chest's [x, y, z] (the remembered place "home_chest"), or nothing.
      * @returns {Promise<boolean>} true if it collected them.
      **/
     const info = MINE_ORES[ore];
@@ -2345,9 +2347,9 @@ export async function mineOre(bot, ore, count=1) {
                 if (!b || b.boundingBox === 'empty') return true;
                 return await breakBlockAt(bot, x, y, z);
             },
-            moveTo: async (x, y, z) => {
+            moveTo: async (x, y, z, ms = 4000) => {
                 const goal = new pf.goals.GoalBlock(x, y, z);
-                const timeout = sleep(4000).then(() => { throw new Error('timeout'); });
+                const timeout = sleep(ms).then(() => { throw new Error('timeout'); });
                 try {
                     await Promise.race([bot.pathfinder.goto(goal), timeout]);
                 } catch {
@@ -2356,7 +2358,18 @@ export async function mineOre(bot, ore, count=1) {
                 const p = bot.entity.position;
                 return Math.floor(p.x) === x && Math.floor(p.z) === z && Math.abs(Math.floor(p.y) - y) <= 1;
             },
-            place: (item, x, y, z) => placeBlock(bot, item, x, y, z, 'bottom', true),
+            place: (item, x, y, z, placeOn = 'bottom') => placeBlock(bot, item, x, y, z, placeOn, true),
+            freeSlots: () => bot.inventory.emptySlotCount(),
+            hostiles: () => Object.values(bot.entities).filter(e => e !== bot.entity && mc.isHostile(e) && e.position
+                && e.position.distanceTo(bot.entity.position) <= 16).length,
+            home: () => {
+                const p = typeof homeChest === 'function' ? homeChest() : homeChest;
+                return Array.isArray(p) && p.length === 3 ? { x: p[0], y: p[1], z: p[2] } : null;
+            },
+            goHome: async h => !!(await goToPosition(bot, h.x, h.y, h.z, 2)),
+            deposit: items => depositInChestAt(bot, homeChestBlock(bot, homeChest), items),
+            isFood: name => !!bot.registry.foodsByName?.[name],
+            chat: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
             sleep,
             log: msg => log(bot, msg),
             stepLog: `./bots/${bot.username}/logs/laya-mine.jsonl`,
@@ -2365,6 +2378,46 @@ export async function mineOre(bot, ore, count=1) {
         return r.ok;
     } finally {
         paused.forEach(m => bot.modes.unpause(m));
+    }
+}
+
+// homeChestBlock finds the chest at (or right next to) the remembered home
+// chest position.
+function homeChestBlock(bot, homeChest) {
+    const p = typeof homeChest === 'function' ? homeChest() : homeChest;
+    if (!Array.isArray(p)) return null;
+    const at = new Vec3(Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2]));
+    for (const d of [[0, 0, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]) {
+        const b = bot.blockAt(at.offset(...d));
+        if (b && (b.name === 'chest' || b.name === 'trapped_chest' || b.name === 'barrel')) return b;
+    }
+    return world.getNearestBlock(bot, 'chest', 6);
+}
+
+// depositInChestAt puts the listed items ([{name, count}]) in a chest block.
+async function depositInChestAt(bot, chest, items) {
+    if (!chest) {
+        log(bot, `There's no chest at the home chest place.`);
+        return false;
+    }
+    let container;
+    try {
+        container = await bot.openContainer(chest);
+        for (const { name, count } of items) {
+            let left = count;
+            for (const item of bot.inventory.items().filter(i => i.name === name)) {
+                const n = Math.min(left, item.count);
+                if (n <= 0) break;
+                await container.deposit(item.type, null, n);
+                left -= n;
+            }
+        }
+        return true;
+    } catch (err) {
+        log(bot, `Couldn't put things in the home chest: ${err.message}`);
+        return false;
+    } finally {
+        container?.close();
     }
 }
 
