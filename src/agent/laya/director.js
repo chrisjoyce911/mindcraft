@@ -34,7 +34,7 @@ export const JOB_KINDS = ['follow', 'come', 'stay', 'mine', 'farm', 'craft', 'ga
 export const KIND_OF = {
     layaMine: 'mine', layaFarm: 'farm', layaCraft: 'craft', layaGather: 'gather',
     followPlayer: 'follow', goToPlayer: 'come', stay: 'stay', givePlayer: 'give', attack: 'attack',
-    putInChest: 'store', setHomeChest: 'home', collectBlocks: 'gather', craftRecipe: 'craft',
+    putInChest: 'store', setHomeChest: 'home', collectBlocks: 'gather', craftRecipe: 'craft', hunt: 'gather',
 };
 
 // SAFETY_MODES: modes that pause the job under them on the stack.
@@ -64,7 +64,7 @@ export class JobStack {
     // command replaces it); returns it.
     start(name, args = [], extra = {}) {
         this.replaceTop();
-        const job = { id: nextId++, name, kind: KIND_OF[name] || null, item: args[0] ?? null, args, type: 'job',
+        const job = { id: nextId++, name, kind: KIND_OF[name] || null, item: (name === 'hunt' ? args[1] : args[0]) ?? null, args, type: 'job',
             state: 'running', startedAt: this.now(), ...extra };
         this.items.push(job);
         this.last = 'none';

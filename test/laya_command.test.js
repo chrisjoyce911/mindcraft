@@ -212,3 +212,63 @@ test('gather beef and kill cow with item none: the message names the animal', as
     await handleCommand('gather stuff', d);
     assert.deepEqual(d.said, ['What should I gather?']);
 });
+
+// ---- prompt v2.1: animal drops, hunting ----
+import { QUESTIONS_V21, ITEMS_V21, huntFor } from '../src/agent/laya/command_state.js';
+const fixture21 = name => JSON.parse(readFileSync(new URL(`./fixtures/laya-command-v21/${name}`, import.meta.url), 'utf8'));
+
+test('golden v2.1 requests: match laya-go byte for byte', () => {
+    for (const [file, msg] of [['request.json', 'Andy, can you craft me 2 iron picks please?'], ['beef_request.json', 'gather beef']]) {
+        const g = fixture21(file);
+        assert.equal(state('andy', 'chrisjoyce911', msg), g.state, file);
+        assert.deepEqual(JSON.parse(JSON.stringify(QUESTIONS_V21)), g.questions, file);
+    }
+    assert.equal(questionsFor('v2.1'), QUESTIONS_V21);
+    assert.equal(questionsFor('v2'), QUESTIONS_V2);
+});
+
+test('v2.1 option lists, resolve and hunt match laya-go', () => {
+    const c = fixture21('resolve_cases.json');
+    assert.deepEqual(COMMANDS_V2, c.commands);
+    assert.deepEqual(ITEMS_V21, c.items);
+    assert.deepEqual(TIERS, c.tiers);
+    assert.deepEqual(COUNTS, c.counts);
+    for (const [input, want] of Object.entries(c.normalize)) assert.equal(normalize(input), want);
+    for (const r of c.resolve) {
+        const carry = (r.carry || []).map(s => ({ item: s.Item, count: s.Count }));
+        assert.equal(resolve(r.command, r.item, r.tier, carry, 'v2.1'), r.want, JSON.stringify(r));
+    }
+    for (const [item, mob] of Object.entries(c.hunt)) assert.equal(huntFor(item), mob, item);
+    // v2 resolves as before
+    const c2 = fixture2('resolve_cases.json');
+    for (const r of c2.resolve) {
+        const carry = (r.carry || []).map(s => ({ item: s.Item, count: s.Count }));
+        assert.equal(resolve(r.command, r.item, r.tier, carry, 'v2'), r.want);
+    }
+});
+
+test('v2.1: a gather of a drop hunts its mob until the count; a mine of a drop is none', async () => {
+    let d = deps(answer({ command: 'gather', item: 'beef', count: '5' }), { task: { prompt: 'v2.1' }, has: n => ['!layaGather', '!hunt'].includes(n) });
+    assert.equal(await handleCommand('get me 5 beef', d), true);
+    assert.deepEqual(d.ran, ['!hunt("cow", "beef", 5)']);
+    d = deps(answer({ command: 'gather', item: 'leather', count: '3' }), { task: { prompt: 'v2.1' } });
+    await handleCommand('kill some cows for leather', d);
+    assert.deepEqual(d.ran, ['!attack("cow")'], 'no !hunt: one attack');
+    d = deps(answer({ command: 'mine', item: 'beef' }), { task: { prompt: 'v2.1' } });
+    await handleCommand('mine beef', d);
+    assert.deepEqual(d.ran, []);
+    assert.match(d.said[0], /What should I mine for/);
+});
+
+test('huntUntil: attacks until the count, stops when none are near or after maxKills', async () => {
+    const { huntUntil } = await import('../src/agent/laya/hunt.js');
+    let beef = 0, cows = 3;
+    let r = await huntUntil(4, { have: () => beef, attack: async () => (cows-- > 0 ? (beef += 2, true) : false) });
+    assert.deepEqual(r, { ok: true, reason: 'done', kills: 2 });
+    r = await huntUntil(10, { have: () => beef, attack: async () => (cows-- > 0 ? (beef += 2, true) : false) });
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, 'none near');
+    r = await huntUntil(2, { have: () => 0, attack: async () => true, maxKills: 3 });
+    assert.equal(r.kills, 3);
+    assert.equal(r.ok, false);
+});
