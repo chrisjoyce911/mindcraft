@@ -566,3 +566,23 @@ test('ensurePickaxe trusts the inventory, not the craft report', async () => {
     const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.notEqual(r.reason, 'needs a stone_pickaxe');
 });
+
+test('pickOre: surface ore under a little cover counts from the mine; the heading faces the nearest ore in 3D', async () => {
+    const { coverAbove } = await import('../src/agent/laya/mine.js');
+    // iron at 162 69 141 under 2 blocks of ground (air from Y 72), the entrance at 172 74 140 (5 above it)
+    const m = { '162,69,141': 'iron_ore' };
+    const blockAt = (x, y, z) => { const n = m[`${x},${y},${z}`] ?? (y >= 72 ? 'air' : 'stone'); return { name: n, boundingBox: n === 'air' ? 'empty' : 'block' }; };
+    const ore = { x: 162, y: 69, z: 141 };
+    assert.equal(coverAbove(blockAt, ore), 2);
+    const opts = { feet: { x: 172, y: 74, z: 140 }, anchor: { x: 172, y: 74, z: 140 }, range: 12, budget: 24, blockAt, below: 4 };
+    assert.deepEqual(pickOre([ore], opts), ore);
+    assert.equal(pickOre([{ x: 162, y: 60, z: 141 }], opts), null, 'deep ore (12 down, buried): left');
+});
+
+test('pickOre: ore under a thin cave roof is not surface ore', () => {
+    // air pocket over the ore at 70-71, rock again from 72 up: a cave, no sky
+    const m = { '162,69,141': 'iron_ore', '162,70,141': 'air', '162,71,141': 'air' };
+    const blockAt = (x, y, z) => { const n = m[`${x},${y},${z}`] ?? 'stone'; return { name: n, boundingBox: n === 'air' ? 'empty' : 'block' }; };
+    const opts = { feet: { x: 172, y: 74, z: 140 }, anchor: { x: 172, y: 74, z: 140 }, range: 12, budget: 24, blockAt, below: 4, belowOpen: 4 };
+    assert.equal(pickOre([{ x: 162, y: 69, z: 141 }], opts), null);
+});

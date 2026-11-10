@@ -126,10 +126,16 @@ export function exposed(blockAt, o) {
 // entrance first), or the one anchor. It returns it or null.
 export function pickOre(ores, { feet, anchor, anchors = null, range, budget, blockAt, below = Infinity, belowOpen = below, skip = () => false }) {
     const cells = anchors?.length ? anchors : [anchor];
+    // under at most `below` blocks of cover (surface ore on a hillside):
+    // reachable by digging down to it from where it lies
+    const shallow = o => {
+        const n = coverAbove(blockAt, o, below + 1);
+        return n <= below && openSky(blockAt, { x: o.x, y: o.y + n - 1, z: o.z }); // sky over the cover, not a cave roof
+    };
     const fromMine = o => cells.some(a => {
         if (dist(a, o) > range) return false;
         const depth = a.y - o.y;
-        return depth <= below || (depth <= belowOpen && exposed(blockAt, o));
+        return depth <= below || (depth <= belowOpen && exposed(blockAt, o)) || shallow(o);
     });
     for (const o of ores) {
         const d = dist(feet, o);
@@ -137,6 +143,18 @@ export function pickOre(ores, { feet, anchor, anchors = null, range, budget, blo
         if (oreSafe(blockAt, feet, o)) return o;
     }
     return null;
+}
+
+// coverAbove counts the solid blocks over o up to the first air (at most
+// max): how deep ore lies under the ground above it.
+export function coverAbove(blockAt, o, max = 9) {
+    let n = 0;
+    while (n < max) {
+        const b = blockAt(o.x, o.y + 1 + n, o.z);
+        if (b && b.boundingBox === 'empty') return n;
+        n++;
+    }
+    return n;
 }
 
 // headingToward is the compass heading from feet towards o along its
@@ -385,7 +403,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             // staircase goes down towards it, so it stays near the mine
             // (else the way andy happens to look)
             const seenOre = !surface ? null : oresNear(SEEN_RANGE).filter(o => oreSafe(deps.blockAt, f, o))
-                .sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0];
+                .sort((a, b) => dist(a, f) - dist(b, f))[0];
             const toward = seenOre && headingToward(f, seenOre);
             if (toward) heading = toward;
             plan = createPlan({ ...f, heading }, ore, { ...planOpts, surface });
