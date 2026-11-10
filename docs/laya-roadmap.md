@@ -32,9 +32,9 @@ Phases (each gated by the strict suite and a live play):
 
 - [x] No LLM: `llm: false`, suite 16/16 without the LLM (fix round 2 + director v1.1 rules).
 - [x] command v2.1 served (command2-v21-c1: 90.8% command, 72.5% unseen, 94.2% item); craft v2.1 served (733).
-- [ ] director-b (mini, v1.1, 4 layers): check ≥ 98% → director-best, served, `tasks.director.enabled: true`, suite, then live play.
-- [ ] mine2-v21-c1 / farm2-v21-c1 (mini): check, serve if better (mine/farm prompt stays v2 text).
-- [ ] command2-v21-c2 / craft2-v21-c2 (Studio): check, serve if better.
+- [x] director-b served (99.2%), `tasks.director.enabled: true`; suite 16/16 with no LLM, director 100% model, ~97% model overall (2026-11-10 23:53). Next: live play.
+- [x] mine v2.1 served (mine2-v21-c2, 56) and farm v2.1 (farm2-v21-c2, 225); c3 passes training on the mini.
+- [x] command2-v21-c3 served (198: 93.5%, unseen 76.7%); craft2-v21-c3 (580); follow-mobs-n2 (1955). Lowest model share: mine-coal 20% (walk-first collect rule steps), farm 75%, follow 88%.
 - [ ] Wiki phrasing bank: fix labels and count wording; full Category:Tutorials overnight when the GPU is free (Ollama shares it).
 - [ ] Gap list → v3 command set (place, withdraw, harvest, smelt, build, search…) for the user to choose.
 - [x] Model share: each test report shows, per task, how many steps the model decided versus rules (`tools/andy-tests/lib/share.js`; reports, .json rows and MCP results).
