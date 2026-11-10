@@ -28,6 +28,19 @@ Phases (each gated by the strict suite and a live play):
 4. **Chores, build, v3 models**: the bot code is sensors + actuators + the loop.
 5. **Learning from play**: in-game outcomes (deaths, lost items, failed jobs, the user's feedback) become training data.
 
+## Work queue (2026-11-10 evening; lead keeps working through it)
+
+- [x] No LLM: `llm: false`, suite 16/16 without the LLM (fix round 2 + director v1.1 rules).
+- [x] command v2.1 served (command2-v21-c1: 90.8% command, 72.5% unseen, 94.2% item); craft v2.1 served (733).
+- [ ] director-b (mini, v1.1, 4 layers): check ≥ 98% → director-best, served, `tasks.director.enabled: true`, suite, then live play.
+- [ ] mine2-v21-c1 / farm2-v21-c1 (mini): check, serve if better (mine/farm prompt stays v2 text).
+- [ ] command2-v21-c2 / craft2-v21-c2 (Studio): check, serve if better.
+- [ ] Wiki phrasing bank: fix labels and count wording; full Category:Tutorials overnight when the GPU is free (Ollama shares it).
+- [ ] Gap list → v3 command set (place, withdraw, harvest, smelt, build, search…) for the user to choose.
+- [ ] Model share: each test report shows, per task, how many steps the model decided versus rules.
+- [ ] Phase 2: switch off Mindcraft modes one by one as the director model covers them.
+- [ ] Weakest-first cycling overnight on the v2.1 confs (follow-mobs first).
+
 ## Now: the current test round
 
 - [ ] mine v2 (`mine-p`: staircase + branch mine, Pack/Unload): served after the strict v1 baseline; in-game run and comparison.
