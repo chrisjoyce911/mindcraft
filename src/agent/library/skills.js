@@ -110,15 +110,17 @@ export async function craftRecipe(bot, itemName, num=1) {
     const craftLimit = mc.calculateLimitingResource(inventory, requiredIngredients);
     
     const times = Math.min(craftLimit.num, num);
-    const before = world.getInventoryCounts(bot)[itemName] || 0;
-    await bot.craft(recipe, times, craftingTable);
-    // The inventory updates a moment after the craft: wait for the result (and
-    // an empty crafting grid) so the next step doesn't read a stale inventory
-    // or start a craft mineflayer stalls on (updateSlot timeout).
-    const want = before + (recipe.result?.count || 1) * times;
-    const gridEmpty = () => craftingTable || [0, 1, 2, 3, 4].every(i => !bot.inventory.slots[i]);
-    if (!await settle(() => (world.getInventoryCounts(bot)[itemName] || 0) >= want && gridEmpty()))
-        console.log(`craftRecipe: ${itemName} still short of ${want} after waiting`);
+    // One craft at a time, each followed by a wait for the inventory to show
+    // it: mineflayer's multi-count craft dropped one of three (3 logs gave 8
+    // planks) and left a stale inventory, and the next craft could stall on
+    // its updateSlot timeout.
+    const per = recipe.result?.count || 1;
+    for (let i = 0; i < times; i++) {
+        const before = world.getInventoryCounts(bot)[itemName] || 0;
+        await bot.craft(recipe, 1, craftingTable);
+        if (!await settle(() => (world.getInventoryCounts(bot)[itemName] || 0) >= before + per, { ms: 2000, quiet: 50 }))
+            console.log(`craftRecipe: ${itemName} still short of ${before + per} after waiting`);
+    }
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     if (placedTable) {
