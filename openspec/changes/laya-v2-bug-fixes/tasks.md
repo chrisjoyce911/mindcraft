@@ -9,4 +9,5 @@
 - [x] 7. Mine torches: craft a batch whenever low with materials carried, with back-off; tests.
 - [x] 8. `followPlayer` without a loaded player entity.
 - [x] 9. `npm test` passes.
-- [ ] 10. Full game-test suite on the test world, compared with the v2 and v1 baselines; report in `bots/andy/logs/game-tests/`.
+- [x] 10. Full game-test suite on the test world, compared with the v2 and v1 baselines; report in `bots/andy/logs/game-tests/`.
+- [ ] 11. Open: mine-iron-staircase phase (a) wants the surface iron about 11 blocks away (`collect_range` 8), and the staircase loops detour→walk back when collecting removed the floor of a stair cell (see `v2-bugfix-report-2026-11-10_17-24.md`).
