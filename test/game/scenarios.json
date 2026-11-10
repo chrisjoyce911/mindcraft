@@ -752,7 +752,7 @@
       "requires": [
         "mine"
       ],
-      "description": "!layaMine(\"iron\", 12) with the v2 mine plan, in two phases. The mine site has 7 iron ore within 16 blocks of the entrance (3 at the surface about 11 away, 4 at y 61-62 about 15 away; 13 within 24), far fewer than 12. (a) He collects the iron he can see first: collect steps in laya-mine before the first `down` step. (b) Then, still short, he follows the plan: the \"iron mine starts at\" announcement, 4+ `down` staircase steps done and his Y 4+ below the start. (c) raw_iron reaches 12. The timeout allows the staircase from Y 74 to the iron band (Y 24) and some branch mining.",
+      "description": "!layaMine(\"iron\", 12) with the v2 mine plan, in two phases. The mine site has 7 iron ore within 16 blocks of the entrance (3 at the surface about 11 away, 4 at y 61-62 about 15 away; 13 within 24), far fewer than 12. (a) He collects the iron he can see first (2+ collect steps; 2 surface ore are within collect_range 12 of the stair cell) in laya-mine before the first `down` step. (b) Then, still short, he follows the plan: the \"iron mine starts at\" announcement, 4+ `down` staircase steps done and his Y 4+ below the start. (c) raw_iron reaches 12. The timeout allows the staircase from Y 74 to the iron band (Y 24) and some branch mining.",
       "setup": [
         {
           "reset": true,
@@ -796,8 +796,8 @@
             "action": "/^down/",
             "outcome": "done"
           },
-          "min": 3,
-          "note": "phase (a): the iron in sight is collected before the staircase starts (3 ore lie within 12 of the entrance)"
+          "min": 2,
+          "note": "phase (a): the iron in sight is collected before the staircase starts (2 surface ore lie within collect_range 12 of the stair cell)"
         },
         {
           "type": "reply",
