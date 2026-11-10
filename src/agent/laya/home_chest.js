@@ -16,6 +16,19 @@ export const isSign = b => !!b && /_(wall_|hanging_|wall_hanging_)?sign$/.test(b
 
 const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2;
 
+// isHomeName: a place name meaning the home chest ("home_chest", "Home Chest").
+export const isHomeName = name => /^home[\s_-]*chest$/i.test(String(name || '').trim());
+
+// homeState checks a saved home chest place ([x, y, z]): 'ok' (a chest is
+// there), 'gone' (the block is loaded and isn't a chest) or 'unknown' (not
+// loaded, or no place saved).
+export function homeState(place, blockAt) {
+    if (!place) return 'unknown';
+    const b = blockAt(Math.floor(place[0]), Math.floor(place[1]), Math.floor(place[2]));
+    if (!b) return 'unknown';
+    return isChest(b) ? 'ok' : 'gone';
+}
+
 // nearestChest returns the position of the chest nearest to `at` within
 // range, from chest positions [{x, y, z}], or null.
 export function nearestChest(chests, at, range = SET_RANGE) {

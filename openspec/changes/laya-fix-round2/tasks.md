@@ -5,7 +5,7 @@
 - [x] 3. Mine plan: staircase to at least 10 below the entrance and the ore's best level; tests.
 - [x] 4. Mine safety: rule `heal`; `drop` veto on model and rule moves; tests.
 - [x] 5. Mine memory: save and resume mines; tests.
-- [ ] 6. Home chest: block `rememberHere("home_chest")` off a chest, drop a home without a chest; tests.
+- [x] 6. Home chest: block `rememberHere("home_chest")` off a chest, drop a home without a chest; tests.
 - [ ] 7. Unload failure backs off; collecting goes on.
 - [ ] 8. Torches: sticks, plank withdrawal, place back-off.
 - [ ] 9. Collect filter: open ore below collect_below.

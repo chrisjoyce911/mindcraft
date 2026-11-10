@@ -2,6 +2,7 @@ import * as skills from '../library/skills.js';
 import settings from '../settings.js';
 import { parseGoal as parseFarmGoal } from '../laya/farm.js';
 import { nearestChestTo } from '../laya/pack_actions.js';
+import { isHomeName } from '../laya/home_chest.js';
 
 // homeChestAdopter lets a Laya task save a chest marked by a sign with the
 // bot's name as the home chest (when none is saved), telling the player.
@@ -164,7 +165,7 @@ export const actionsList = [
         perform: runLayaAction('layaMine', (agent, ore, count) => {
             const progress = { done: 0 };
             const work = () => skills.mineOre(agent.bot, ore, Math.max(1, count - progress.done),
-                () => agent.memory_bank.recallPlace('home_chest'), progress);
+                () => agent.homeChest(), progress);
             work.remaining = () => count - progress.done;
             return work;
         })
@@ -184,7 +185,7 @@ export const actionsList = [
             return runLayaAction('layaFarm', () => {
                 const work = () => skills.farmWithLayaModel(agent.bot,
                     { crop: goal.crop, count: goal.count, progress, minutes: end == null ? null : Math.max(0.1, (end - Date.now()) / 60000) },
-                    () => agent.memory_bank.recallPlace('home_chest'), homeChestAdopter(agent));
+                    () => agent.homeChest(), homeChestAdopter(agent));
                 if (goal.count != null) work.remaining = () => goal.count - progress.harvested;
                 return work;
             })(agent, goal.crop, goal.count ?? 'any');
@@ -255,6 +256,13 @@ export const actionsList = [
         params: {'name': { type: 'string', description: 'The name to remember the location as.' }},
         perform: async function (agent, name) {
             const pos = agent.bot.entity.position;
+            if (isHomeName(name)) {
+                // the home chest is only ever a chest: the one nearest me
+                const c = nearestChestTo(agent.bot, pos);
+                if (!c) return "There's no chest here, so I can't make it my home chest. Stand by a chest and use !setHomeChest.";
+                agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z);
+                return `Home chest set at ${c.x} ${c.y} ${c.z}.`;
+            }
             agent.memory_bank.rememberPlace(name, pos.x, pos.y, pos.z);
             return `Location saved as "${name}".`;
         }

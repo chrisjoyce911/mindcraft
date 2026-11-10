@@ -23,6 +23,8 @@ import { Director, KIND_OF, armedOf, armorPoints, dangerOf, HARMFUL } from './la
 import { valuables } from './laya/mine_state.js';
 import { depositList } from './laya/mine.js';
 import { packDeps } from './laya/pack_actions.js';
+import { homeState } from './laya/home_chest.js';
+import Vec3 from 'vec3';
 import { runJob } from './commands/actions.js';
 import { getNearestEntityWhere, getInventoryCounts } from './library/world.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
@@ -650,11 +652,25 @@ export class Agent {
         };
     }
 
+    // homeChest is the saved home chest place ([x, y, z]) when a chest is
+    // still there (or its chunk isn't loaded); a home whose chest is gone is
+    // forgotten, with a word to the players.
+    homeChest() {
+        const h = this.memory_bank.recallPlace('home_chest');
+        if (!h) return undefined;
+        let st = 'unknown';
+        try { st = homeState(h, (x, y, z) => this.bot.blockAt(new Vec3(x, y, z))); } catch { /* not loaded */ }
+        if (st !== 'gone') return h;
+        this.memory_bank.forgetPlace('home_chest');
+        this.openChat(`My home chest at ${Math.floor(h[0])} ${Math.floor(h[1])} ${Math.floor(h[2])} is gone, so I've forgotten it.`);
+        return undefined;
+    }
+
     // _usableHome: the home chest unless unloading there failed lately (then
     // the director sees Home none and goes on with the job).
     _usableHome() {
         if (Date.now() < (this._noUnloadUntil || 0)) return null;
-        const h = this.memory_bank.recallPlace('home_chest');
+        const h = this.homeChest();
         return h ? { x: h[0], y: h[1], z: h[2] } : null;
     }
 
@@ -694,7 +710,7 @@ export class Agent {
         if (activity === 'unload') {
             const home = this._usableHome();
             if (!home) return;
-            const pack = packDeps(bot, () => this.memory_bank.recallPlace('home_chest'));
+            const pack = packDeps(bot, () => this.homeChest());
             let ok = await pack.goHome(home);
             if (ok) {
                 const items = depositList(getInventoryCounts(bot), pack.isFood, 32);

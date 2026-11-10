@@ -46,3 +46,17 @@ test('a full home chest spills into the chests touching it', async () => {
     used.length = 0;
     assert.deepEqual(await depositAll(chests.slice(0, 1), [{ name: 'wheat', count: 3 }], into), [{ name: 'wheat', count: 3 }]);
 });
+
+test('isHomeName and homeState: the home chest must be a chest', async () => {
+    const { isHomeName, homeState } = await import('../src/agent/laya/home_chest.js');
+    assert.ok(isHomeName('home_chest'));
+    assert.ok(isHomeName('Home Chest'));
+    assert.ok(!isHomeName('home'));
+    assert.ok(!isHomeName('mine'));
+    const blocks = { '1,64,1': { name: 'chest' }, '2,64,1': { name: 'dirt' } };
+    const blockAt = (x, y, z) => blocks[`${x},${y},${z}`] || null;
+    assert.equal(homeState([1, 64, 1], blockAt), 'ok');
+    assert.equal(homeState([2.4, 64.9, 1.2], blockAt), 'gone', 'a fake home chest (no chest there)');
+    assert.equal(homeState([9, 64, 9], blockAt), 'unknown', 'not loaded');
+    assert.equal(homeState(undefined, blockAt), 'unknown');
+});
