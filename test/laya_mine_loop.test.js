@@ -617,4 +617,6 @@ test('v2: a blocked staircase starts once more heading back before giving up', a
     const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.equal(r.counters.restarts, 1, 'one new staircase');
     assert.ok(s.calls.moves.some(([x, y]) => x < 0 && y < 60), 'heading west, going down');
+    const restart = s.calls.logs.find(l => /starting the mine again/.test(l));
+    assert.match(restart, /heading W\./, 'back from the plan heading E, whatever the last move was');
 });

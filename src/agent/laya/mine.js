@@ -279,7 +279,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             logStep({ ...entry, outcome: 'unsafe-ground' });
             return finish(false, `the ground at ${f.x} ${f.y} ${f.z} is unsafe (water or caves): every plan step is vetoed`);
         }
-        heading = backOf(heading);
+        heading = backOf(plan.heading); // the other way from the plan's heading (not the last move's)
         plan = createPlan({ ...f, heading }, ore, planOpts);
         counters.restarts = (counters.restarts || 0) + 1;
         logStep({ restart: f, heading, reason: 'abandons', outcome: 'restarted' });
