@@ -44,7 +44,7 @@ test('decide: the spec v1.1 rules in priority order, with laya-go rule names', (
     assert.deepEqual(decide(s({ ...z(4), health: 10, armed: 'none' })), { activity: 'flee', rule: 'flee-hostile' });
     assert.deepEqual(decide(s({ hostiles: 1, nearest: { kind: 'creeper', dist: 3 } })), { activity: 'flee', rule: 'flee-creeper' });
     // v1.1: within 8 at health 6 or less: flee
-    assert.deepEqual(decide(s({ ...z(7), health: 6 })), { activity: 'flee', rule: 'flee-hostile' });
+    assert.deepEqual(decide(s({ ...z(7), health: 6 })), { activity: 'flee', rule: 'flee-low' });
     assert.deepEqual(decide(s({ ...z(4), health: 10 })), { activity: 'defend', rule: 'defend' });
     assert.deepEqual(decide(s({ ...z(8) })), { activity: 'defend', rule: 'defend' });
     assert.deepEqual(decide(s({ health: 8, job: mine })), { activity: 'heal', rule: 'heal' });
@@ -63,7 +63,7 @@ test('decide: the spec v1.1 rules in priority order, with laya-go rule names', (
     assert.deepEqual(decide(s({ job: mine, last: 'interrupted' })), { activity: 'continue', rule: 'continue' });
     assert.deepEqual(decide(s({ job: mine, last: 'failed', paused: 'farm' })), { activity: 'resume', rule: 'resume-failed' });
     assert.deepEqual(decide(s({ job: mine, last: 'blocked' })), { activity: 'idle', rule: 'idle-failed' });
-    assert.deepEqual(decide(s({ job: mine, last: 'blocked', food: 17, health: 19 })), { activity: 'idle', rule: 'idle-failed' });
+    assert.deepEqual(decide(s({ job: mine, last: 'blocked', food: 17, health: 19 })), { activity: 'idle', rule: 'idle-failed' }, 'eat-idle only with nothing to do');
     assert.deepEqual(decide(calm), { activity: 'idle', rule: 'idle' });
     assert.deepEqual(decide(s({ food: 17, health: 19 })), { activity: 'eat', rule: 'eat-idle' });
 });
@@ -186,4 +186,34 @@ test('itemWord: laya-go director item words', async () => {
     assert.equal(itemWord('farm', 'wheat'), 'wheat');
     assert.equal(itemWord('craft', 'stone_pickaxe'), 'stone_pickaxe');
     assert.equal(itemWord('follow', null), 'none');
+});
+
+// parseDirector reads a director state back to a situation (job and paused as
+// directorState takes them).
+function parseDirector(text) {
+    const L = text.split('\n').map(l => l.split(' '));
+    const [, kind, item, , left] = L[1];
+    const n = x => Number(x);
+    return {
+        job: kind === 'none' ? null : { kind, item, left: left === 'any' ? 'any' : n(left) },
+        paused: L[2][1] === 'none' ? null : L[2][1],
+        health: n(L[3][1]), food: n(L[3][3]), armed: L[3][5], armor: n(L[3][7]),
+        hostiles: n(L[4][1]), nearest: L[4][3] === 'none' ? null : { kind: L[4][3], dist: n(L[4][4]) },
+        light: n(L[5][1]), night: L[5][3] === 'yes', under: L[5][5] === 'yes',
+        free: n(L[6][1]), home: L[6][3] === 'none' ? null : n(L[6][3]), valuables: n(L[6][5]),
+        foodItems: n(L[7][2]), danger: L[8][1], last: L[9][1],
+    };
+}
+
+test('rules and state agree with laya-go v1.1 on 1000 generated situations (db494eb)', () => {
+    const rows = readFileSync(new URL('./fixtures/laya-director-v1/decisions.jsonl', import.meta.url), 'utf8').trim().split('\n').map(l => JSON.parse(l));
+    assert.equal(rows.length, 1000);
+    const rules = new Set();
+    for (const r of rows) {
+        const s = parseDirector(r.state);
+        assert.equal(directorState(s), r.state, 'state round trip');
+        assert.deepEqual(decide(s), { activity: r.answer, rule: r.rule }, r.state);
+        rules.add(r.rule);
+    }
+    assert.equal(rules.size, 16, 'every rule is exercised');
 });
