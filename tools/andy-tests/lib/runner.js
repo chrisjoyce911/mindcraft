@@ -7,7 +7,7 @@
 //      replies and the laya log lines in the test's window; evaluate checks
 //   6. cleanup (always)
 import { expand, stepKind, coords, describeStep } from './scenarios.js';
-import { evaluate, describeCheck } from './checks.js';
+import { evaluate, describeCheck, blockKey } from './checks.js';
 import { inventoryDiff } from './session.js';
 import { brief } from './logs.js';
 import { brisbane, brisbaneIso, clock } from './time.js';
@@ -33,6 +33,37 @@ function stateTest(spec, s) {
     if (spec.idle != null) return !!s.action?.isIdle === !!spec.idle;
     throw new Error(`waitFor needs stat, item, entity, action or idle: ${JSON.stringify(spec)}`);
 }
+
+// Fail fast: a wait (waitFor, waitReply, waitLog) whose condition isn't met
+// once andy's action has ended. When andy was busy during the wait and has
+// then been idle for idleFail ms (default 30 s; the step's `idleFail`, the
+// test's or the file's defaults; false turns it off), the step fails with the
+// reason instead of waiting out its timeout. A wait while andy never gets
+// busy (eat waiting for hunger to drop) is not affected.
+export const IDLE_FAIL_MS = 30000;
+
+async function waitStep(step, ctx, fn, timeout) {
+    const s = ctx.session;
+    const idleFail = step.idleFail ?? ctx.defaults.idleFail ?? IDLE_FAIL_MS;
+    let busy = false, idleSince = null, gaveUp = null;
+    const r = await s.waitUntil(async () => {
+        const v = await fn();
+        if (v) return v;
+        if (idleFail === false) return null;
+        const st = s.mind?.state?.();
+        if (!st) return null;
+        const t = s.now();
+        if (!st.action?.isIdle) { busy = true; idleSince = null; } else if (busy && idleSince == null) idleSince = t;
+        if (busy && idleSince != null && t - idleSince >= idleFail) { gaveUp = { idleMs: t - idleSince }; return gaveUp; }
+        return null;
+    }, { timeout, poll: step.poll ?? 500 });
+    if (r.ok && r.value === gaveUp && gaveUp) return { ok: false, idle: true, ms: r.ms, idleMs: gaveUp.idleMs };
+    return r;
+}
+
+const waitFailure = (r, what) => (r.idle
+    ? `andy's action ended and ${what} ${Math.round(r.idleMs / 1000)}s later (gave up after ${Math.round(r.ms / 1000)}s, not waiting for the timeout)`
+    : null);
 
 // runStep runs one (already expanded) step. ctx: {session, deadline, t0,
 // serverReplies, defaults, anchor()}.
@@ -70,22 +101,22 @@ export async function runStep(step, ctx) {
             break;
         }
         case 'waitFor': {
-            const r = await s.waitUntil(() => stateTest(v, s.mind.state()), { timeout: budget(60000) });
-            if (!r.ok) throw new StepFailed(`timed out waiting for ${JSON.stringify(v)}`);
+            const r = await waitStep(step, ctx, () => stateTest(v, s.mind.state()), budget(60000));
+            if (!r.ok) throw new StepFailed(waitFailure(r, `${JSON.stringify(v)} was still not true`) || `timed out waiting for ${JSON.stringify(v)}`);
             break;
         }
         case 'waitReply': {
             const from = ctx.tAction ?? ctx.t0;
             const rx = new RegExp(v, 'i');
-            const r = await s.waitUntil(() => s.chatSince(from).find(c => rx.test(c.text)), { timeout: budget(60000) });
-            if (!r.ok) throw new StepFailed(`andy never said /${v}/`);
+            const r = await waitStep(step, ctx, () => s.chatSince(from).find(c => rx.test(c.text)), budget(60000));
+            if (!r.ok) throw new StepFailed(waitFailure(r, `he still hadn't said /${v}/`) || `andy never said /${v}/`);
             out.push(r.value.text);
             break;
         }
         case 'waitLog': {
             const from = ctx.tAction ?? ctx.t0;
-            const r = await s.waitUntil(() => s.logs({ task: v.task, since: from, match: v.match, limit: 1 })[0], { timeout: budget(60000), poll: 1000 });
-            if (!r.ok) throw new StepFailed(`no laya-${v.task} entry matching ${JSON.stringify(v.match ?? {})}`);
+            const r = await waitStep({ poll: 1000, ...step }, ctx, () => s.logs({ task: v.task, since: from, match: v.match, limit: 1 })[0], budget(60000));
+            if (!r.ok) throw new StepFailed(waitFailure(r, `there was still no laya-${v.task} entry matching ${JSON.stringify(v.match ?? {})}`) || `no laya-${v.task} entry matching ${JSON.stringify(v.match ?? {})}`);
             break;
         }
         case 'tp': {
@@ -142,6 +173,40 @@ async function readChests(session, keys) {
     return { items, errors };
 }
 
+// Blocks the `block` checks need, counted at the end of the action (before
+// cleanup). {blockKey: {count, center} | {error}}
+async function readBlocks(session, checks, vars) {
+    const out = {};
+    for (const c of checks.filter(k => k.type === 'block').map(k => expand(k, vars))) {
+        const key = blockKey(c);
+        if (out[key]) continue;
+        try {
+            const center = !c.near || c.near === 'andy' ? null : coords(c.near);
+            out[key] = await session.countBlocks(c.block, center, c.radius ?? 6);
+        } catch (e) { out[key] = { error: e.message }; }
+    }
+    return out;
+}
+
+// via: how a test's action reached andy's job.
+//   direct  the action sends andy a !command (no chat line to interpret)
+//   model   a chat line the Laya command model turned into a command
+//           (laya-command kind "run"); command names what it ran
+//   llm     a chat line the command model passed to the LLM (kind "llm")
+//   none    no laya-command entry for the chat line (the command task off,
+//           or the line not addressed to andy)
+// Only the test's own action steps count (not setup or cleanup).
+export function viaOf(test, logs = [], tAction = 0) {
+    const steps = test.action || [];
+    if (!steps.some(st => stepKind(st) === 'say')) return { via: steps.some(st => stepKind(st) === 'andy') ? 'direct' : 'none' };
+    const cmds = logs.filter(e => e.task === 'command' && Date.parse(e.time) >= tAction);
+    const first = cmds.find(e => e.kind === 'run') || cmds.find(e => e.kind === 'llm') || cmds[0];
+    if (!first) return { via: 'none' };
+    if (first.kind === 'run') return { via: 'model', command: (first.lines || []).join(' ') || first.command };
+    if (first.kind === 'llm') return { via: 'llm', command: `${first.command || 'chat'} → LLM` };
+    return { via: 'none', command: first.kind };
+}
+
 // disabledTasks: the Laya tasks a test requires that andy's settings turn off.
 export function disabledTasks(requires = [], settings = {}) {
     const tasks = settings?.decision_models?.tasks;
@@ -165,6 +230,11 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
 
     const finish = () => {
         result.ms = session.now() - started;
+        if (result.status !== 'skip' && !result.via) {
+            let logs = [];
+            try { logs = session.logs({ task: 'command', since: ctx.tAction ?? ctx.t0, limit: 0, full: true }); } catch { /* no logs */ }
+            Object.assign(result, viaOf(test, logs, ctx.tAction ?? ctx.t0));
+        }
         if (report) writeTest(report, test, result);
         return result;
     };
@@ -204,6 +274,7 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
         const final = await session.state();
         result.after = await session.snapshot('after');
         const chests = await readChests(session, keys);
+        const blocks = await readBlocks(session, test.checks, ctx.vars);
         const now = session.now();
         const evalCtx = {
             snapshots: session.snapshots,
@@ -213,6 +284,7 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
             waited: result.waited, final, chests: chests.items, chestErrors: chests.errors, chestsBefore,
             serverReplies: ctx.serverReplies,
             tester: session.tester?.position?.() || null,
+            blocks,
         };
         result.checks = test.checks.map(c => {
             const ec = expand(c, ctx.vars);
@@ -222,6 +294,7 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
         result.chests = chests.items;
         result.inventoryChange = inventoryDiff(result.before.inventory, result.after.inventory);
         result.logs = evalCtx.logs.map(e => brief(e, 200));
+        if (Object.keys(blocks).length) result.blocks = blocks;
         const failed = result.checks.filter(c => !c.ok);
         if (failed.length) { result.status = 'fail'; result.reason = failed.map(c => `${c.type}: ${c.reason}`).join('; '); }
         else result.reason = result.checks.map(c => c.reason).join('; ');
@@ -266,7 +339,19 @@ export async function runSuite(session, tests, { defaults = {}, report = null, o
     };
     report?.event({ type: 'suite-end', summary });
     if (report) writeSummary(report, results, summary);
-    return { summary, results: results.map(({ name, status, ms, reason }) => ({ name, status, seconds: +(ms / 1000).toFixed(1), reason })), report: report?.paths() };
+    const table = summaryRows(results);
+    if (report?.json) report.json({ started: brisbaneIso(started), finished: brisbaneIso(session.now()), world: session.config.world || 'settings', summary, tests: table });
+    return { summary, results: table.map(({ test, result, seconds, via, command, reason }) => ({ name: test, status: result, seconds, via, command, reason })), report: report?.paths() };
+}
+
+// summaryRows: the machine-readable per-test summary (stable keys, diffed by
+// compare.js): test, result (pass|fail|error|skip), seconds, via, command,
+// reason.
+export function summaryRows(results) {
+    return results.map(r => ({
+        test: r.name, result: r.status, seconds: +((r.ms || 0) / 1000).toFixed(1),
+        via: r.via ?? (r.status === 'skip' ? 'skip' : 'none'), ...(r.command ? { command: r.command } : {}), reason: r.reason || '',
+    }));
 }
 
 // ---- report sections ----
@@ -280,6 +365,7 @@ export function writeTest(report, test, r) {
     lines.push(`- Started: ${r.started.replace('T', ' ').replace('+10:00', ' AEST')}`);
     if (r.anchor) lines.push(`- Andy at: ${r.anchor.x} ${r.anchor.y} ${r.anchor.z}`);
     lines.push(`- Result: ${r.reason || '—'}`);
+    if (r.via) lines.push(`- Via: ${r.via}${r.command ? ` (${r.command})` : ''}`);
     if (r.cleanupError) lines.push(`- Cleanup error: ${r.cleanupError}`);
     lines.push('');
     if (r.steps.length) {
@@ -296,6 +382,7 @@ export function writeTest(report, test, r) {
     if (r.before && r.after) {
         lines.push(`Inventory before: ${fmtInv(r.before.inventory)}`, '', `Inventory after: ${fmtInv(r.after.inventory)}`, '', `Change: ${fmtInv(r.inventoryChange, true)}`, '');
     }
+    if (r.blocks) for (const [k, v] of Object.entries(r.blocks)) lines.push(`Blocks ${k}: ${v.error ? 'unread: ' + v.error : `${v.count} around ${v.center.x} ${v.center.y} ${v.center.z}`}`, '');
     if (r.chests && Object.keys(r.chests).length) for (const [k, v] of Object.entries(r.chests)) lines.push(`Chest ${k}: ${fmtInv(v)}`, '');
     if (r.logs?.length) {
         const byTask = {};
@@ -310,8 +397,8 @@ export function writeTest(report, test, r) {
 const fmtInv = (inv = {}, signed = false) => Object.entries(inv).map(([k, v]) => `${k} ${signed && v > 0 ? '+' : ''}${v}`).join(', ') || 'nothing';
 
 function writeSummary(report, results, s) {
-    const lines = [`## Summary`, '', `${s.pass} passed, ${s.fail} failed, ${s.error} errors, ${s.skip} skipped in ${(s.ms / 1000).toFixed(0)}s (finished ${brisbane()}).`, '', '| Test | Result | Seconds | Why |', '|---|---|---|---|'];
-    for (const r of results) lines.push(`| ${r.name} | ${r.status.toUpperCase()} | ${(r.ms / 1000).toFixed(1)} | ${(r.reason || '').replace(/\|/g, '\\|').slice(0, 200)} |`);
+    const lines = [`## Summary`, '', `${s.pass} passed, ${s.fail} failed, ${s.error} errors, ${s.skip} skipped in ${(s.ms / 1000).toFixed(0)}s (finished ${brisbane()}).`, '', '| Test | Result | Seconds | Via | Why |', '|---|---|---|---|---|'];
+    for (const r of results) lines.push(`| ${r.name} | ${r.status.toUpperCase()} | ${((r.ms || 0) / 1000).toFixed(1)} | ${r.via || '—'}${r.command ? ` \`${r.command.replace(/\|/g, '\\|')}\`` : ''} | ${(r.reason || '').replace(/\|/g, '\\|').slice(0, 200)} |`);
     report.md(lines.join('\n') + '\n');
 }
 

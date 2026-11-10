@@ -137,6 +137,18 @@ export class Tester extends EventEmitter {
         } finally { win.close(); }
     }
 
+    // countBlocks counts blocks whose name matches `name` (a name, or
+    // "/regex/") within radius of center {x, y, z}, from what tester has
+    // loaded (tester stands near andy in every test, so his area is loaded).
+    countBlocks(name, center, radius = 6) {
+        this.require();
+        const m = String(name).match(/^\/(.*)\/([a-z]*)$/s);
+        const test = m ? (n => new RegExp(m[1], m[2] || 'i').test(n)) : (n => n === name);
+        const Vec3 = this.deps.Vec3;
+        const found = this.bot.findBlocks({ point: new Vec3(center.x, center.y, center.z), matching: b => !!b && test(b.name), maxDistance: radius, count: 4096 });
+        return found.length;
+    }
+
     close() {
         try { this.bot?.quit?.(); } catch { /* */ }
         this.bot = null;

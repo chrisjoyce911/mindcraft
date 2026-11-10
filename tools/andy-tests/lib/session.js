@@ -373,6 +373,16 @@ export class Session {
         return { at: { x, y, z }, items: await tester.chest(x, y, z) };
     }
 
+    // countBlocks: {count, center} of blocks named `name` within radius of
+    // center (andy's position when center is null).
+    async countBlocks(name, center = null, radius = 6) {
+        const tester = await this.ensureTester();
+        const c = center || (await this.state())?.gameplay?.position;
+        if (!c) throw new Error("andy's position is unknown");
+        const at = { x: Math.floor(c.x), y: Math.floor(c.y), z: Math.floor(c.z) };
+        return { count: await tester.countBlocks(name, at, radius), center: at };
+    }
+
     // ---- waiting ----
 
     // waitIdle: done when andy has been idle for `settle` ms after being

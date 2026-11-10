@@ -45,6 +45,7 @@
         "laya:check": "node src/models/laya_check.js",
         "game-test": "node tools/andy-tests/cli.js",
         "game-test:mcp": "node tools/andy-tests/mcp.js",
+        "game-test:compare": "node tools/andy-tests/compare.js",
         "world:start": "node tools/test-world/world.js start",
         "world:stop": "node tools/test-world/world.js stop",
         "world:reset": "node tools/test-world/world.js reset",

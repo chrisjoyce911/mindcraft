@@ -26,7 +26,10 @@ export const STEPS = {
     anchor: 'take andy\'s current block as {x} {y} {z} again',
     site: 'test world only: teleport andy, tester beside him, to a named site of tools/test-world/sites.json and take it as {x} {y} {z} ("farm", or {name, who: andy|tester|both}); does nothing on another world',
 };
-const STEP_OPTIONS = new Set(['timeout', 'repeat', 'optional', 'note', 'replyMs']);
+// idleFail (waitFor, waitReply, waitLog): ms andy may stay idle after his
+// action ended before the wait fails (default 30000; false: wait out the
+// timeout). See runner.js waitStep.
+const STEP_OPTIONS = new Set(['timeout', 'repeat', 'optional', 'note', 'replyMs', 'idleFail']);
 
 export function stepKind(step) {
     if (!step || typeof step !== 'object' || Array.isArray(step)) return null;
