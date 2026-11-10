@@ -143,7 +143,7 @@ function cellsToDig(view, action) {
 //   moveTo(x, y, z, timeoutMs) → bool, place(item, x, y, z, placeOn) → bool
 //   v2: freeSlots() → empty inventory slots, home() → home chest {x, y, z} | null,
 //       hostiles() → hostile mobs within 16 blocks (bot.health and bot.food are read too),
-//       goHome({x, y, z}) → bool, deposit([{name, count}]) → bool, isFood(name) → bool,
+//       goHome({x, y, z}) → bool, deposit([{name, count}]) → bool (true: all went in), isFood(name) → bool,
 //       chat(msg) (optional)
 //   sleep(ms), log(msg), stepLog (file path, or null)
 export async function mineWithLaya(bot, oreName, count, deps) {
@@ -194,15 +194,21 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         counters.walks++;
         return await deps.moveTo(c.x, c.y, c.z, ms);
     };
+    // goUnload returns 'done', 'partial' (the chests filled up after taking
+    // something) or 'failed'.
+    const total = inv => Object.values(inv).reduce((n, c) => n + c, 0);
     const goUnload = async home => {
         counters.unloads++;
-        if (!await deps.goHome(home)) return false;
+        if (!await deps.goHome(home)) return 'failed';
         const items = depositList(deps.inventory(), deps.isFood || (() => false), opts.keep_blocks);
-        const before = deps.inventory()[ore.drop] || 0;
-        const ok = await deps.deposit(items);
-        deposited += Math.max(0, before - (deps.inventory()[ore.drop] || 0));
-        deps.log?.(ok ? 'Emptied my pack into the home chest.' : "Couldn't empty my pack into the home chest.");
-        return ok;
+        const inv0 = deps.inventory();
+        const ok = await deps.deposit(items).catch(() => false);
+        const inv1 = deps.inventory();
+        deposited += Math.max(0, (inv0[ore.drop] || 0) - (inv1[ore.drop] || 0));
+        const outcome = ok ? 'done' : total(inv1) < total(inv0) ? 'partial' : 'failed';
+        deps.log?.({ done: 'Emptied my pack into the home chest.', partial: 'The home chest is full: I put in what fit.',
+            failed: "Couldn't empty my pack into the home chest." }[outcome]);
+        return outcome;
     };
 
     let plan = null;
@@ -293,9 +299,12 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             entry.unload = u?.probability;
             const want = s.free === 0 || (u?.confident ? u.probability >= 0.5 : unload(s));
             if (want && !touching(view).length) {
-                const ok = await goUnload(homePos);
-                if (!ok) noUnloadUntil = step + opts.unload_retry_steps;
-                logStep({ ...entry, action: 'unload', source: u?.confident ? 'model' : 'rules', outcome: ok ? 'done' : 'failed' });
+                // A full chest after putting things in is a partial unload: no
+                // failure, but no Unload again for a while either.
+                const outcome = await goUnload(homePos);
+                const ok = outcome !== 'failed';
+                if (outcome !== 'done') noUnloadUntil = step + opts.unload_retry_steps;
+                logStep({ ...entry, action: 'unload', source: u?.confident ? 'model' : 'rules', outcome });
                 failures = ok ? 0 : failures + 1;
                 if (!ok) counters.failures++;
                 if (failures >= opts.max_failures) return finish(false, `${failures} steps failed in a row`);

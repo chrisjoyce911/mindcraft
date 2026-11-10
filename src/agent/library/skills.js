@@ -2357,16 +2357,8 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
                 return Math.floor(p.x) === x && Math.floor(p.z) === z && Math.abs(Math.floor(p.y) - y) <= 1;
             },
             place: (item, x, y, z, placeOn = 'bottom') => placeBlock(bot, item, x, y, z, placeOn, true),
-            freeSlots: () => bot.inventory.emptySlotCount(),
-            hostiles: () => Object.values(bot.entities).filter(e => e !== bot.entity && mc.isHostile(e) && e.position
-                && e.position.distanceTo(bot.entity.position) <= 16).length,
-            home: () => {
-                const p = typeof homeChest === 'function' ? homeChest() : homeChest;
-                return Array.isArray(p) && p.length === 3 ? { x: p[0], y: p[1], z: p[2] } : null;
-            },
-            goHome: async h => !!(await goToPosition(bot, h.x, h.y, h.z, 2)),
-            deposit: items => depositInChestAt(bot, homeChestBlock(bot, homeChest), items),
-            isFood: name => !!bot.registry.foodsByName?.[name],
+            // the home chest and its neighbours, as the farm task uses them
+            ...packDeps(bot, homeChest),
             chat: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
             sleep,
             log: msg => log(bot, msg),
@@ -2411,46 +2403,6 @@ async function collectOreAt(bot, o, names, ms = 30000) {
     } finally {
         clearTimeout(timer);
         if (prev) bot.pathfinder.setMovements(prev);
-    }
-}
-
-// homeChestBlock finds the chest at (or right next to) the remembered home
-// chest position.
-function homeChestBlock(bot, homeChest) {
-    const p = typeof homeChest === 'function' ? homeChest() : homeChest;
-    if (!Array.isArray(p)) return null;
-    const at = new Vec3(Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2]));
-    for (const d of [[0, 0, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]) {
-        const b = bot.blockAt(at.offset(...d));
-        if (b && (b.name === 'chest' || b.name === 'trapped_chest' || b.name === 'barrel')) return b;
-    }
-    return world.getNearestBlock(bot, 'chest', 6);
-}
-
-// depositInChestAt puts the listed items ([{name, count}]) in a chest block.
-async function depositInChestAt(bot, chest, items) {
-    if (!chest) {
-        log(bot, `There's no chest at the home chest place.`);
-        return false;
-    }
-    let container;
-    try {
-        container = await bot.openContainer(chest);
-        for (const { name, count } of items) {
-            let left = count;
-            for (const item of bot.inventory.items().filter(i => i.name === name)) {
-                const n = Math.min(left, item.count);
-                if (n <= 0) break;
-                await container.deposit(item.type, null, n);
-                left -= n;
-            }
-        }
-        return true;
-    } catch (err) {
-        log(bot, `Couldn't put things in the home chest: ${err.message}`);
-        return false;
-    } finally {
-        container?.close();
     }
 }
 

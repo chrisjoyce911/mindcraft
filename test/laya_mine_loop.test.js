@@ -294,3 +294,17 @@ test('v2: ore far from the plan is left; ore chains never pull the bot away', as
     assert.deepEqual(calls.walks, [[0, 20, 0]], 'walks back to the plan');
     assert.deepEqual(calls.moves.slice(-2), [[1, 20, 0], [2, 20, 0]], 'and the plan goes on');
 });
+
+test('v2: a full home chest after taking some is a partial unload, not a failure', async () => {
+    const inv = { stone_pickaxe: 1, torch: 5, cobblestone: 50, raw_iron: 2, andesite: 10 };
+    const { bot, deps, calls } = v2({ y: 20, steps: 4, free: 0, home: { x: 0, y: 20, z: 10 }, inv });
+    deps.deposit = async items => {
+        calls.deposited.push(items);
+        deps.inventory = (orig => () => ({ ...orig(), andesite: 0 }))(deps.inventory);
+        return false; // full after the andesite
+    };
+    const r = await mineWithLaya(bot, 'iron', 1, deps);
+    assert.equal(calls.home.length, 1, 'no unload again straight away');
+    assert.equal(r.counters.failures, 0);
+    assert.ok(calls.logs.some(l => /home chest is full/.test(l)));
+});
