@@ -481,3 +481,12 @@ test('a failed torch place waits a few moves before trying again', async () => {
     assert.equal(r.counters.steps.torch, 2);
     assert.equal(r.counters.steps.tunnel, 12);
 });
+
+test('pickOre: ore 5–8 below is taken only when open to the air (a pocket beside the stair)', () => {
+    const w = fakeWorld(50, { '3,44,0': 'iron_ore', '3,43,0': 'air', '5,44,0': 'iron_ore' });
+    const opts = { feet: { x: 0, y: 50, z: 0 }, anchor: { x: 0, y: 50, z: 0 }, range: 12, budget: 24, blockAt: w.blockAt, below: 4, belowOpen: 8 };
+    assert.deepEqual(pickOre([{ x: 5, y: 44, z: 0 }, { x: 3, y: 44, z: 0 }], opts), { x: 3, y: 44, z: 0 }, 'the buried one 6 below is left');
+    assert.equal(pickOre([{ x: 5, y: 44, z: 0 }], opts), null);
+    assert.equal(pickOre([{ x: 3, y: 41, z: 0 }], { ...opts, blockAt: fakeWorld(50, { '3,41,0': 'iron_ore', '3,40,0': 'air' }).blockAt }), null, '9 below: too deep');
+    assert.equal(pickOre([{ x: 3, y: 44, z: 0 }], { ...opts, belowOpen: 4 }), null, 'collect_below alone');
+});

@@ -49,7 +49,7 @@ import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
     keep_blocks: 32, unload_retry_steps: 50, unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4,
-    walk_restart: 2, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
+    collect_below_open: 8, walk_restart: 2, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
@@ -111,14 +111,22 @@ export function oreSafe(blockAt, feet, ore) {
     return true;
 }
 
+// exposed: a block with air beside it (ore on a cave or pocket wall).
+export function exposed(blockAt, o) {
+    return SIDES.slice(1).some(([dx, dy, dz]) => blockAt(o.x + dx, o.y + dy, o.z + dz)?.boundingBox === 'empty');
+}
+
 // pickOre chooses the ore to collect from ores ([{x, y, z}], nearest
 // first): the nearest within range of anchor (the plan cell) and of sight
 // (SEEN_RANGE) of feet, not skipped, within the off-plan budget left, and
-// safe, and at most below blocks under anchor. It returns it or null.
-export function pickOre(ores, { feet, anchor, range, budget, blockAt, below = Infinity, skip = () => false }) {
+// safe, and at most below blocks under anchor (belowOpen for ore open to
+// the air, in a cave or pocket beside the stair). It returns it or null.
+export function pickOre(ores, { feet, anchor, range, budget, blockAt, below = Infinity, belowOpen = below, skip = () => false }) {
     for (const o of ores) {
         const d = dist(feet, o);
-        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || anchor.y - o.y > below || skip(o)) continue;
+        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || skip(o)) continue;
+        const depth = anchor.y - o.y;
+        if (depth > below && !(depth <= belowOpen && exposed(blockAt, o))) continue;
         if (oreSafe(blockAt, feet, o)) return o;
     }
     return null;
@@ -372,7 +380,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         const anchor = pn?.walk || feet;
         const near = pickOre(oresNear(SEEN_RANGE), { feet, anchor, blockAt: deps.blockAt,
             range: plan ? opts.collect_range : SEEN_RANGE, budget: plan ? opts.collect_budget - offPlan : Infinity,
-            below: plan ? opts.collect_below : Infinity,
+            below: plan ? opts.collect_below : Infinity, belowOpen: plan ? Math.max(opts.collect_below, opts.collect_below_open) : Infinity,
             skip: o => failedOre.has(oreKey(o)) });
         const seen = near ? Math.max(1, Math.ceil(Math.hypot(near.x - bx, near.y - by, near.z - bz))) : 0;
         const inv2 = deps.inventory();
