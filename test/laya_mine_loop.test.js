@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mineWithLaya } from '../src/agent/laya/mine.js';
+import { mineWithLaya, pickOre, oreSafe } from '../src/agent/laya/mine.js';
 import { ORES } from '../src/agent/laya/mine_state.js';
 
 const EMPTY = new Set(['air', 'torch', 'lava', 'water']);
@@ -256,4 +256,41 @@ test('v2: the model decides Unload when sure; a completely full pack always unlo
     s = v2({ y: 20, steps: 2, free: 0, decide: withUnload(0.95) });
     await mineWithLaya(s.bot, 'iron', 1, s.deps);
     assert.equal(s.calls.home.length, 0, 'no home chest known');
+});
+
+// ---- v2 bug fixes: bounded, safe collecting; partial unloads; torch batches ----
+
+test('pickOre: near the plan, within budget, away from water and lava', () => {
+    const w = fakeWorld(20, { '3,20,4': 'water' });
+    const opts = { feet: { x: 0, y: 20, z: 0 }, anchor: { x: 0, y: 20, z: 0 }, range: 8, budget: 24, blockAt: w.blockAt };
+    assert.deepEqual(pickOre([{ x: 12, y: 20, z: 0 }, { x: 2, y: 20, z: 1 }], opts), { x: 2, y: 20, z: 1 }, 'the far one is past range');
+    assert.equal(pickOre([{ x: 3, y: 20, z: 3 }], opts), null, 'water touches the ore');
+    assert.equal(pickOre([{ x: 6, y: 20, z: 7 }], opts), null, 'water on the way');
+    assert.equal(pickOre([{ x: 5, y: 20, z: 0 }], { ...opts, budget: 4 }), null, 'past the budget');
+    assert.equal(pickOre([{ x: 5, y: 20, z: 0 }], { ...opts, skip: () => true }), null);
+    assert.equal(oreSafe(w.blockAt, { x: 0, y: 20, z: 0 }, { x: 5, y: 20, z: 0 }), true);
+});
+
+test('v2: ore far from the plan is left; ore chains never pull the bot away', async () => {
+    // a line of ore going east from the plan's first branch, away from the mine
+    const blocks = { '2,20,3': 'iron_ore', '9,20,3': 'iron_ore', '16,20,3': 'iron_ore', '23,20,3': 'iron_ore' };
+    // 4 steps: collect, walk back, tunnel to x 1, tunnel to x 2 (the next ore
+    // comes within 8 of the tunnel only after that)
+    const { bot, deps, calls, w, inventory } = v2({ y: 20, steps: 4, blocks, decide: () => answer('collect') });
+    const collected = [];
+    deps.ores = names => [...w.m].filter(([, n]) => names.includes(n)).map(([k]) => {
+        const [x, y, z] = k.split(',').map(Number);
+        return { x, y, z };
+    }).sort((a, b) => Math.hypot(a.x - bot.entity.position.x, a.z - bot.entity.position.z) - Math.hypot(b.x - bot.entity.position.x, b.z - bot.entity.position.z));
+    deps.collect = async (names, n, o) => {
+        collected.push(o);
+        w.m.set(`${o.x},${o.y},${o.z}`, 'air');
+        inventory.raw_iron = (inventory.raw_iron || 0) + 1;
+        bot.entity.position = { x: o.x + 0.5, y: o.y, z: o.z + 0.5 };
+        return true;
+    };
+    await mineWithLaya(bot, 'iron', 4, deps);
+    assert.deepEqual(collected.map(o => o.x), [2], 'only the ore within 8 of the plan cell');
+    assert.deepEqual(calls.walks, [[0, 20, 0]], 'walks back to the plan');
+    assert.deepEqual(calls.moves.slice(-2), [[1, 20, 0], [2, 20, 0]], 'and the plan goes on');
 });

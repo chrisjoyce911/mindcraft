@@ -12,7 +12,12 @@
 //
 // What it lacks it crafts (deps.craft): the pickaxe the ore needs (before
 // starting, and on "stop" for a weak pickaxe), torches when they run out, and
-// a pickaxe again if it breaks. It stops when it has count more of the ore's
+// a pickaxe again if it breaks.
+//
+// Ore in sight is collected only when it is safe and near the mine: within
+// collect_range of the plan cell (v2; of the bot with v1), with no water or
+// lava touching it or on the way there, and at most collect_budget blocks of
+// collecting away from the plan before it walks back. It stops when it has count more of the ore's
 // drop, after max_steps steps, after max_failures failed steps in a row, or
 // when trapped.
 //
@@ -37,7 +42,8 @@ import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, H
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
-const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, keep_blocks: 32, unload_retry_steps: 50 };
+const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4,
+    keep_blocks: 32, unload_retry_steps: 50, collect_range: 8, collect_budget: 24 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
@@ -73,6 +79,45 @@ export function summary(c, got, want, drop) {
     return `Laya mine: ${got} of ${want} ${drop}; asked ${c.asked}, model steps ${c.model}, rule steps: ${rules}; vetoes: ${vetoes}; crafted: ${c.crafted.join(', ') || 'nothing'}${plan}`;
 }
 
+// FLUIDS are the blocks that hold water or lava.
+const FLUIDS = new Set(['water', 'lava', 'bubble_column', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass']);
+const isFluid = b => !!b && (FLUIDS.has(b.name) || b.getProperties?.().waterlogged === true);
+const SIDES = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+// fluidNear reports whether a cell or a cell touching it holds water or lava.
+export function fluidNear(blockAt, x, y, z) {
+    return SIDES.some(([dx, dy, dz]) => isFluid(blockAt(x + dx, y + dy, z + dz)));
+}
+
+// oreSafe reports whether ore can be collected from feet without going near
+// water or lava: none touching the ore, and none touching the straight line
+// there at feet or head height.
+export function oreSafe(blockAt, feet, ore) {
+    if (fluidNear(blockAt, ore.x, ore.y, ore.z)) return false;
+    const n = Math.ceil(dist(feet, ore) * 2);
+    for (let i = 1; i < n; i++) {
+        const t = i / n;
+        const x = Math.floor(feet.x + 0.5 + (ore.x - feet.x) * t), z = Math.floor(feet.z + 0.5 + (ore.z - feet.z) * t);
+        const y = Math.floor(feet.y + (ore.y - feet.y) * t);
+        if (fluidNear(blockAt, x, y, z) || fluidNear(blockAt, x, y + 1, z)) return false;
+    }
+    return true;
+}
+
+// pickOre chooses the ore to collect from ores ([{x, y, z}], nearest
+// first): the nearest within range of anchor (the plan cell) and of sight
+// (SEEN_RANGE) of feet, not skipped, within the off-plan budget left, and
+// safe. It returns it or null.
+export function pickOre(ores, { feet, anchor, range, budget, blockAt, skip = () => false }) {
+    for (const o of ores) {
+        const d = dist(feet, o);
+        if (d > SEEN_RANGE || dist(anchor, o) > range || d > budget || skip(o)) continue;
+        if (oreSafe(blockAt, feet, o)) return o;
+    }
+    return null;
+}
+
 // worldCell turns a view cell [layer, dx, dz] into world coordinates.
 const worldCell = (bx, by, bz, [l, dx, dz]) => [bx + dx, by + FEET - l, bz + dz];
 
@@ -92,7 +137,9 @@ function cellsToDig(view, action) {
 // mineWithLaya mines until it has count more of the ore's drop. deps:
 //   client ({decide}), task (settings)
 //   blockAt(x, y, z), inventory() → {name: count}, nearestOre(blocks, range) → {x, y, z} | null
-//   craft(item, count) → bool, collect(blocks, count) → bool, dig(x, y, z) → bool,
+//   ores(blocks, range) → [{x, y, z}] nearest first (optional; else nearestOre)
+//   craft(item, count) → bool, collect(blocks, count, {x, y, z}) → bool (the ore block given),
+//   dig(x, y, z) → bool,
 //   moveTo(x, y, z, timeoutMs) → bool, place(item, x, y, z, placeOn) → bool
 //   v2: freeSlots() → empty inventory slots, home() → home chest {x, y, z} | null,
 //       hostiles() → hostile mobs within 16 blocks (bot.health and bot.food are read too),
@@ -110,6 +157,10 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     let deposited = 0; // of the ore's drop, in the home chest
     const got = () => (deps.inventory()[ore.drop] || 0) + deposited - start;
     let heading = headingOf(bot.entity.yaw || 0), dark = 0, failures = 0, triedTorches = false, noUnloadUntil = 0;
+    let offPlan = 0; // blocks collecting has taken the bot away from the plan
+    const failedOre = new Set(); // ore blocks a collect failed on
+    const oreKey = o => `${o.x},${o.y},${o.z}`;
+    const oresNear = range => deps.ores ? deps.ores(ore.blocks, range) : [deps.nearestOre(ore.blocks, range)].filter(Boolean);
 
     const logStep = entry => {
         if (!opts.log_steps || !deps.stepLog) return;
@@ -176,22 +227,28 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         const feet = feetOf();
         const { x: bx, y: by, z: bz } = feet;
         const view = readView(deps.blockAt, bx, by, bz, ore.blocks);
-        const near = deps.nearestOre(ore.blocks, SEEN_RANGE);
+
+        let pn = plan ? plan.next(feet) : null;
+        if (pn?.done) return finish(false, `plan: ${pn.done}`);
+        if (pn && !pn.walk) offPlan = 0; // back on the plan
+        // Ore to collect: near the plan cell (v1: the bot), safe, within budget.
+        const anchor = pn?.walk || feet;
+        const near = pickOre(oresNear(SEEN_RANGE), { feet, anchor, blockAt: deps.blockAt,
+            range: plan ? opts.collect_range : SEEN_RANGE, budget: plan ? opts.collect_budget - offPlan : Infinity,
+            skip: o => failedOre.has(oreKey(o)) });
         const seen = near ? Math.max(1, Math.ceil(Math.hypot(near.x - bx, near.y - by, near.z - bz))) : 0;
         const inv2 = deps.inventory();
         const s = { ore: oreName, y: by, pick: pickTier(inv2), torches: inv2.torch || 0, blocks: countOf(inv2, THROWAWAY),
             dark, heading, seen: seen <= SEEN_RANGE ? seen : 0, view };
 
-        let pn = null, homePos = null;
+        let homePos = null;
         if (plan) {
-            pn = plan.next(feet);
-            if (pn.done) return finish(false, `plan: ${pn.done}`);
             if (pn.walk) {
-                // Off the plan: ore in sight and touching fluid first, else walk back.
+                // Off the plan: ore near it and touching fluid first, else walk back.
                 const first = decide(s);
                 if (first.rule !== 'collect' && first.rule !== 'block-fluid') {
                     const ok = await walkTo(pn.walk);
-                    logStep({ walk: pn.walk, segment: pn.segment, outcome: ok ? 'done' : 'failed' });
+                    logStep({ walk: pn.walk, segment: pn.segment, pos: feet, state: state(s), outcome: ok ? 'done' : 'failed' });
                     failures = ok ? 0 : failures + 1;
                     if (!ok) counters.failures++;
                     if (failures >= opts.max_failures) return finish(false, `${failures} steps failed in a row`);
@@ -208,13 +265,11 @@ export async function mineWithLaya(bot, oreName, count, deps) {
 
         const rule = decide(s);
         let action = rule.action, source = 'rules', why = null;
-        const entry = { rule: rule.action };
+        const entry = { rule: rule.action, pos: feet, state: state(s) };
         let r = null;
         if (!plan || s.plan) {
-            const text = state(s);
-            entry.state = text;
             counters.asked++;
-            r = await deps.client.decide('mine', text, s.plan ? QUESTIONS_V2 : QUESTIONS);
+            r = await deps.client.decide('mine', entry.state, s.plan ? QUESTIONS_V2 : QUESTIONS);
         } else why = 'walk-first';
         if (!r) why = why || 'no-answer';
         else {
@@ -255,7 +310,15 @@ export async function mineWithLaya(bot, oreName, count, deps) {
 
         let ok = false;
         const kind = action.split(' ')[0];
-        if (kind === 'collect') ok = await deps.collect(ore.blocks, 1);
+        if (kind === 'collect') {
+            entry.ore = near;
+            ok = await deps.collect(ore.blocks, 1, near).catch(() => false);
+            if (!ok) failedOre.add(oreKey(near));
+            if (plan) {
+                const f = feetOf();
+                offPlan += Math.hypot(f.x - bx, f.y - by, f.z - bz);
+            }
+        }
         else if (MOVES.has(kind)) {
             if (s.plan && action !== s.plan) {
                 // A detour round an unsafe plan step: give up that segment.

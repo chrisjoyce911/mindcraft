@@ -2337,11 +2337,9 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
                 const b = world.getNearestBlocks(bot, blocks, range, 1)[0];
                 return b ? b.position : null;
             },
+            ores: (blocks, range) => world.getNearestBlocks(bot, blocks, range, 32).map(b => b.position),
             craft: (item, n) => craftForTask(bot, item, n),
-            collect: async (blocks, n) => {
-                const near = world.getNearestBlocks(bot, blocks, 16, 1)[0];
-                return near ? await collectBlock(bot, near.name, n) : false;
-            },
+            collect: (blocks, n, o) => collectOreAt(bot, o, blocks),
             dig: async (x, y, z) => {
                 const b = bot.blockAt(new Vec3(x, y, z));
                 if (!b || b.boundingBox === 'empty') return true;
@@ -2378,6 +2376,41 @@ export async function mineOre(bot, ore, count=1, homeChest=null) {
         return r.ok;
     } finally {
         paused.forEach(m => bot.modes.unpause(m));
+    }
+}
+
+// collectOreAt digs one ore block at o ({x, y, z}) for the Laya mine task
+// and picks up its drop. The way there keeps out of water and lava (they cost
+// a lot to the pathfinder) and never makes fluid flow. It returns true when
+// the block is gone.
+async function collectOreAt(bot, o, names, ms = 30000) {
+    const block = o && bot.blockAt(new Vec3(o.x, o.y, o.z));
+    if (!block || !names.includes(block.name)) return false;
+    const prev = bot.pathfinder.movements;
+    const m = new pf.Movements(bot);
+    m.liquidCost = 100;
+    m.dontCreateFlow = true;
+    m.allowParkour = false;
+    m.maxDropDown = 3;
+    m.infiniteLiquidDropdownDistance = false;
+    let timer;
+    try {
+        bot.pathfinder.setMovements(m);
+        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); });
+        try {
+            await Promise.race([bot.pathfinder.goto(new pf.goals.GoalLookAtBlock(block.position, bot.world, { reach: 4 })), timeout]);
+        } catch {
+            bot.pathfinder.setGoal(null);
+        }
+        if (bot.entity.position.distanceTo(block.position.offset(0.5, 0.5, 0.5)) > 5) return false;
+        await bot.tool.equipForBlock(block);
+        if (!block.canHarvest(bot.heldItem ? bot.heldItem.type : null)) return false;
+        await bot.dig(block);
+        await pickupNearbyItems(bot);
+        return bot.blockAt(block.position)?.name !== block.name;
+    } finally {
+        clearTimeout(timer);
+        if (prev) bot.pathfinder.setMovements(prev);
     }
 }
 
