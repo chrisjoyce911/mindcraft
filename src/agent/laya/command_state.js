@@ -9,8 +9,8 @@ export const MAX_MESSAGE = 120;
 export const NONE = 'none';
 
 export const COMMANDS = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'give', 'attack', 'store', 'eat', 'inventory', 'chat'];
-// COMMANDS_V2: prompt v2's, v1's with farm after mine.
-export const COMMANDS_V2 = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'farm', 'give', 'attack', 'store', 'eat', 'inventory', 'chat'];
+// COMMANDS_V2: prompt v2's: v1's with farm after mine and home after store.
+export const COMMANDS_V2 = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'farm', 'give', 'attack', 'store', 'home', 'eat', 'inventory', 'chat'];
 export const TIERS = ['wooden', 'stone', 'iron', 'diamond', NONE];
 export const COUNTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '16', '20', '24', '32', '48', '64', 'all', 'any'];
 export const CROPS = ['wheat', 'carrots', 'potatoes', 'beetroot'];

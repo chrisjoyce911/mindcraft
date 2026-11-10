@@ -163,3 +163,32 @@ test('home command: !setHomeChest, a short reply when it worked', async () => {
         assert.deepEqual(said, [want]);
     }
 });
+
+import { QUESTIONS_V2, questionsFor, COMMANDS_V2, ITEMS_V2 } from '../src/agent/laya/command_state.js';
+
+const fixture2 = name => JSON.parse(readFileSync(new URL(`./fixtures/laya-command-v2/${name}`, import.meta.url), 'utf8'));
+
+test('golden v2 requests: match laya-go byte for byte', () => {
+    for (const [file, msg] of [['request.json', 'Andy, can you craft me 2 iron picks please?'], ['farm_request.json', 'andy farm wheat 10'], ['home_request.json', 'andy this is your home chest']]) {
+        const g = fixture2(file);
+        assert.equal(state('andy', 'chrisjoyce911', msg), g.state, file);
+        assert.deepEqual(JSON.parse(JSON.stringify(QUESTIONS_V2)), g.questions, file);
+    }
+    assert.equal(questionsFor('v2'), QUESTIONS_V2);
+    assert.equal(questionsFor('v1'), QUESTIONS);
+    assert.equal(questionsFor(undefined), QUESTIONS);
+});
+
+test('v2 option lists, normalize and resolve match laya-go', () => {
+    const c = fixture2('resolve_cases.json');
+    assert.deepEqual(COMMANDS_V2, c.commands);
+    assert.deepEqual(ITEMS_V2, c.items);
+    assert.deepEqual(TIERS, c.tiers);
+    assert.deepEqual(COUNTS, c.counts);
+    for (const [input, want] of Object.entries(c.normalize)) assert.equal(normalize(input), want);
+    for (const r of c.resolve) {
+        const carry = (r.carry || []).map(s => ({ item: s.Item, count: s.Count }));
+        assert.equal(resolve(r.command, r.item, r.tier, carry), r.want, JSON.stringify(r));
+    }
+    assert.ok(c.resolve.some(r => r.command === 'farm'));
+});

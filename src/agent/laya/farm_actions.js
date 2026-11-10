@@ -153,7 +153,7 @@ export function farmDeps(bot, radius = 64) {
         await skills.goToPosition(bot, pos.x, pos.y, pos.z, 2);
         return bot.entity.position.distanceTo(new Vec3(pos.x, pos.y, pos.z)) <= 4;
     };
-    const findWater = async r => {
+    const findWater = r => {
         const w = findWaterBlock(bot, r);
         return w ? { x: w.position.x, y: w.position.y, z: w.position.z } : null;
     };
