@@ -490,3 +490,28 @@ test('pickOre: ore 5–8 below is taken only when open to the air (a pocket besi
     assert.equal(pickOre([{ x: 3, y: 41, z: 0 }], { ...opts, blockAt: fakeWorld(50, { '3,41,0': 'iron_ore', '3,40,0': 'air' }).blockAt }), null, '9 below: too deep');
     assert.equal(pickOre([{ x: 3, y: 44, z: 0 }], { ...opts, belowOpen: 4 }), null, 'collect_below alone');
 });
+
+test('v2.1: a stop with rule low-health takes the heal path, not "needs a pickaxe"', async () => {
+    // heal_health 0: the loop-top heal is off, so the rules' low-health stop decides
+    const s = v2({ y: 60, steps: 3 });
+    Object.assign(s.deps.task, { prompt: 'v2.1', heal_health: 0 });
+    s.bot.health = 6; s.bot.food = 20;
+    s.deps.sleep = async ms => { if (ms >= 1000) s.bot.health = 20; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.notEqual(r.reason, 'needs a stone_pickaxe');
+    assert.equal(s.bot.health, 20);
+    assert.ok(s.calls.moves.length >= 1, 'healed, then down the staircase');
+    const { decide } = await import('../src/agent/laya/mine_state.js');
+    assert.ok(decide);
+});
+
+test('v2: a saved mine that is not there any more (a reset world) is forgotten and a new one starts', async () => {
+    let saved = [{ entrance: { x: 0, y: 60, z: 0 }, heading: 'E', surface: false, ores: ['coal'] }];
+    const store = { find: () => saved[0] || null, save: rec => { saved = [rec]; }, forget: () => { saved = []; } };
+    const s = v2({ y: 60, steps: 2 });
+    s.deps.mines = store;
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.reused, false);
+    assert.match(s.calls.chat[0], /iron mine starts at 0 60 0/);
+    assert.deepEqual(saved[0].ores, ['iron']);
+});

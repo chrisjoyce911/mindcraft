@@ -43,7 +43,7 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug, cellOf, TORCH_EVERY,
+import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, HEAD, readView, state, decide, unsafe, touching, dug, cellOf, TORCH_EVERY, LOW_HEALTH,
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
@@ -219,7 +219,7 @@ function cellsToDig(view, action) {
 //   resumed after an interrupt knows how many are left
 export async function mineWithLaya(bot, oreName, count, deps) {
     const opts = { ...DEFAULTS, ...(deps.task || {}) };
-    const v2 = opts.prompt === 'v2';
+    const v2 = opts.prompt === 'v2' || opts.prompt === 'v2.1'; // v2.1: v2's prompt, v2.1's rules
     const maxSteps = opts.max_steps ?? MAX_STEPS[v2 ? 'v2' : 'v1'];
     const counters = newCounters();
     const ore = ORES[oreName];
@@ -301,7 +301,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
     // heal (rule "heal"): hurt, so no more digging down: eat until food
     // eat_to, retreat up the staircase from hostiles, and wait to regenerate.
     // With no food it stops and asks for some.
-    const heal = async feet => {
+    const heal = async (feet, upTo = opts.heal_health) => {
         counters.rules.heal = (counters.rules.heal || 0) + 1;
         const hostiles = deps.hostiles?.() ?? 0;
         const entry = { rule: 'heal', action: 'heal', source: 'rules', why: 'heal', pos: feet,
@@ -316,7 +316,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             deps.chat?.(msg);
             return finish(false, 'hurt with no food');
         }
-        for (let i = 0; i < opts.heal_wait_s && !bot.interrupt_code && (bot.health ?? 20) <= opts.heal_health; i++) {
+        for (let i = 0; i < opts.heal_wait_s && !bot.interrupt_code && (bot.health ?? 20) <= upTo; i++) {
             if (!retreated && plan && (deps.hostiles?.() ?? 0) > 0) retreated = await walkTo(plan.entrance);
             await deps.sleep(1000);
         }
@@ -332,6 +332,17 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         const f = feetOf();
         reused = deps.mines?.find(f) || null;
         let msg;
+        if (reused) {
+            // the saved mine must still be there: its first plan cell dug
+            const e = reused.entrance;
+            const probe = createPlan({ ...e, heading: reused.heading }, ore, { ...planOpts, surface: !!reused.surface });
+            const open = c => ['A', 'O'].includes(cellOf(deps.blockAt(c.x, c.y, c.z), [])) && cellOf(deps.blockAt(c.x, c.y + 1, c.z), []) === 'A';
+            if (!probe.skipDug(open, 1)) {
+                logStep({ reuse: e, outcome: 'gone' });
+                deps.mines.forget?.(e);
+                reused = null;
+            }
+        }
         if (reused) {
             // the same layout from the same entrance: walk through what is dug
             const e = reused.entrance;
@@ -547,6 +558,14 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             ok = !!item;
             for (const c of touching(view)) if (item) ok = await deps.place(item, ...worldCell(bx, by, bz, c)) && ok;
         } else if (kind === 'stop') {
+            if (rule.rule === 'low-health') {
+                // hurt going down: eat, retreat, wait (or stop and ask for food)
+                logStep({ ...entry, outcome: 'heal' });
+                const h = await heal(feet, Math.max(opts.heal_health, LOW_HEALTH));
+                if (h) return h;
+                await deps.sleep?.(0);
+                continue;
+            }
             if (rule.rule === 'need-pickaxe' && await ensurePickaxe()) ok = true;
             else {
                 logStep({ ...entry, outcome: 'stopped' });

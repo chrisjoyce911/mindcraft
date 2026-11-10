@@ -10,7 +10,7 @@
 
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { state, questionsFor, resolve, carried, FOODS, NONE } from './command_state.js';
+import { state, questionsFor, resolve, carried, huntFor, FOODS, NONE } from './command_state.js';
 
 export const DEFAULTS = {
     min_confidence: 0.6,   // Command's top probability to act on it
@@ -22,7 +22,7 @@ export const DEFAULTS = {
     mine_count: 4,
     craft_count: 1,
     farm_max: 640,         // the most a farm count asks for
-    prompt: 'v1',          // v2: the farm command and crops (a command v2 model)
+    prompt: 'v1',          // v2: the farm command and crops (a command v2 model); v2.1: animal drops (hunt)
     no_llm: false,         // true: reply with a canned line instead of asking the LLM
     log_decisions: true,
 };
@@ -100,7 +100,7 @@ export function plan(r, ctx) {
     if (a.Command.topProbability < o.min_confidence) return { kind: 'llm', reason: 'low-confidence' };
     const key = a.Item.top, tier = a.Tier.top, count = a.Count.top;
     const carry = ctx.carry || [];
-    const item = resolve(command, key, tier, carry);
+    const item = resolve(command, key, tier, carry, o.prompt);
     const has = ctx.has || (() => false);
     const held = name => carry.filter(s => s.item === name).reduce((n, s) => n + s.count, 0);
     const run = (lines, say) => ({ kind: 'run', lines, say });
@@ -123,6 +123,12 @@ export function plan(r, ctx) {
                 return { kind: 'reply', text: 'What should I gather?' };
             }
             const n = Math.min(64, countOf(count, o.gather_count));
+            // a drop (v2.1: beef, leather, ...; wool, string): hunt its mob until the count
+            const mob = huntFor(item);
+            if (mob) {
+                if (has('!hunt')) return run([`!hunt(${q(mob)}, ${q(item)}, ${n})`], `Hunting ${mob}s for ${n} ${item}.`);
+                return run([`!attack(${q(mob)})`], `Hunting a ${mob} for ${item}.`);
+            }
             if (has('!layaGather')) return run([`!layaGather(${q(item)}, ${n})`], `Getting ${n} ${item}.`);
             return run([`!collectBlocks(${q(ORE_BLOCK[item] || item)}, ${n})`], `Getting ${n} ${item}.`);
         }

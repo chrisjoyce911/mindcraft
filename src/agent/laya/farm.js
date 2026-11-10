@@ -146,7 +146,7 @@ export function summary(c) {
 export async function farmWithLaya(bot, goal, deps) {
     const opts = { ...DEFAULTS, ...(deps.task || {}) };
     const g = typeof goal === 'number' ? { crop: 'any', count: null, ms: goal } : { crop: 'any', count: null, ms: null, ...goal };
-    const v2 = opts.prompt === 'v2';
+    const v2 = opts.prompt === 'v2' || opts.prompt === 'v2.1'; // v2.1: v2's prompt, v2.1's rules
     const counters = newCounters();
     // progress: the harvest so far, shared across resumes of one command
     const progress = g.progress || { harvested: 0 };

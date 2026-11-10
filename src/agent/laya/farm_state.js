@@ -157,10 +157,22 @@ function nearest(grid, match) {
     return BY_DISTANCE.find(p => match(grid[p.z][p.x])) || null;
 }
 
-// nearestDry: the nearest dry ground cell other than the bot's own (where a
-// pond goes; laya-go nearestDry).
-function nearestDry(grid) {
-    return BY_DISTANCE.slice(1).find(p => grid[p.z][p.x] === 'L') || null;
+// nearestDry: where a pond goes (laya-go nearestDry, v2.1 rules): the
+// nearest dry ground cell other than the bot's own with no X (solid: a dug
+// hole reads as one, and water poured beside it runs off) beside it, else
+// the nearest dry ground cell.
+export function nearestDry(grid) {
+    const besideSolid = p => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => {
+        const x = p.x + dx, z = p.z + dz;
+        return x >= 0 && z >= 0 && x < SIZE && z < SIZE && grid[z][x] === 'X';
+    });
+    let first = null;
+    for (const p of BY_DISTANCE.slice(1)) {
+        if (grid[p.z][p.x] !== 'L') continue;
+        if (!besideSolid(p)) return p;
+        first ??= p;
+    }
+    return first;
 }
 
 // targetOptions are the Target question's options (laya-go

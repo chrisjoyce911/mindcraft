@@ -4,7 +4,8 @@
 // turns the Item kind into a Minecraft item with the bot's inventory.
 // test/laya_command.test.js checks it all against laya-go's fixtures.
 
-export const VERSION = 'v1'; // the default; v2 adds farm (settings decision_models.tasks.command.prompt)
+export const VERSION = 'v1'; // the default; v2 adds farm, v2.1 animal drops (settings decision_models.tasks.command.prompt)
+export const VERSIONS = ['v1', 'v2', 'v2.1'];
 export const MAX_MESSAGE = 120;
 export const NONE = 'none';
 
@@ -74,6 +75,23 @@ export const KINDS_V2 = [...KINDS,
     { key: 'beetroot', gather: 'beetroot', craft: '', carried: is('beetroot') },
 ];
 
+// DROPS: prompt v2.1's new kinds, what animals drop (laya-go generate.Drops),
+// each with the mob that drops it (hunt): a gather of a drop is a hunt.
+// chicken is also a mob (an attack's target).
+export const DROPS = [
+    { key: 'beef', gather: 'beef', craft: '', hunt: 'cow', carried: is('beef', 'cooked_beef') },
+    { key: 'pork', gather: 'porkchop', craft: '', hunt: 'pig', carried: is('porkchop', 'cooked_porkchop') },
+    { key: 'mutton', gather: 'mutton', craft: '', hunt: 'sheep', carried: is('mutton', 'cooked_mutton') },
+    { key: 'chicken', gather: 'chicken', craft: '', hunt: 'chicken', carried: is('chicken', 'cooked_chicken') },
+    { key: 'leather', gather: 'leather', craft: '', hunt: 'cow', carried: is('leather') },
+    { key: 'feather', gather: 'feather', craft: '', hunt: 'chicken', carried: is('feather') },
+    { key: 'egg', gather: 'egg', craft: '', hunt: 'chicken', carried: is('egg') },
+];
+
+// KINDS_V21: prompt v2.1's kinds: v2's (the same gather, craft and carried)
+// and the drops.
+export const KINDS_V21 = [...KINDS_V2, ...DROPS];
+
 const itemOptions = kinds => {
     const o = [...kinds.map(k => k.key), ...TOOLS, ...ARMOR];
     for (const m of MOBS) if (!o.includes(m)) o.push(m);
@@ -84,9 +102,22 @@ const itemOptions = kinds => {
 // ITEMS_V2.
 export const ITEMS = itemOptions(KINDS);
 export const ITEMS_V2 = itemOptions(KINDS_V2);
+// ITEMS_V21: v2's in the same order, then the drops not already there
+// (chicken is a mob in v2), then none.
+export const ITEMS_V21 = [...ITEMS_V2.slice(0, -1), ...DROPS.map(k => k.key).filter(k => !ITEMS_V2.includes(k)), NONE];
 
-// kindOf: any version's kind (laya-go KindOf).
-const kindOf = key => KINDS_V2.find(k => k.key === key);
+// kindOf: prompt version v's kind (laya-go kindOfFor): v2's kinds for v1
+// and v2, v2.1's (with the drops) for v2.1.
+const kindOf = (key, v = 'v2') => (v === 'v2.1' ? KINDS_V21 : KINDS_V2).find(k => k.key === key);
+
+// huntFor is laya-go's HuntFor: the mob a gather of item (resolve's answer)
+// hunts, or '' when it isn't an animal drop (v2.1's drops, wool from sheep,
+// string from spiders).
+export function huntFor(item) {
+    if (item === 'white_wool') return 'sheep';
+    if (item === 'string') return 'spider';
+    return DROPS.find(k => k.gather === item)?.hunt || '';
+}
 
 // normalize is laya-go's generate.Normalize: lower case, apostrophes
 // dropped, anything but a–z, 0–9 and _ as a space, spaces collapsed, cut to
@@ -129,8 +160,14 @@ export const QUESTIONS_V2 = {
     Item: { ...QUESTIONS.Item, criteria: ITEMS_V2.slice() },
 };
 
-// questionsFor returns prompt version v's questions (v1 unless 'v2').
-export const questionsFor = v => (v === 'v2' ? QUESTIONS_V2 : QUESTIONS);
+// QUESTIONS_V21: prompt v2.1's (v2's commands, v2.1's items).
+export const QUESTIONS_V21 = {
+    ...QUESTIONS_V2,
+    Item: { ...QUESTIONS.Item, criteria: ITEMS_V21.slice() },
+};
+
+// questionsFor returns prompt version v's questions (v1 unless 'v2' or 'v2.1').
+export const questionsFor = v => (v === 'v2.1' ? QUESTIONS_V21 : v === 'v2' ? QUESTIONS_V2 : QUESTIONS);
 
 // bestTier: the tier a tool without one is made in (laya-go BestTier).
 export function bestTier(carry) {
@@ -148,10 +185,11 @@ export function pick(carry, match) {
     return best;
 }
 
-// resolve is laya-go's generate.Resolve: the Minecraft item a command acts
-// on, from the Item key, the Tier and what the bot carries ([{item, count}]),
-// or NONE.
-export function resolve(command, key, tier, carry) {
+// resolve is laya-go's generate.ResolveFor: the Minecraft item a command
+// acts on, from the Item key, the Tier and what the bot carries ([{item,
+// count}]), or NONE, for prompt version v (v1 and v2 resolve alike; v2.1
+// adds the drops: a gather of a drop gets the drop, mine none).
+export function resolve(command, key, tier, carry, v = 'v2') {
     if (!key || key === NONE) return NONE;
     const tool = TOOLS.includes(key), armor = ARMOR.includes(key);
     const noTier = !tier || tier === NONE;
@@ -161,13 +199,13 @@ export function resolve(command, key, tier, carry) {
         case 'farm': // v2: the crop key
             return CROPS.includes(key) ? key : NONE;
         case 'gather': case 'mine': {
-            const k = kindOf(key);
-            return k && k.gather ? k.gather : NONE;
+            const k = kindOf(key, v);
+            return k && k.gather && (command === 'gather' || !k.hunt) ? k.gather : NONE;
         }
         case 'craft': {
             if (tool) return `${noTier ? bestTier(carry) : tier}_${key}`;
             if (armor) return `${noTier || tier === 'wooden' || tier === 'stone' ? 'iron' : tier}_${key}`;
-            const k = kindOf(key);
+            const k = kindOf(key, v);
             return k && k.craft ? k.craft : NONE;
         }
         case 'give': case 'store': case 'eat': {
@@ -175,7 +213,7 @@ export function resolve(command, key, tier, carry) {
             if (tool || armor) {
                 match = n => n.endsWith('_' + key) && (noTier || n.startsWith(tier + '_'));
             } else {
-                const k = kindOf(key);
+                const k = kindOf(key, v);
                 if (!k) return NONE;
                 match = k.carried;
             }

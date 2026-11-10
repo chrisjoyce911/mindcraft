@@ -16,6 +16,10 @@ export const ABOVE = 0, HEAD = 1, FEET = 2, FLOOR = 3, BELOW = 4;
 export const TORCH_EVERY = 8;
 export const SEEN_RANGE = 16;
 export const MIN_Y = -59;
+// COLLECT_RANGE: with a plan, ore seen further than this is left (laya-go
+// rules.CollectRange, the bot's collect_range); LOW_HEALTH: with a plan, a
+// step down at this health or less is a stop (rule low-health).
+export const COLLECT_RANGE = 12, LOW_HEALTH = 8;
 
 export const TIERS = ['none', 'wooden', 'stone', 'iron', 'diamond'];
 
@@ -220,9 +224,13 @@ export function decide(s) {
     const ore = ORES[s.ore];
     if (!ore || s.pick < ore.tier) return { action: 'stop', rule: 'need-pickaxe' };
     if (touching(s.view).length && s.blocks > 0) return { action: 'block', rule: 'block-fluid' };
-    if (s.seen > 0) return { action: 'collect', rule: 'collect' };
+    if (s.seen > 0 && !(s.plan && s.seen > COLLECT_RANGE)) return { action: 'collect', rule: 'collect' };
     if (s.dark >= TORCH_EVERY && s.torches > 0) return { action: 'torch', rule: 'torch' };
-    if (s.plan) return followPlan(s);
+    if (s.plan) {
+        const d = followPlan(s);
+        if (d.action.startsWith('down') && s.health > 0 && s.health <= LOW_HEALTH) return { action: 'stop', rule: 'low-health' };
+        return d;
+    }
     let want = 'tunnel', rule = 'branch-mine', order = ['tunnel', 'down', 'up'];
     if (s.y > ore.hi) [want, rule, order] = ['down', 'go-down', ['down', 'tunnel', 'up']];
     else if (s.y < ore.lo) [want, rule, order] = ['up', 'go-up', ['up', 'tunnel', 'down']];

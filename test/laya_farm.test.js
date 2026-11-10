@@ -478,3 +478,13 @@ test('vetoed steps: banned, the rules answer instead', async () => {
     assert.deepEqual(c.vetoes, { 'not-tillable': 1 }, 'vetoed once, then banned');
     assert.equal(calls.act.length, 2, 'the rules act instead');
 });
+
+test('v2.1 nearestDry: a pond never goes beside an X (a dug hole) unless every dry cell has one', async () => {
+    const { nearestDry } = await import('../src/agent/laya/farm_state.js');
+    const row = s => [...s];
+    // bot at the centre (4,4); the nearest dry cell E1 (5,4) has an X beside it at (6,4)
+    let grid = ['GGGGGGGGG', 'GGGGGGGGG', 'GGGGGGGGG', 'GGGGGGGGG', 'GGGGGLXGG', 'GGGGGGGGG', 'GGGGGGGGG', 'GGLGGGGGG', 'GGGGGGGGG'].map(row);
+    assert.deepEqual(nearestDry(grid), { x: 2, z: 7 });
+    grid = ['GGGGGGGGG', 'GGGGGGGGG', 'GGGGGGGGG', 'GGGGGGGGG', 'GGGGGLXGG', 'GGGGGGGGG', 'GGGGGGGGG', 'GGGGGGGGG', 'GGGGGGGGG'].map(row);
+    assert.deepEqual(nearestDry(grid), { x: 5, z: 4 }, 'every dry cell has one: the nearest');
+});

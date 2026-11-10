@@ -21,6 +21,10 @@ export const SAMPLES = {
     command: new URL('../../test/fixtures/laya-command-v1/request.json', import.meta.url),
     'command:v2': new URL('../../test/fixtures/laya-command-v2/request.json', import.meta.url),
     'mine:v2': new URL('../../test/fixtures/laya-mine-v2/request.json', import.meta.url),
+    // v2.1: the command's own prompt; mine and farm keep v2's prompt text
+    'command:v2.1': new URL('../../test/fixtures/laya-command-v21/request.json', import.meta.url),
+    'mine:v2.1': new URL('../../test/fixtures/laya-mine-v2/request.json', import.meta.url),
+    'farm:v2.1': new URL('../../test/fixtures/laya-farm-v2/request.json', import.meta.url),
 };
 
 // loadSample returns a task's sample request, matching its prompt version.

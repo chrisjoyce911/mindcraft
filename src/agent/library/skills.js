@@ -12,6 +12,7 @@ import { ORES as MINE_ORES } from "../laya/mine_state.js";
 import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
 import { packDeps } from "../laya/pack_actions.js";
+import { huntUntil } from "../laya/hunt.js";
 import { mineStore } from "../laya/mine_memory.js";
 import { readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, mkdirSync as mkdirSyncFs } from "fs";
 
@@ -548,6 +549,33 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     }
     log(bot, `Collected ${collected} ${blockType}.`);
     return collected > 0;
+}
+
+export function inventoryCount(bot, item) {
+    /**
+     * How many of an item the bot carries.
+     **/
+    return world.getInventoryCounts(bot)[item] || 0;
+}
+
+export async function huntForDrop(bot, mob, item, count=1, target=null) {
+    /**
+     * Hunt the given mob until count more of item (its drop) are carried, picking up the drops.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {string} mob, the mob that drops it, e.g. "cow".
+     * @param {string} item, the drop, e.g. "beef".
+     * @param {number} count, how many more to have.
+     * @returns {Promise<boolean>} true once it has them.
+     **/
+    const have = () => world.getInventoryCounts(bot)[item] || 0;
+    const r = await huntUntil(count, {
+        have,
+        attack: () => attackNearest(bot, mob, true),
+        pickup: () => pickupNearbyItems(bot),
+        interrupted: () => !!bot.interrupt_code,
+    }, target);
+    log(bot, r.ok ? `Hunted ${r.kills} ${mob}: I have ${have()} ${item}.` : `Stopped hunting ${mob} for ${item}: ${r.reason}.`);
+    return r.ok;
 }
 
 export async function pickupNearbyItems(bot) {

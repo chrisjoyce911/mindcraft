@@ -171,6 +171,22 @@ export const actionsList = [
         })
     },
     {
+        name: '!hunt',
+        description: 'Hunt an animal or mob until you have the given number more of its drop (e.g. cow for beef or leather, pig for porkchop, sheep for mutton or wool, chicken for chicken, feather or egg, spider for string), picking up the drops.',
+        params: {
+            'mob': { type: 'string', description: 'The mob to hunt, e.g. cow.' },
+            'item': { type: 'string', description: 'The drop to collect, e.g. beef.' },
+            'count': { type: 'int', description: 'How many more of the drop to have.', domain: [1, 64] },
+        },
+        // the target is fixed at the command, so a resumed hunt doesn't add more
+        perform: runLayaAction('hunt', (agent, mob, item, count) => {
+            const target = (skills.inventoryCount?.(agent.bot, item) ?? 0) + count;
+            const work = () => skills.huntForDrop(agent.bot, mob, item, count, target);
+            work.remaining = () => target - (skills.inventoryCount?.(agent.bot, item) ?? 0);
+            return work;
+        })
+    },
+    {
         name: '!layaFarm',
         description: 'Farm nearby with the Laya farm model: harvest ripe crops, replant, till, water, bone meal and breed animals, making a hoe, seeds or a water bucket when needed and emptying a full pack into the home chest (the remembered place "home_chest"). With a count it stops once that many of the crop are harvested; without one it farms until stopped. A lone number is minutes to farm (old form).',
         params: {
