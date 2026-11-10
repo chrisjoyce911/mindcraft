@@ -1,5 +1,6 @@
 import * as skills from '../library/skills.js';
 import settings from '../settings.js';
+import { parseGoal as parseFarmGoal } from '../laya/farm.js';
 import convoManager from '../conversation.js';
 
 
@@ -138,14 +139,20 @@ export const actionsList = [
     },
     {
         name: '!layaFarm',
-        description: 'Farm nearby with the Laya farm model for some minutes: harvest ripe crops, replant, till, water, bone meal and breed animals, making a hoe, seeds or a water bucket when needed.',
+        description: 'Farm nearby with the Laya farm model: harvest ripe crops, replant, till, water, bone meal and breed animals, making a hoe, seeds or a water bucket when needed and emptying a full pack into the home chest (the remembered place "home_chest"). With a count it stops once that many of the crop are harvested; without one it farms until stopped. A lone number is minutes to farm (old form).',
         params: {
-            'minutes': {type: 'float', description: 'How long to farm.', domain: [0.5, 60]}
+            'crop': {type: 'string', optional: true, description: 'The crop: wheat, carrots, potatoes, beetroot or any (default any).'},
+            'count': {type: 'string', optional: true, description: 'How many of the crop to harvest, or "any" to farm until stopped (default).'}
         },
-        perform: runLayaAction('layaFarm', (agent, minutes) => {
-            const end = Date.now() + minutes * 60000;
-            return () => skills.farmWithLayaModel(agent.bot, Math.max(0.1, (end - Date.now()) / 60000));
-        })
+        perform: async function (agent, crop, count) {
+            const goal = parseFarmGoal(crop, count);
+            if (goal.error) return goal.error;
+            const end = goal.minutes == null ? null : Date.now() + goal.minutes * 60000;
+            const progress = { harvested: 0 }; // kept across resumes after a fight
+            return runLayaAction('layaFarm', () => () => skills.farmWithLayaModel(agent.bot,
+                { crop: goal.crop, count: goal.count, progress, minutes: end == null ? null : Math.max(0.1, (end - Date.now()) / 60000) },
+                () => agent.memory_bank.recallPlace('home_chest')))(agent);
+        }
     },
     {
         name: '!goToCoordinates',

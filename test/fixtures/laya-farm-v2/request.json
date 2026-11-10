@@ -1,0 +1,51 @@
+{
+  "questions": {
+    "Action": {
+      "criteria": [
+        "harvest",
+        "plant",
+        "till",
+        "water",
+        "pond",
+        "bone_meal",
+        "breed",
+        "find_water",
+        "wait"
+      ],
+      "instructions": "What should I do next on the farm?",
+      "type": "choice"
+    },
+    "Item": {
+      "criteria": [
+        "hoe",
+        "bone_meal",
+        "wheat_seeds",
+        "carrot",
+        "none"
+      ],
+      "instructions": "Which item should I use?",
+      "type": "choice"
+    },
+    "Target": {
+      "criteria": [
+        "E0 N1",
+        "W1 S0",
+        "E1 S0",
+        "E1 N2",
+        "W2 N1",
+        "E4 S0",
+        "cow",
+        "pig",
+        "none"
+      ],
+      "instructions": "Which cell or animals?",
+      "type": "choice"
+    },
+    "Unload": {
+      "criteria": null,
+      "instructions": "I should go and empty my pack into the home chest now.",
+      "type": "noul"
+    }
+  },
+  "state": "Farm.\nCrop carrots\nPack 5 Home 12 Health 20 Food 18 Hostiles 0 Valuables 6\nCarry hoe x1 bone_meal x3 wheat_seeds x12 carrot x5\nAnimals cow 2 pig 3\nGGGGGXGGL\nG111211GL\nG11W1F1GL\nG121113GL\nGGGGX33GL\nXXXXXXXXX\nGGGGGGGGL\nOOOOOOOOO\nLLLLLLLLL"
+}

@@ -11,6 +11,7 @@ import { mineWithLaya } from "../laya/mine.js";
 import { ORES as MINE_ORES } from "../laya/mine_state.js";
 import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
+import { packDeps } from "../laya/pack_actions.js";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -2367,14 +2368,16 @@ export async function mineOre(bot, ore, count=1) {
     }
 }
 
-export async function farmWithLayaModel(bot, minutes=5) {
+export async function farmWithLayaModel(bot, goal=5, homeChest=null) {
     /**
      * Farm nearby with the Laya "farm" decision model (src/agent/laya/farm.js):
      * harvest, replant, till, water, bone meal and breed, making a hoe, seeds
-     * or a water bucket when needed. Needs the farm task in
-     * settings.decision_models.
+     * or a water bucket when needed, walking to water when there is none, and
+     * (prompt v2) emptying a full pack into the home chest. Needs the farm
+     * task in settings.decision_models.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
-     * @param {number} minutes, how long to farm.
+     * @param {number|object} goal, minutes to farm, or {crop, count, minutes}: crop wheat, carrots, potatoes, beetroot or any; count of the crop to harvest (null: until stopped).
+     * @param {function} homeChest, optional: returns the home chest's [x, y, z] (the remembered place "home_chest"), or nothing.
      * @returns {Promise<boolean>} true if farming ran.
      **/
     const task = taskSettings('farm');
@@ -2382,12 +2385,16 @@ export async function farmWithLayaModel(bot, minutes=5) {
         log(bot, 'The Laya farm task is off (settings.decision_models.tasks.farm).');
         return false;
     }
+    const g = typeof goal === 'number' ? { crop: 'any', count: null, minutes: goal } : goal;
     const paused = ['item_collecting', 'hunting', 'torch_placing', 'unstuck', 'elbow_room'];
     paused.forEach(m => bot.modes.pause(m));
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     try {
-        await farmWithLaya(bot, minutes * 60000, {
-            client: laya, task, ...farmDeps(bot),
+        await farmWithLaya(bot, { crop: g.crop || 'any', count: g.count ?? null, progress: g.progress, ms: g.minutes == null ? null : g.minutes * 60000 }, {
+            client: laya, task, ...farmDeps(bot, task.water_radius ?? 64),
+            pack: packDeps(bot, homeChest),
+            inventory: () => world.getInventoryCounts(bot),
+            say: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
             now: () => Date.now(), sleep, log: msg => log(bot, msg),
             stepLog: `./bots/${bot.username}/logs/laya-farm.jsonl`,
         });

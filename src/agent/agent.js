@@ -4,7 +4,7 @@ import { VisionInterpreter } from './vision/vision_interpreter.js';
 import { Prompter } from '../models/prompter.js';
 import { initModes } from './modes.js';
 import { initBot, isHostile } from '../utils/mcdata.js';
-import { containsCommand, commandExists, executeCommand, truncCommandMessage, isAction, blacklistCommands } from './commands/index.js';
+import { containsCommand, commandExists, commandArity, executeCommand, truncCommandMessage, isAction, blacklistCommands } from './commands/index.js';
 import { ActionManager } from './action_manager.js';
 import { NPCContoller } from './npc/controller.js';
 import { MemoryBank } from './memory_bank.js';
@@ -301,6 +301,7 @@ export class Agent {
                 bot: this.bot,
                 speaker: source,
                 has: name => commandExists(name),
+                arity: name => commandArity(name),
                 nearestHostile: () => getNearestEntityWhere(this.bot, e => isHostile(e), 16)?.name ?? null,
                 execute: line => executeCommand(this, line),
                 say: text => this.routeResponse(source, text),

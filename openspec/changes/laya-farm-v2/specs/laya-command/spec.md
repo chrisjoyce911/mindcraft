@@ -18,4 +18,4 @@ The `mine` command with Count `any` SHALL run `!layaMine(ore)` with no count whe
 
 #### Scenario: mine until stopped
 - **WHEN** a player says "andy mine some iron" and `!layaMine`'s count is optional
-- **THEN** the bot runs `!layaMine("raw_iron")`
+- **THEN** the bot runs `!layaMine("iron")`

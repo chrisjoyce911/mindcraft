@@ -11,6 +11,8 @@
 //   W water   F empty wet farmland   D empty dry farmland
 //   crops growing/ripe: wheat 1/2, carrot 3/4, potato 5/6, beetroot 7/8
 
+import { packLine } from './pack.js';
+
 export const SIZE = 9;
 export const C = (SIZE - 1) / 2;
 
@@ -155,6 +157,12 @@ function nearest(grid, match) {
     return BY_DISTANCE.find(p => match(grid[p.z][p.x])) || null;
 }
 
+// nearestDry: the nearest dry ground cell other than the bot's own (where a
+// pond goes; laya-go nearestDry).
+function nearestDry(grid) {
+    return BY_DISTANCE.slice(1).find(p => grid[p.z][p.x] === 'L') || null;
+}
+
 // targetOptions are the Target question's options (laya-go
 // rules.TargetOptions).
 export function targetOptions(s) {
@@ -162,6 +170,11 @@ export function targetOptions(s) {
     const key = p => p.z * SIZE + p.x;
     for (const m of [isRipe, c => c === 'F', c => c === 'D', c => c === 'G', isGrowing]) {
         const p = nearest(s.grid, m);
+        if (p) pick.add(key(p));
+    }
+    // v2 (a crop is set): the nearest dry ground, a pond's place
+    if (s.crop) {
+        const p = nearestDry(s.grid);
         if (p) pick.add(key(p));
     }
     for (const p of BY_DISTANCE) {
@@ -175,4 +188,131 @@ export function targetOptions(s) {
 // itemOptions are the Item question's options: the carried items, then none.
 export function itemOptions(s) {
     return [...s.carry.map(c => c.item), NONE];
+}
+
+// ---- Prompt v2 (laya-go farm-v2): the crop being farmed, the pack line and
+// the Unload question; actions for a dry place.
+
+// FARM_CROPS: the Crop line's values, and the produce item each counts.
+export const FARM_CROPS = ['wheat', 'carrots', 'potatoes', 'beetroot', 'any'];
+export const PRODUCE = { wheat: ['wheat'], carrots: ['carrot'], potatoes: ['potato'], beetroot: ['beetroot'] };
+PRODUCE.any = [...PRODUCE.wheat, ...PRODUCE.carrots, ...PRODUCE.potatoes, ...PRODUCE.beetroot];
+// CROP_OF: a FARM_CROPS name to its CROPS entry.
+export const CROP_OF = { wheat: CROPS[0], carrots: CROPS[1], potatoes: CROPS[2], beetroot: CROPS[3] };
+
+export const POND = 'pond';
+export const FIND_WATER = 'find_water';
+export const ACTIONS_V2 = ['harvest', 'plant', 'till', 'water', POND, 'bone_meal', 'breed', FIND_WATER, 'wait'];
+
+const UNLOAD_TEXT = 'I should go and empty my pack into the home chest now.';
+
+// questionsV2: v1's questions with the v2 actions, and Unload.
+export function questionsV2(s) {
+    return {
+        ...questions(s),
+        Action: { criteria: ACTIONS_V2.slice(), instructions: 'What should I do next on the farm?', type: 'choice' },
+        Unload: { criteria: null, instructions: UNLOAD_TEXT, type: 'noul' },
+    };
+}
+
+// farmValuables: prompt v2's Valuables for an inventory ({name: count}): the
+// harvested crops carried beyond the seeds and food kept (keep is the unload
+// keep rule, farm.js farmKeep).
+export function farmValuables(inv, keep) {
+    let n = 0;
+    for (const name of PRODUCE.any) {
+        const c = inv[name] || 0;
+        n += c - Math.min(c, keep(name, c));
+    }
+    return n;
+}
+
+// stateV2 writes a situation with s.crop and s.pack (pack.js) as prompt v2:
+// v1 with the Crop and Pack lines after "Farm.".
+export function stateV2(s) {
+    const lines = state(s).split('\n');
+    lines.splice(1, 0, `Crop ${s.crop}`, packLine(s.pack));
+    return lines.join('\n');
+}
+
+// ---- Rules: a port of laya-go's games/farm/rules Decide, the answer used
+// when the model isn't sure (prompt v2).
+
+const KEEP = 4; // seeds kept back from breeding
+const BREED_FOODS = { cow: ['wheat'], sheep: ['wheat'], pig: ['carrot', 'potato', 'beetroot'], chicken: ['wheat_seeds', 'beetroot_seeds'] };
+const count = (s, item) => s.carry.find(c => c.item === item)?.count || 0;
+const isSeed = item => CROPS.some(c => c.seed === item);
+
+function seedFor(s, p) {
+    const want = CROP_OF[s.crop];
+    if (want && count(s, want.seed) > 0) return { seed: want.seed, rule: 'plant-crop' };
+    const counts = {};
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const x = p.x + dx, z = p.z + dz;
+        if ((dx === 0 && dz === 0) || x < 0 || z < 0 || x >= SIZE || z >= SIZE) continue;
+        const cr = CROPS.find(c => c.growing === s.grid[z][x] || c.ripe === s.grid[z][x]);
+        if (cr && count(s, cr.seed) > 0) counts[cr.seed] = (counts[cr.seed] || 0) + 1;
+    }
+    let best = '', n = 0;
+    for (const cr of CROPS) if ((counts[cr.seed] || 0) > n) { best = cr.seed; n = counts[cr.seed]; }
+    if (best) return { seed: best, rule: 'replant' };
+    for (const cr of CROPS) if (count(s, cr.seed) > 0 && (!best || count(s, cr.seed) > count(s, best))) best = cr.seed;
+    return { seed: best, rule: 'plant' };
+}
+
+function breedFood(s, kind) {
+    const spare = f => count(s, f) - (isSeed(f) ? KEEP : 0);
+    let best = '';
+    for (const f of BREED_FOODS[kind]) if (spare(f) >= 2 && (!best || spare(f) > spare(best))) best = f;
+    return best || null;
+}
+
+// farmCell: part of a farm, or one without needing water (laya-go farmCell).
+const farmCell = c => isRipe(c) || isGrowing(c) || c === 'G' || c === 'F' || c === 'D';
+
+// hasWater reports whether the view has water or anything hydrated by it.
+export function hasWater(grid) {
+    return grid.some(r => r.some(c => c === 'W' || c === 'G' || c === 'F'));
+}
+
+// growing reports whether any crop in the view is still growing.
+export function growing(grid) {
+    return grid.some(r => r.some(isGrowing));
+}
+
+// decide returns the rules' answer {action, target, item, rule}; prompt v2
+// rules when the situation has a crop (s.crop).
+export function decide(s) {
+    const g = s.grid, near = m => nearest(g, m);
+    const d = (action, p, item, rule) => ({ action, target: typeof p === 'string' ? p : cellName(p.x, p.z), item, rule });
+    let p = near(isRipe);
+    if (p) return d('harvest', p, NONE, 'harvest');
+    const bucket = count(s, 'water_bucket') > 0;
+    if (bucket && (p = near(c => c === 'D'))) return d('water', p, 'water_bucket', 'water');
+    if (CROPS.some(c => count(s, c.seed) > 0)) {
+        if ((p = near(c => c === 'F' || (!bucket && c === 'D')))) {
+            const { seed, rule } = seedFor(s, p);
+            return d('plant', p, seed, rule);
+        }
+        if (count(s, 'hoe') > 0 && (p = near(c => c === 'G'))) return d('till', p, 'hoe', 'till');
+    }
+    if (s.crop) { // v2
+        if (bucket && count(s, 'hoe') > 0 && CROPS.some(c => count(s, c.seed) > 0) && (p = nearestDry(g)))
+            return d(POND, p, 'water_bucket', 'pond');
+        if (!bucket && !near(farmCell)) return d(FIND_WATER, NONE, NONE, 'find_water');
+    }
+    for (const h of s.animals) {
+        if (h.count < 2) continue;
+        const f = breedFood(s, h.kind);
+        if (f) return d('breed', h.kind, f, 'breed');
+    }
+    if (count(s, 'bone_meal') > 0 && (p = near(isGrowing))) return d('bone_meal', p, 'bone_meal', 'bone_meal');
+    return d('wait', NONE, NONE, 'wait');
+}
+
+// pondCell names the nearest dry ground cell other than the bot's own, or
+// null.
+export function pondCell(grid) {
+    const p = nearestDry(grid);
+    return p ? cellName(p.x, p.z) : null;
 }

@@ -110,8 +110,8 @@ export function parseCommandMessage(message) {
     const params = commandParams(command);
     const paramNames = commandParamNames(command);
     
-    if (args.length !== params.length)
-        return `Command ${command.name} was given ${args.length} args, but requires ${params.length} args.`;
+    if (args.length < numRequired(command) || args.length > params.length)
+        return `Command ${command.name} was given ${args.length} args, but requires ${argsWanted(command)} args.`;
 
     
     for (let i = 0; i < args.length; i++) {
@@ -209,6 +209,27 @@ function numParams(command) {
     return commandParams(command).length;
 }
 
+// numRequired counts the parameters before the first optional one: optional
+// parameters ({optional: true}) may be left off the end.
+function numRequired(command) {
+    const params = commandParams(command);
+    const i = params.findIndex(p => p.optional);
+    return i < 0 ? params.length : i;
+}
+
+function argsWanted(command) {
+    const req = numRequired(command), all = numParams(command);
+    return req === all ? `${all}` : `${req} to ${all}`;
+}
+
+// commandArity returns a command's {min, max} number of arguments, or null.
+export function commandArity(commandName) {
+    if (!commandName.startsWith("!"))
+        commandName = "!" + commandName;
+    const command = commandMap[commandName];
+    return command ? { min: numRequired(command), max: numParams(command) } : null;
+}
+
 export async function executeCommand(agent, message) {
     let parsed = parseCommandMessage(message);
     if (typeof parsed === 'string')
@@ -220,8 +241,8 @@ export async function executeCommand(agent, message) {
         if (parsed.args) {
             numArgs = parsed.args.length;
         }
-        if (numArgs !== numParams(command))
-            return `Command ${command.name} was given ${numArgs} args, but requires ${numParams(command)} args.`;
+        if (numArgs < numRequired(command) || numArgs > numParams(command))
+            return `Command ${command.name} was given ${numArgs} args, but requires ${argsWanted(command)} args.`;
         else {
             const result = await command.perform(agent, ...parsed.args);
             return result;
@@ -251,7 +272,7 @@ export function getCommandDocs(agent) {
         if (command.params) {
             docs += 'Params:\n';
             for (let param in command.params) {
-                docs += `${param}: (${typeTranslations[command.params[param].type]??command.params[param].type}) ${command.params[param].description}\n`;
+                docs += `${param}: (${typeTranslations[command.params[param].type]??command.params[param].type}${command.params[param].optional ? ', optional' : ''}) ${command.params[param].description}\n`;
             }
         }
     }

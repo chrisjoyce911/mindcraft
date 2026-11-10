@@ -21,6 +21,7 @@ export const DEFAULTS = {
     gather_count: 8,       // counts when the message says none
     mine_count: 4,
     craft_count: 1,
+    farm_max: 640,         // the most a farm count asks for
     no_llm: false,         // true: reply with a canned line instead of asking the LLM
     log_decisions: true,
 };
@@ -32,6 +33,10 @@ export const CANNED = "Sorry, I can only do simple commands right now: follow, c
 const ORE_BLOCK = { raw_iron: 'iron_ore', coal: 'coal_ore', diamond: 'diamond_ore', raw_gold: 'gold_ore', raw_copper: 'copper_ore',
     redstone: 'redstone_ore', lapis_lazuli: 'lapis_ore', emerald: 'emerald_ore', cobblestone: 'stone', log: 'oak_log', planks: 'oak_planks' };
 
+// MINE_ORE: the ore !layaMine takes for the item mine gets (laya-go's
+// gather item); other items aren't ores and go to the gather fallbacks.
+const MINE_ORE = { coal: 'coal', raw_copper: 'copper', raw_iron: 'iron', lapis_lazuli: 'lapis', raw_gold: 'gold', redstone: 'redstone', diamond: 'diamond' };
+
 // Foods eaten when "eat" names none, best first; bad foods aren't chosen.
 const GOOD_FOODS = ['golden_carrot', 'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_salmon', 'baked_potato', 'bread',
     'cooked_chicken', 'cooked_cod', 'pumpkin_pie', 'mushroom_stew', 'carrot', 'apple', 'beetroot', 'melon_slice', 'sweet_berries', 'cookie', 'dried_kelp', 'potato'];
@@ -40,6 +45,9 @@ const GOOD_FOODS = ['golden_carrot', 'cooked_beef', 'cooked_porkchop', 'cooked_m
 const keep = n => /_(pickaxe|axe|sword|shovel|hoe|helmet|chestplate|leggings|boots)$/.test(n) || n === 'shield' || FOODS.includes(n);
 
 const q = s => JSON.stringify(String(s));
+
+// openEnded: a count that means "keep going" (none said).
+const openEnded = count => count === 'any' || count === 'all';
 
 function countOf(answer, fallback) {
     const n = parseInt(answer, 10);
@@ -52,7 +60,9 @@ function countOf(answer, fallback) {
 //   {kind: 'llm', reason}             let the LLM handle the message
 //   {kind: 'ignore'}                  the message is for someone else
 // ctx: speaker, carry ([{item, count}]), has(name) → command exists,
-// nearestHostile() → mob name or null, opts (DEFAULTS merged with settings).
+// nearestHostile() → mob name or null, arity(name) → {min, max} arguments
+// of a command (so an optional count can be left off), opts (DEFAULTS merged
+// with settings).
 export function plan(r, ctx) {
     const o = { ...DEFAULTS, ...(ctx.opts || {}) };
     if (!r) return { kind: 'llm', reason: 'no-answer' };
@@ -89,10 +99,22 @@ export function plan(r, ctx) {
         }
         case 'mine': {
             if (item === NONE) return { kind: 'reply', text: 'What should I mine for? Iron, coal, diamonds…' };
+            const ore = MINE_ORE[item], mine = ore && has('!layaMine');
+            // "mine some iron": until stopped, when !layaMine takes a lone ore
+            if (mine && openEnded(count) && (ctx.arity?.('!layaMine')?.min ?? 2) <= 1)
+                return run([`!layaMine(${q(ore)})`], `Mining ${ore} until you say stop.`);
             const n = Math.min(64, countOf(count, o.mine_count));
-            if (has('!layaMine')) return run([`!layaMine(${q(item)}, ${n})`], `Mining for ${n} ${item}.`);
+            if (mine) return run([`!layaMine(${q(ore)}, ${n})`], `Mining for ${n} ${item}.`);
             if (has('!layaGather')) return run([`!layaGather(${q(item)}, ${n})`], `Mining for ${n} ${item}.`);
             return run([`!collectBlocks(${q(ORE_BLOCK[item] || item)}, ${n})`], `Mining for ${n} ${item}.`);
+        }
+        case 'farm': {
+            if (!has('!layaFarm')) return { kind: 'llm', reason: 'no-farm-command' };
+            const crop = item !== NONE ? item : 'any';
+            const what = crop === 'any' ? 'crops' : crop;
+            if (openEnded(count)) return run([`!layaFarm(${q(crop)})`], `Farming ${what} until you say stop.`);
+            const n = Math.min(o.farm_max, countOf(count, o.farm_max));
+            return run([`!layaFarm(${q(crop)}, ${n})`], `Farming until I've harvested ${n} ${what}.`);
         }
         case 'craft': {
             if (item === NONE) return { kind: 'reply', text: "I don't know how to make that." };
@@ -147,7 +169,7 @@ export function logDecision(path, entry) {
 
 // handleCommand decides one player message. deps:
 //   client {decide}, task (settings), bot ({username, inventory}), speaker,
-//   has(name), nearestHostile(), execute(line) → result text, say(text),
+//   has(name), arity(name), nearestHostile(), execute(line) → result text, say(text),
 //   logPath.
 // It returns true when the message was handled (the LLM isn't asked).
 export async function handleCommand(message, deps) {
@@ -156,7 +178,7 @@ export async function handleCommand(message, deps) {
     if (!text) return false;
     const r = await deps.client.decide('command', text, QUESTIONS);
     const carry = carried(deps.bot);
-    const p = plan(r, { speaker: deps.speaker, carry, has: deps.has, nearestHostile: deps.nearestHostile, opts: o });
+    const p = plan(r, { speaker: deps.speaker, carry, has: deps.has, arity: deps.arity, nearestHostile: deps.nearestHostile, opts: o });
     const entry = { state: text, kind: p.kind, reason: p.reason, lines: p.lines, ms: r?.ms };
     if (r) {
         const a = r.answers;

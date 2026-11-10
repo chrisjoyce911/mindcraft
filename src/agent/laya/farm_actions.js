@@ -60,7 +60,8 @@ function isBaby(e) {
 }
 
 // farmDeps returns the deps farm.js needs for a real bot.
-export function farmDeps(bot) {
+// radius: how far to look for water (the farm task's water_radius).
+export function farmDeps(bot, radius = 64) {
     const blockAt = (x, y, z) => bot.blockAt(new Vec3(x, y, z));
     let last = null; // the situation read last, with its origin
     const read = () => {
@@ -115,6 +116,15 @@ export function farmDeps(bot) {
             if (!await equipItem('water_bucket')) return false;
             await bot.activateBlock(bot.blockAt(ground.offset(0, -1, 0)), new Vec3(0, 1, 0));
             return true;
+        case 'pond': { // a 1-block hole in dry ground, filled from the bucket
+            if (floods(blockAt, ground)) return false;
+            const above = bot.blockAt(crop);
+            if (above && above.name !== 'air') await bot.dig(above); // grass or a flower on top
+            await bot.dig(bot.blockAt(ground));
+            if (!await equipItem('water_bucket')) return false;
+            await bot.activateBlock(bot.blockAt(ground.offset(0, -1, 0)), new Vec3(0, 1, 0));
+            return bot.blockAt(ground)?.name === 'water';
+        }
         case 'bone_meal':
             if (!await equipItem('bone_meal')) return false;
             await bot.activateBlock(bot.blockAt(crop));
@@ -133,13 +143,33 @@ export function farmDeps(bot) {
                 if (r?.ok) return true;
             } catch { /* fall back below */ }
         }
-        return craftWithSkills(bot, item, count);
+        return craftWithSkills(bot, item, count, radius);
     };
-    return { read, act, craft };
+    const position = () => {
+        const p = bot.entity.position;
+        return { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+    };
+    const goTo = async pos => {
+        await skills.goToPosition(bot, pos.x, pos.y, pos.z, 2);
+        return bot.entity.position.distanceTo(new Vec3(pos.x, pos.y, pos.z)) <= 4;
+    };
+    const findWater = async r => {
+        const w = findWaterBlock(bot, r);
+        return w ? { x: w.position.x, y: w.position.y, z: w.position.z } : null;
+    };
+    return { read, act, craft, position, goTo, findWater };
 }
 
-// craftWithSkills gets an item with Mindcraft's own skills.
-export async function craftWithSkills(bot, item, count) {
+// findWaterBlock finds the nearest water source block within radius, or
+// null.
+export function findWaterBlock(bot, radius = 64) {
+    return bot.findBlock({ matching: b => b.name === 'water' && b.metadata === 0, maxDistance: radius });
+}
+
+// craftWithSkills gets an item with Mindcraft's own skills. A water bucket
+// is made only from what's there: a carried bucket (or 3 iron ingots for
+// one) and water within radius.
+export async function craftWithSkills(bot, item, count, radius = 64) {
     const count_of = name => bot.inventory.items().filter(i => i.name === name).reduce((n, i) => n + i.count, 0);
     switch (item) {
     case 'hoe':
@@ -150,9 +180,10 @@ export async function craftWithSkills(bot, item, count) {
         await skills.pickupNearbyItems(bot);
         return count_of('wheat_seeds') > 0;
     case 'water_bucket': {
-        if (count_of('bucket') === 0 && !await skills.craftRecipe(bot, 'bucket', 1)) return false;
-        const water = bot.findBlock({ matching: b => b.name === 'water' && b.metadata === 0, maxDistance: 32 });
+        if (count_of('bucket') === 0 && count_of('iron_ingot') < 3) return false;
+        const water = findWaterBlock(bot, radius);
         if (!water) return false;
+        if (count_of('bucket') === 0 && !await skills.craftRecipe(bot, 'bucket', 1)) return false;
         await skills.goToPosition(bot, water.position.x, water.position.y, water.position.z, 3);
         await skills.equip(bot, 'bucket');
         await bot.activateBlock(water);

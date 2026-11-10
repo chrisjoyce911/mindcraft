@@ -124,6 +124,7 @@ const settings = {
                 "enabled": false,      // off: every player message goes to the LLM as before
                 "server": "golaya",
                 "model": "command-a",
+                "prompt": "v1",        // v2 adds the farm command and crops: use it with a command v2 model
                 "timeout_ms": 500,
                 "min_confidence": 0.6, // Command's top probability needed to act without the LLM
                 "addressed_min": 0.5,  // less sure the message is for me: the LLM decides
@@ -134,11 +135,15 @@ const settings = {
             "farm": {
                 "enabled": false,      // off: !layaFarm says so and does nothing
                 "server": "golaya",
-                "model": "farm-a",
+                "model": "farm-a",     // farm-a is a prompt v1 model: with v2 use a v2 model (or the v2 rules decide when it isn't sure)
+                "prompt": "v2",        // v2 adds the crop, the pack line and Unload (home chest), pond and find_water; v1 for farm-a
                 "timeout_ms": 300,
                 "min_confidence": 0.5,
                 "step_ms": 500,        // pause between steps that do nothing
-                "max_steps": 400,
+                "max_steps": 400,      // the most steps of a timed !layaFarm(minutes); a count or "until stopped" has no limit
+                "wait_limit": 20,      // waits in a row with nothing growing before it stops
+                "water_radius": 64,    // how far it looks for water when there's none to farm with
+                "keep_seeds": 16,      // seeds of each kind kept when emptying the pack into the home chest ("home_chest" place)
                 "log_steps": true      // bots/<name>/logs/laya-farm.jsonl
             }
         }

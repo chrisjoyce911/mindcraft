@@ -72,7 +72,7 @@ test('plan: gather, mine and craft use the Laya commands when present', () => {
     assert.deepEqual(plan(answer({ command: 'gather', item: 'wood', count: '10' }), ctx()).lines, ['!layaGather("log", 10)']);
     assert.deepEqual(plan(answer({ command: 'gather', item: 'wood' }), ctx()).lines, ['!layaGather("log", 8)']);
     assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: '4' }), ctx()).lines, ['!layaGather("raw_iron", 4)']);
-    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron' }), ctx({ has: n => n === '!layaMine' })).lines, ['!layaMine("raw_iron", 4)']);
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron' }), ctx({ has: n => n === '!layaMine' })).lines, ['!layaMine("iron", 4)']);
     assert.deepEqual(plan(answer({ command: 'mine', item: 'iron' }), ctx({ has: () => false })).lines, ['!collectBlocks("iron_ore", 4)']);
     assert.equal(plan(answer({ command: 'mine' }), ctx()).kind, 'reply');
     assert.deepEqual(plan(answer({ command: 'craft', item: 'pickaxe', count: '1' }), ctx()).lines, ['!layaCraft("iron_pickaxe", 1)'], 'best tier: 4 iron ingots');
@@ -134,4 +134,17 @@ test('handleCommand runs commands, merges inventory, and falls back to the LLM',
     d = deps(answer({ addressed: 0.02, command: 'follow' }));
     assert.equal(await handleCommand('bob follow me', d), true);
     assert.deepEqual([d.ran, d.said], [[], []], 'for someone else: ignored');
+});
+
+test('plan: farm a count, until stopped, and open-ended mining', () => {
+    const farmCtx = ctx({ has: n => ['!layaFarm', '!layaMine'].includes(n), arity: n => (n === '!layaMine' ? { min: 1, max: 2 } : { min: 0, max: 2 }) });
+    assert.deepEqual(plan(answer({ command: 'farm', item: 'wheat', count: '20' }), farmCtx).lines, ['!layaFarm("wheat", 20)']);
+    assert.deepEqual(plan(answer({ command: 'farm', item: 'carrots', count: 'any' }), farmCtx).lines, ['!layaFarm("carrots")']);
+    assert.deepEqual(plan(answer({ command: 'farm', item: 'none', count: 'any' }), farmCtx).lines, ['!layaFarm("any")']);
+    assert.equal(plan(answer({ command: 'farm', item: 'wheat' }), ctx()).kind, 'llm', 'no !layaFarm');
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: 'any' }), farmCtx).lines, ['!layaMine("iron")']);
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: '9' }), farmCtx).lines, ['!layaMine("iron", 9)']);
+    const fixedMine = ctx({ has: n => n === '!layaMine', arity: () => ({ min: 2, max: 2 }) });
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'iron', count: 'any' }), fixedMine).lines, ['!layaMine("iron", 4)'], 'count required: the default count');
+    assert.deepEqual(plan(answer({ command: 'mine', item: 'stone', count: '8' }), ctx({ has: n => n === '!layaMine' })).lines, ['!collectBlocks("stone", 8)'], 'stone is no ore');
 });

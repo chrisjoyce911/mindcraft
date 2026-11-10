@@ -11,6 +11,7 @@ export const NONE = 'none';
 export const COMMANDS = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'give', 'attack', 'store', 'eat', 'inventory', 'chat'];
 export const TIERS = ['wooden', 'stone', 'iron', 'diamond', NONE];
 export const COUNTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '16', '20', '24', '32', '48', '64', 'all', 'any'];
+export const CROPS = ['wheat', 'carrots', 'potatoes', 'beetroot'];
 export const TOOLS = ['pickaxe', 'axe', 'sword', 'shovel', 'hoe'];
 export const ARMOR = ['helmet', 'chestplate', 'leggings', 'boots'];
 export const MOBS = ['zombie', 'skeleton', 'spider', 'creeper', 'witch', 'husk', 'cave_spider', 'stray', 'drowned', 'enderman', 'slime', 'cow', 'pig', 'sheep', 'chicken'];
@@ -133,6 +134,8 @@ export function resolve(command, key, tier, carry) {
     switch (command) {
         case 'attack':
             return MOBS.includes(key) ? key : NONE;
+        case 'farm': // v2: the crop key
+            return CROPS.includes(key) ? key : NONE;
         case 'gather': case 'mine': {
             const k = kindOf(key);
             return k && k.gather ? k.gather : NONE;
