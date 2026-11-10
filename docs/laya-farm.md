@@ -63,6 +63,8 @@ The user's first trial was a savanna plateau far from water: every cell was `L` 
 - **With a water bucket** (and a hoe and seeds) the v2 rules make a **pond**; with any prompt, a `wait` in a view with no water and nothing growing becomes a pond on the nearest dry ground.
 - **Without one**, `find_water` (or a `wait` in a dry view with nothing growing): the bot looks for a water source within `water_radius` (64) blocks, walks there and carries on farming. If there is none, or it's still dry after walking there, it says **"No water near here — take me to water or give me a water bucket."** and stops.
 - A water bucket is only made from what's there: a carried bucket or 3 iron ingots, and water within `water_radius`.
+- **No endless failures:** a vetoed or failed step bans that action on that cell for `ban_steps` (20) steps (the rules answer instead, or a wait); after `max_bad` (6) vetoed or failed steps in a row it says "I keep failing to … here; stopping." and stops. A pond next to a hole, lower ground or water is vetoed (`beside-hole`).
+- **Checked actions:** `till` is done only when the cell is farmland afterwards, `plant` only when a crop stands there, and `water`/`pond` only when water is in the hole. Buckets are used as an item (look at the block, `activateItem`), as Minecraft needs.
 - **Wait limit:** after `wait_limit` waits (or unsure v1 answers) in a row with nothing growing in view, it stops. While crops grow it keeps waiting.
 
 ## Unloading (v2)
@@ -101,6 +103,7 @@ With a home chest known the bot unloads when the model is sure Unload is true, o
 | `wait_limit` | 20 | waits in a row with nothing growing before it stops |
 | `water_radius` | 64 | how far it looks for water |
 | `keep_seeds` | 16 | seeds of each kind kept when unloading |
+| `ban_steps`, `max_bad` | 20, 6 | steps a failed or vetoed action stays banned on its cell; such steps in a row before it stops |
 | `log_steps` | `true` | `bots/<name>/logs/laya-farm.jsonl`: each step's state, answer and outcome, and each item crafted |
 
 **Model and prompt:** see laya-go's `docs/farm.md`. Contract tests (`test/laya_farm.test.js`) check that the bot's v1 and v2 states equal laya-go's golden requests byte for byte (`test/fixtures/laya-farm-v1/`, `laya-farm-v2/`), and that the rules port agrees with laya-go on generated situations. `npm run laya:check farm` asks the sample of the task's prompt.
