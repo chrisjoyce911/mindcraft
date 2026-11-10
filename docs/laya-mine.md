@@ -24,7 +24,7 @@ With `prompt: "v2"` (the default) the bot digs an orderly mine (`src/agent/laya/
 
 Following the plan:
 - The plan's next step goes to the model as the `Plan` line. Ore in sight, lava and water, and a due torch still come first.
-- **Collecting ore** only counts ore within `collect_range` (8) blocks of the plan cell, with no water or lava touching it or on the straight way there, while the collecting since leaving the plan stays within `collect_budget` (24) blocks. Ore further off is ignored (it isn't in the `Seen` line), so the bot can't chain ore to ore away from the mine. The way to the ore avoids fluids. An ore block whose collect failed isn't tried again in that job.
+- **Collecting ore** only counts ore within `collect_range` (12) blocks of the plan cell, with no water or lava touching it or on the straight way there, while the collecting since leaving the plan stays within `collect_budget` (24) blocks. Ore further off is ignored (it isn't in the `Seen` line), so the bot can't chain ore to ore away from the mine. The way to the ore avoids fluids. An ore block whose collect failed isn't tried again in that job.
 - After collecting ore off the line, at the end of a branch and after unloading, the bot walks back (the pathfinder, through the dug mine) to where it left the plan.
 - When the plan step is unsafe, the bot takes the safe detour the model or rule gives, and the plan abandons the rest of that branch or main tunnel (an abandoned main tunnel ends its level: the staircase continues from there). An unsafe staircase step shifts the staircase one block to the right; after `max_shifts` (3) shifts in a row the plan ends.
 - A move the model answers that isn't the plan step, while the plan step is safe, is overruled (`off-plan`).
@@ -106,7 +106,7 @@ It crafts what it needs through `skills.craftForTask`, which uses the Laya craft
 | `timeout_ms`, `min_confidence` | 300, 0.4 | |
 | `max_steps`, `max_failures` | 2000, 4 | without a setting, 2000 for v2 and 300 for v1 |
 | `torch_batch`, `torch_low`, `torch_retry_steps` | 4, 4, 50 | torches crafted at a time; craft when fewer; steps to wait after a failed craft |
-| `collect_range`, `collect_budget` | 8, 24 | v2: ore collected only within this of the plan cell; blocks of collecting off the plan before walking back |
+| `collect_range`, `collect_budget` | 12, 24 | v2: ore collected only within this of the plan cell; blocks of collecting off the plan before walking back |
 | `main_length`, `branch_every`, `branch_length` | 32, 3, 16 | the grid at each level |
 | `level_gap`, `next_shaft` | 4, 40 | between levels; the next column to the right |
 | `keep_blocks` | 32 | throwaway blocks kept when unloading |

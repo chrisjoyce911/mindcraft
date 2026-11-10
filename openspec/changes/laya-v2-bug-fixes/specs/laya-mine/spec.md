@@ -6,7 +6,7 @@
 With a mine plan, the bot SHALL collect ore only when it lies within `collect_range` blocks of the current plan cell, no water or lava touches it or the straight way to it, and the collecting since leaving the plan stays within `collect_budget` blocks. Otherwise it SHALL walk back onto the plan. The way to the ore SHALL avoid fluids.
 
 #### Scenario: a chain of ore away from the mine
-- **WHEN** ore lies 4, 9, 16 and 23 blocks from the plan's first cell in a line away from it
+- **WHEN** ore lies 4, 14, 26 and 38 blocks from the plan's first cell in a line away from it
 - **THEN** the bot collects the nearest, walks back to the plan and goes on with it
 
 #### Scenario: ore beside water

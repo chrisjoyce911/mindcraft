@@ -14,7 +14,7 @@ The v2 test round on 2026-11-10 (`bots/andy/logs/game-tests/v2-mine-farm-report-
 
 ## What Changes
 
-- **Mine collect:** ore is collected only when it is within `collect_range` (8) of the plan cell, has no water or lava touching it or on the straight way there, and the collects since leaving the plan stay within `collect_budget` (24) blocks. Then andy walks back onto the plan. The game side digs that exact block over a path that avoids fluids. Walk and `walk-first` step logs carry the state and position.
+- **Mine collect:** ore is collected only when it is within `collect_range` (12) of the plan cell, has no water or lava touching it or on the straight way there, and the collects since leaving the plan stay within `collect_budget` (24) blocks. Then andy walks back onto the plan. The game side digs that exact block over a path that avoids fluids. Walk and `walk-first` step logs carry the state and position.
 - **Mine unload:** this uses `pack_actions.packDeps` (the home chest and the chests touching it), as the farm does. If the chests fill after something went in, the unload is partial. That is not a failure, and Unload still backs off.
 - **Mine torches:** andy crafts a batch whenever he has fewer than `torch_low` (4) torches and carries coal or charcoal plus sticks or wood, or when he has none left in the dark. After a failed craft he waits `torch_retry_steps` (50) steps before trying again.
 - **Farm buckets:** water is poured and buckets are filled by looking at the block and using the item (`activateItem`). Both are checked afterwards.

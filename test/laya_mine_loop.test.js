@@ -280,9 +280,9 @@ test('canMakeTorches: coal or charcoal, and sticks or wood', () => {
 
 test('v2: ore far from the plan is left; ore chains never pull the bot away', async () => {
     // a line of ore going east from the plan's first branch, away from the mine
-    const blocks = { '2,20,3': 'iron_ore', '9,20,3': 'iron_ore', '16,20,3': 'iron_ore', '23,20,3': 'iron_ore' };
+    const blocks = { '2,20,3': 'iron_ore', '14,20,3': 'iron_ore', '26,20,3': 'iron_ore', '38,20,3': 'iron_ore' };
     // 4 steps: collect, walk back, tunnel to x 1, tunnel to x 2 (the next ore
-    // comes within 8 of the tunnel only after that)
+    // comes within 12 of the tunnel only after that)
     const { bot, deps, calls, w, inventory } = v2({ y: 20, steps: 4, blocks, decide: () => answer('collect') });
     const collected = [];
     deps.ores = names => [...w.m].filter(([, n]) => names.includes(n)).map(([k]) => {
@@ -297,7 +297,7 @@ test('v2: ore far from the plan is left; ore chains never pull the bot away', as
         return true;
     };
     await mineWithLaya(bot, 'iron', 4, deps);
-    assert.deepEqual(collected.map(o => o.x), [2], 'only the ore within 8 of the plan cell');
+    assert.deepEqual(collected.map(o => o.x), [2], 'only the ore within 12 of the plan cell');
     assert.deepEqual(calls.walks, [[0, 20, 0]], 'walks back to the plan');
     assert.deepEqual(calls.moves.slice(-2), [[1, 20, 0], [2, 20, 0]], 'and the plan goes on');
 });

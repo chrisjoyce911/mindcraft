@@ -45,7 +45,7 @@ import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, H
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
-    keep_blocks: 32, unload_retry_steps: 50, collect_range: 8, collect_budget: 24 };
+    keep_blocks: 32, unload_retry_steps: 50, collect_range: 12, collect_budget: 24 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
 const MOVES = new Set(['tunnel', 'down', 'up']);
