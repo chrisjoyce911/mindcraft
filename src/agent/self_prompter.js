@@ -1,3 +1,5 @@
+import settings from './settings.js';
+import { llmOn } from './llm_gate.js';
 const STOPPED = 0
 const ACTIVE = 1
 const PAUSED = 2
@@ -13,6 +15,7 @@ export class SelfPrompter {
     }
 
     start(prompt) {
+        if (!llmOn(settings)) return 'Self-prompting needs the chat LLM (settings.llm is off).';
         console.log('Self-prompting started.');
         if (!prompt) {
             if (!this.prompt)

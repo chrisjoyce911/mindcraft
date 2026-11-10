@@ -4,6 +4,7 @@ import * as mc from '../utils/mcdata.js';
 import settings from './settings.js'
 import convoManager from './conversation.js';
 import { laya, taskSettings } from '../models/laya.js';
+import { llmOn } from './llm_gate.js';
 import { LayaEater, summary as eatSummary } from './laya/eat.js';
 import { LayaDefender, summary as defendSummary } from './laya/defend.js';
 import { defendActions } from './laya/defend_actions.js';
@@ -431,7 +432,8 @@ async function execute(mode, agent, func, timeout=-1) {
         interrupted_action && // it interrupted a previous action
         !agent.actions.resume_func && // there is no resume function
         !agent.self_prompter.isActive() && // self prompting is not on
-        !code_return.interrupted; // this mode action was not interrupted by something else
+        !code_return.interrupted && // this mode action was not interrupted by something else
+        llmOn(settings); // with the chat LLM off nobody is asked: a resumable job carries on by itself
 
     if (should_reprompt) {
         // auto prompt to respond to the interruption

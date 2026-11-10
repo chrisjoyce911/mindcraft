@@ -1,4 +1,5 @@
 import settings from './settings.js';
+import { llmOn } from './llm_gate.js';
 import { containsCommand } from './commands/index.js';
 import { sendBotChatToServer } from './mindserver_proxy.js';
 
@@ -294,7 +295,7 @@ async function _scheduleProcessInMessage(sender, received, convo) {
             scheduleResponse(fastDelay);
         }
         else {
-            let shouldRespond = await agent.prompter.promptShouldRespondToBot(received.message);
+            let shouldRespond = llmOn(settings) && await agent.prompter.promptShouldRespondToBot(received.message);
             console.log(`${agent.name} decided to ${shouldRespond?'respond':'not respond'} to ${sender}`);
             if (shouldRespond)
                 scheduleResponse(fastDelay);

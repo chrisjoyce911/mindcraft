@@ -1,0 +1,14 @@
+# Tasks
+
+- [x] 1. `settings.llm` switch: routing (`llm_gate.js`), agent/modes/self-prompter/memory/convo/npc/vision gates; tests.
+- [ ] 2. Resume after interrupt: the interrupt's exception keeps the resume; remaining count; tests.
+- [ ] 3. Mine plan: staircase to at least 10 below the entrance and the ore's best level; tests.
+- [ ] 4. Mine safety: rule `heal`; `drop` veto on model and rule moves; tests.
+- [ ] 5. Mine memory: save and resume mines; tests.
+- [ ] 6. Home chest: block `rememberHere("home_chest")` off a chest, drop a home without a chest; tests.
+- [ ] 7. Unload failure backs off; collecting goes on.
+- [ ] 8. Torches: sticks, plank withdrawal, place back-off.
+- [ ] 9. Collect filter: open ore below collect_below.
+- [ ] 10. Memory summary without finished requests.
+- [ ] 11. `npm test` passes; merged into `laya-follow`.
+- [ ] 12. Full game suite with `llm` false; report.

@@ -17,7 +17,8 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { laya, taskSettings } from '../models/laya.js';
-import { handleCommand } from './laya/command.js';
+import { handleCommand, CANNED } from './laya/command.js';
+import { llmOn, route, NO_LLM_REPLY, deathMessage } from './llm_gate.js';
 import { getNearestEntityWhere } from './library/world.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
 
@@ -197,7 +198,7 @@ export class Agent {
             bannedFood: ["rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chicken"]
         };
 
-        if (save_data?.self_prompt) {
+        if (save_data?.self_prompt && llmOn(settings)) {
             if (init_message) {
                 this.history.add('system', init_message);
             }
@@ -213,7 +214,7 @@ export class Agent {
                 convoManager.receiveFromBot(this.last_sender, msg_package);
             }
         }
-        else if (init_message) {
+        else if (init_message && llmOn(settings)) {
             await this.handleMessage('system', init_message, 2);
         }
         else {
@@ -273,32 +274,50 @@ export class Agent {
         const from_other_bot = convoManager.isOtherAgent(source);
         if (!self_prompt) this.last_speaker = source; // !setHomeChest looks next to them
 
-        if (!self_prompt && !from_other_bot) { // from user, check for forced commands
-            const user_command_name = containsCommand(message);
-            if (user_command_name) {
-                if (!commandExists(user_command_name)) {
-                    this.routeResponse(source, `Command '${user_command_name}' does not exist.`);
-                    return false;
-                }
-                this.routeResponse(source, `*${source} used ${user_command_name.substring(1)}*`);
-                if (user_command_name === '!newAction') {
-                    // all user-initiated commands are ignored by the bot except for this one
-                    // add the preceding message to the history to give context for newAction
-                    this.history.add(source, message);
-                }
-                let execute_res = await executeCommand(this, message);
-                if (execute_res) 
-                    this.routeResponse(source, execute_res);
-                return true;
-            }
+        const llm = llmOn(settings);
+        const user_command_name = !self_prompt && !from_other_bot ? containsCommand(message) : null;
+        const where = route({ llm, selfPrompt: self_prompt, fromOtherBot: from_other_bot, userCommand: user_command_name,
+            commandTask: !!taskSettings('command') });
+        if (where === 'refuse') {
+            this.routeResponse(source, NO_LLM_REPLY);
+            return false;
+        }
+        if (where === 'drop') {
+            // settings.llm off: system, self and other bots' messages are
+            // only logged (an interrupted Laya job resumes by itself)
+            console.log(`(llm off) not answering ${source}: ${message.slice(0, 200)}`);
+            return false;
+        }
+        if (where === 'canned') {
+            this.history.add(source, message);
+            this.routeResponse(source, CANNED);
+            return false;
         }
 
-        if (!self_prompt && !from_other_bot && taskSettings('command')) {
+        if (where === 'command') { // from user, check for forced commands
+            if (!commandExists(user_command_name)) {
+                this.routeResponse(source, `Command '${user_command_name}' does not exist.`);
+                return false;
+            }
+            this.routeResponse(source, `*${source} used ${user_command_name.substring(1)}*`);
+            if (user_command_name === '!newAction') {
+                // all user-initiated commands are ignored by the bot except for this one
+                // add the preceding message to the history to give context for newAction
+                this.history.add(source, message);
+            }
+            let execute_res = await executeCommand(this, message);
+            if (execute_res) 
+                this.routeResponse(source, execute_res);
+            return true;
+        }
+
+        if (where === 'laya') {
             // The Laya command model turns plain chat into a command; chat and
-            // unsure answers fall through to the LLM below.
+            // unsure answers fall through to the LLM below (with the LLM off:
+            // a canned reply).
             const handled = await handleCommand(message, {
                 client: laya,
-                task: taskSettings('command'),
+                task: llm ? taskSettings('command') : { ...taskSettings('command'), no_llm: true },
                 bot: this.bot,
                 speaker: source,
                 has: name => commandExists(name),
@@ -311,6 +330,10 @@ export class Agent {
             if (handled) {
                 this.history.add(source, message);
                 return true;
+            }
+            if (!llm) {
+                this.routeResponse(source, CANNED);
+                return false;
             }
         }
 
@@ -504,9 +527,14 @@ export class Agent {
                 this.memory_bank.rememberPlace('last_death_position', death_pos.x, death_pos.y, death_pos.z);
                 let death_pos_text = null;
                 if (death_pos) {
-                    death_pos_text = `x: ${death_pos.x.toFixed(2)}, y: ${death_pos.y.toFixed(2)}, z: ${death_pos.x.toFixed(2)}`;
+                    death_pos_text = `x: ${death_pos.x.toFixed(2)}, y: ${death_pos.y.toFixed(2)}, z: ${death_pos.z.toFixed(2)}`;
                 }
                 let dimention = this.bot.game.dimension;
+                if (!llmOn(settings)) {
+                    // no LLM to decide what next: say where, and stay stopped
+                    this.openChat(deathMessage(death_pos, message));
+                    return;
+                }
                 this.handleMessage('system', `You died at position ${death_pos_text || "unknown"} in the ${dimention} dimension with the final message: '${message}'. Your place of death is saved as 'last_death_position' if you want to return. Previous actions were stopped and you have respawned.`);
             }
         });

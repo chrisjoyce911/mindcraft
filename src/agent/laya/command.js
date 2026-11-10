@@ -27,7 +27,8 @@ export const DEFAULTS = {
     log_decisions: true,
 };
 
-export const CANNED = "Sorry, I can only do simple commands right now: follow, come, stop, stay, gather, craft, mine, give, attack, store, eat or inventory.";
+export const CANNED = "Sorry, I only understand simple commands, like: follow me, come here, stop, mine 8 iron, " +
+    "get 16 logs, craft a stone pickaxe, farm wheat, give me your coal, store everything, this is your chest.";
 
 // Ore and generic names the plain fallbacks (no Laya craft or mine commands)
 // need as blocks or recipes.
