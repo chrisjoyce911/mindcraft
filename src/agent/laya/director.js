@@ -168,8 +168,8 @@ export function directorState(s) {
 }
 
 // RULES are the rule names, in order (laya-go games/director/rules).
-export const RULES = ['flee-danger', 'flee-hostile', 'flee-creeper', 'defend', 'heal', 'eat-hungry', 'unload-full', 'unload-near',
-    'unload-valuables', 'resume-paused', 'continue', 'resume-failed', 'idle-failed', 'eat-idle', 'idle'];
+export const RULES = ['flee-danger', 'flee-hostile', 'flee-creeper', 'flee-low', 'defend', 'heal', 'eat-hungry', 'unload-full',
+    'unload-near', 'unload-valuables', 'resume-paused', 'continue', 'resume-failed', 'idle-failed', 'eat-idle', 'idle'];
 
 // decide is the spec's rules (v1.1), in order: {activity, rule}.
 export function decide(s) {
@@ -179,7 +179,7 @@ export function decide(s) {
     if (s.danger === 'fluid' || s.danger === 'fire' || s.danger === 'drowning') return r('flee', 'flee-danger');
     if (within(4) && (s.health <= 6 || (s.armed === 'none' && s.health <= 10))) return r('flee', 'flee-hostile');
     if (within(3) && s.nearest.kind === 'creeper') return r('flee', 'flee-creeper');
-    if (within(8) && s.health <= 6) return r('flee', 'flee-hostile'); // v1.1
+    if (within(8) && s.health <= 6) return r('flee', 'flee-low'); // v1.1
     if (within(8) && s.health > 6) return r('defend', 'defend');
     if (s.health <= 8 && !within(8)) return r('heal', 'heal');
     if (s.food <= 6 && s.foodItems > 0) return r('eat', 'eat-hungry');
@@ -192,8 +192,10 @@ export function decide(s) {
     if (!job && paused) return r('resume', 'resume-paused');
     if (job && !stuck) return r('continue', 'continue');
     if (job && paused) return r('resume', 'resume-failed');
-    if (!job && s.food < 18 && s.health < 20 && s.foodItems > 0) return r('eat', 'eat-idle');
-    return job ? r('idle', 'idle-failed') : r('idle', 'idle');
+    if (job) return r('idle', 'idle-failed'); // a failed job, nothing paused
+    // rule 10, nothing to do: eat when not full
+    if (s.food < 18 && s.health < 20 && s.foodItems > 0) return r('eat', 'eat-idle');
+    return r('idle', 'idle');
 }
 
 // nextActivity is the decision point: the director model when deps.client
