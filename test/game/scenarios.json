@@ -260,15 +260,24 @@
       "requires": [
         "farm"
       ],
-      "description": "A chest 3 blocks east with a sign saying andy beside it. Starting a farm job makes andy look for a signed chest and adopt it. Only works while andy has NO home chest saved (a fresh start with load_memory false), so it runs before the other home chest tests.",
+      "description": "A chest 3 blocks east with a sign saying andy beside it. Starting a farm job makes andy look for a signed chest and adopt it. Andy looks for the home chest only once the farm loop runs, so the test runs at the farm site (water close by) and gives him a hoe and seeds; at a dry spot the job stops at \"No water near here\" first. Only works while andy has NO home chest saved (a fresh start with load_memory false), so it runs before the other home chest tests.",
       "setup": [
         {
-          "site": "base"
+          "site": "farm"
         },
         {
           "tp": {
             "dx": 2
           }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_hoe"
+        },
+        {
+          "cmd": "/give {andy} wheat_seeds 4"
         },
         {
           "cmd": "/setblock {x+3} {y} {z} chest"
