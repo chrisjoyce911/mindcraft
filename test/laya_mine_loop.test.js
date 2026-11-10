@@ -608,3 +608,13 @@ test('v2: every plan step unsafe (water below): restart once heading back, then 
     assert.equal(r.counters.restarts, 1);
     assert.ok(r.counters.abandoned <= 17, `gave up after ${r.counters.abandoned} abandons`);
 });
+
+test('v2: a blocked staircase starts once more heading back before giving up', async () => {
+    // a hollow under every stair cell to the east from Y 60: shifts run out
+    const blocks = {};
+    for (let x = 1; x <= 12; x++) for (let z = -6; z <= 6; z++) for (let y = 40; y <= 57; y++) blocks[`${x},${y},${z}`] = 'air';
+    const s = v2({ y: 60, steps: 60, blocks });
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.counters.restarts, 1, 'one new staircase');
+    assert.ok(s.calls.moves.some(([x, y]) => x < 0 && y < 60), 'heading west, going down');
+});

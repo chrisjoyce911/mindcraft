@@ -459,6 +459,13 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         let view = readView(deps.blockAt, bx, by, bz, ore.blocks);
 
         let pn = plan ? plan.next(feet) : null;
+        if (pn?.done === 'the staircase is blocked') {
+            // blocked (a lake, a cave): once, a new staircase heading back
+            abandonStreak = opts.max_abandons;
+            const stuck = unsafeHere({ pos: feet, plan: 'blocked' });
+            if (stuck) return stuck;
+            pn = plan.next(feet);
+        }
         if (pn?.done) return finish(false, `plan: ${pn.done}`);
         if (pn && !pn.walk) offPlan = 0; // back on the plan
         // Ore to collect: near the plan cell (v1: the bot), safe, within budget.
