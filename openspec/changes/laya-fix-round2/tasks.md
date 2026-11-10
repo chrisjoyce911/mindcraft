@@ -6,7 +6,7 @@
 - [x] 4. Mine safety: rule `heal`; `drop` veto on model and rule moves; tests.
 - [x] 5. Mine memory: save and resume mines; tests.
 - [x] 6. Home chest: block `rememberHere("home_chest")` off a chest, drop a home without a chest; tests.
-- [ ] 7. Unload failure backs off; collecting goes on.
+- [x] 7. Unload failure backs off (unload_fail_steps 200); ore in sight with room is collected first.
 - [ ] 8. Torches: sticks, plank withdrawal, place back-off.
 - [ ] 9. Collect filter: open ore below collect_below.
 - [ ] 10. Memory summary without finished requests.

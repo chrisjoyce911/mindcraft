@@ -48,7 +48,7 @@ import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, H
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
-    keep_blocks: 32, unload_retry_steps: 50, collect_range: 12, collect_budget: 24, collect_below: 4,
+    keep_blocks: 32, unload_retry_steps: 50, unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4,
     walk_restart: 2, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2 };
 const MAX_STEPS = { v1: 300, v2: 2000 };
 const FACE = { N: 'north', E: 'east', S: 'south', W: 'west' };
@@ -456,12 +456,16 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             const u = r?.answers?.Unload;
             entry.unload = u?.probability;
             const want = s.free === 0 || (u?.confident ? u.probability >= 0.5 : unload(s));
-            if (want && !touching(view).length) {
+            // ore in sight and room for it: collect it first
+            const collectFirst = s.seen > 0 && s.free > 0;
+            if (want && collectFirst) entry.unload_later = 'collect-first';
+            if (want && !collectFirst && !touching(view).length) {
                 // A full chest after putting things in is a partial unload: no
                 // failure, but no Unload again for a while either.
                 const outcome = await goUnload(homePos);
                 const ok = outcome !== 'failed';
-                if (outcome !== 'done') noUnloadUntil = step + opts.unload_retry_steps;
+                // a failed unload backs off longer: mining and collecting go on
+                if (outcome !== 'done') noUnloadUntil = step + (ok ? opts.unload_retry_steps : opts.unload_fail_steps);
                 logStep({ ...entry, action: 'unload', source: u?.confident ? 'model' : 'rules', outcome });
                 failures = ok ? 0 : failures + 1;
                 if (!ok) counters.failures++;

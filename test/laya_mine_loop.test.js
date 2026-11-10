@@ -456,3 +456,19 @@ test('v2: a mine job near a saved mine goes on with it: same entrance, dug cells
     assert.deepEqual(s.calls.walks[0], [4, 56, 0], 'walks to the bottom of the dug staircase');
     assert.deepEqual(saved[0].ores, ['iron']);
 });
+
+test('v2: ore in sight with room in the pack is collected before unloading; a failed unload backs off', async () => {
+    const inv = { stone_pickaxe: 1, torch: 5, cobblestone: 10, dirt: 40 };
+    let s = v2({ y: 20, steps: 2, free: 1, home: { x: 0, y: 20, z: 10 }, inv, blocks: { '2,20,1': 'iron_ore' } });
+    s.deps.ores = () => [{ x: 2, y: 20, z: 1 }];
+    s.deps.collect = async () => { s.w.m.set('2,20,1', 'air'); s.inventory.raw_iron = (s.inventory.raw_iron || 0) + 1; return true; };
+    const r = await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(r.ok, true);
+    assert.equal(s.calls.home.length, 0, 'collected first');
+    // unload fails (no chest there): no retry for unload_fail_steps
+    s = v2({ y: 20, steps: 12, free: 2, home: { x: 0, y: 20, z: 10 }, inv });
+    s.deps.deposit = async () => false;
+    await mineWithLaya(s.bot, 'iron', 1, s.deps);
+    assert.equal(s.calls.home.length, 1);
+    assert.ok(s.calls.moves.length > 5, 'mining went on');
+});
