@@ -1,0 +1,19 @@
+{
+  "questions": {
+    "Activity": {
+      "criteria": [
+        "continue",
+        "defend",
+        "flee",
+        "eat",
+        "heal",
+        "unload",
+        "resume",
+        "idle"
+      ],
+      "instructions": "What should I do now?",
+      "type": "choice"
+    }
+  },
+  "state": "Director.\nJob mine iron_ore left 6\nPaused none\nHealth 14 Food 12 Armed sword Armor 8\nHostiles 2 Nearest zombie 6\nLight 4 Night no Under yes\nPack 5 Home 18 Valuables 3\nFood items 4\nDanger none\nLast none"
+}
