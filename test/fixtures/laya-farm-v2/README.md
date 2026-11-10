@@ -4,4 +4,4 @@
 - `barren_request.json` is `games/farm/prompt/testdata/v2_barren_request.json`: the trial's savanna plateau (every cell dry ground or path), a hoe and one wheat seed, no home chest.
 - `decisions.jsonl`: 200 v1 and 200 v2 situations from laya-go's farm generator (`generate.SituationsFor(v, 7, 200)`) with their state text, `rules.Decide` answer and rule, and Target and Item options.
 
-All from laya-go branch `farm-v2` (uncommitted work on top of `69d1b33`, 2026-11-10). test/laya_farm.test.js checks the bot matches them exactly. Re-copy them when laya-go's farm-v2 is committed.
+All from laya-go branch `farm-v2`, commit `d827c6e` (the two requests are identical to it; `decisions.jsonl` was generated from the same rules before that commit). test/laya_farm.test.js checks the bot matches them exactly.
