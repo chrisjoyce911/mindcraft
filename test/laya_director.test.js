@@ -63,7 +63,7 @@ test('decide: the spec v1.1 rules in priority order, with laya-go rule names', (
     assert.deepEqual(decide(s({ job: mine, last: 'interrupted' })), { activity: 'continue', rule: 'continue' });
     assert.deepEqual(decide(s({ job: mine, last: 'failed', paused: 'farm' })), { activity: 'resume', rule: 'resume-failed' });
     assert.deepEqual(decide(s({ job: mine, last: 'blocked' })), { activity: 'idle', rule: 'idle-failed' });
-    assert.deepEqual(decide(s({ job: mine, last: 'blocked', food: 17, health: 19 })), { activity: 'eat', rule: 'eat-idle' });
+    assert.deepEqual(decide(s({ job: mine, last: 'blocked', food: 17, health: 19 })), { activity: 'idle', rule: 'idle-failed' });
     assert.deepEqual(decide(calm), { activity: 'idle', rule: 'idle' });
     assert.deepEqual(decide(s({ food: 17, health: 19 })), { activity: 'eat', rule: 'eat-idle' });
 });

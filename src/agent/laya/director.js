@@ -192,7 +192,7 @@ export function decide(s) {
     if (!job && paused) return r('resume', 'resume-paused');
     if (job && !stuck) return r('continue', 'continue');
     if (job && paused) return r('resume', 'resume-failed');
-    if (s.food < 18 && s.health < 20 && s.foodItems > 0) return r('eat', 'eat-idle');
+    if (!job && s.food < 18 && s.health < 20 && s.foodItems > 0) return r('eat', 'eat-idle');
     return job ? r('idle', 'idle-failed') : r('idle', 'idle');
 }
 
