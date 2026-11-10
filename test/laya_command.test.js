@@ -272,3 +272,10 @@ test('huntUntil: attacks until the count, stops when none are near or after maxK
     assert.equal(r.kills, 3);
     assert.equal(r.ok, false);
 });
+
+test('laya:check has v2.1 samples (command v2.1, mine and farm on v2 text)', async () => {
+    const { loadSample } = await import('../src/models/laya_check.js');
+    assert.deepEqual(loadSample('command', 'v2.1').questions.Item.criteria, ITEMS_V21);
+    assert.ok(loadSample('mine', 'v2.1').questions.Unload);
+    assert.ok(loadSample('farm', 'v2.1').questions.Unload);
+});
