@@ -5,7 +5,7 @@
 //   timeline: [{t, action, idle, pos, health, hunger, entities}],
 //   waited: {idle, timedOut} (the wait after the action), final: andy's last state,
 //   chests: {"x y z": {item: count}}, chestsBefore: same, serverReplies: [lines],
-//   tester: {x, y, z} }
+//   tester: {x, y, z}, blocks: {blockKey: {count, center} | {error}} }
 import { matches, matchValue } from './logs.js';
 
 // count: items matching a name, "a|b" alternatives or "/regex/".
@@ -115,12 +115,28 @@ export const CHECKS = {
         const hit = labels.find(l => re(c.match).test(l));
         return hit ? { ok: true, reason: `saw ${hit}` } : { ok: false, reason: `never saw /${c.match}/ (saw ${labels.join(', ') || 'nothing'})` };
     },
-    // {match}: a reply from the server to tester's commands
+    // {match, none: true → the server must not say it}: a reply from the
+    // server to tester's commands
     serverReply(c, ctx) {
         const hit = (ctx.serverReplies || []).find(l => re(c.match).test(l));
+        if (c.none) return hit ? { ok: false, reason: `the server said "${hit}"` } : { ok: true, reason: `server never said /${c.match}/` };
         return hit ? { ok: true, reason: `"${hit}"` } : { ok: false, reason: `server never said /${c.match}/ (said: ${(ctx.serverReplies || []).slice(-4).map(l => `"${l}"`).join(', ') || 'nothing'}). Are cheats on for tester?` };
     },
+    // {block (name or /regex/), near: "andy" (default) | "x y z", radius (6),
+    // min (1), max}: blocks of that kind within radius at the end of the
+    // action (read before cleanup), e.g. the water of a pond andy made
+    block(c, ctx) {
+        const b = ctx.blocks?.[blockKey(c)];
+        if (!b) return { ok: false, reason: `blocks ${c.block} near ${c.near || 'andy'} were not read` };
+        if (b.error) return { ok: false, reason: `blocks ${c.block} near ${c.near || 'andy'} could not be read: ${b.error}` };
+        const want = { min: c.min ?? (c.max == null ? 1 : null), max: c.max };
+        return bounds(b.count, want, `${c.block} blocks within ${c.radius ?? 6} of ${b.center ? fmtPos(b.center) : c.near || 'andy'}:`, false);
+    },
 };
+
+// blockKey names one block count a `block` check needs (the runner reads
+// them, the check looks them up).
+export const blockKey = c => `${c.block}@${c.near || 'andy'}@${c.radius ?? 6}`;
 
 export function evaluate(check, ctx) {
     try {
@@ -145,7 +161,8 @@ export function describeCheck(c) {
     case 'stat': return `andy's ${c.field} ${c.since ? `changes since ${c.since} by` : 'is'} ${range()}`;
     case 'noEntity': return `no ${c.entity} near andy at the end`;
     case 'actionSeen': return c.final ? `andy is doing /${c.match}/ at the end` : `andy's action /${c.match}/ is seen`;
-    case 'serverReply': return `the server replies /${c.match}/`;
+    case 'serverReply': return c.none ? `the server never replies /${c.match}/` : `the server replies /${c.match}/`;
+    case 'block': return `${c.block} blocks within ${c.radius ?? 6} of ${c.near || 'andy'} at the end: ${range() || '≥ 1'}`;
     default: return JSON.stringify(c);
     }
 }

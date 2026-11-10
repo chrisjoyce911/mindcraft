@@ -18,6 +18,7 @@ export class FakeWorld {
         };
         this.tester = { x: 12.5, y: 64, z: -4.5 };
         this.chests = {};          // "x y z" → {item: count}
+        this.blocks = {};          // block name → how many tester sees near andy
         this.commands = [];        // tester's slash commands
         this.sent = [];            // mindserver messages to andy
         this.said = [];            // tester's chat
@@ -83,13 +84,15 @@ export class FakeTester extends EventEmitter {
         if (!c) throw new Error(`No chest at ${x} ${y} ${z}`);
         return { ...c };
     }
+    countBlocks(name, center, radius) { this.world.blockQueries = [...(this.world.blockQueries || []), { name, center, radius }]; return this.world.blocks[name] ?? 0; }
     close() { this.connected = false; }
 }
 
 export class MemReport {
-    constructor() { this.events = []; this.text = ''; }
+    constructor() { this.events = []; this.text = ''; this.summary = null; }
     event(e) { this.events.push(e); }
     md(t) { this.text += t; }
+    json(o) { this.summary = o; }
     paths() { return { md: '/tmp/fake.md', jsonl: '/tmp/fake.jsonl' }; }
 }
 

@@ -83,8 +83,10 @@ test('steps describe themselves', () => {
 });
 
 test('cli args', () => {
-    assert.deepEqual(parseArgs(['--tag', 'quick', 'eat', '--list']), { names: ['eat'], tag: 'quick', list: true, scenarios: null, verbose: false, help: false, world: null, reset: false });
+    assert.deepEqual(parseArgs(['--tag', 'quick', 'eat', '--list']), { names: ['eat'], tag: 'quick', list: true, scenarios: null, verbose: false, help: false, world: null, reset: false, name: null });
     assert.equal(parseArgs(['--tag=full']).tag, 'full');
+    assert.equal(parseArgs(['--name', 'baseline-v1']).name, 'baseline-v1');
+    assert.equal(parseArgs(['--name=x']).name, 'x');
     assert.equal(parseArgs(['--world', 'test']).world, 'test');
     assert.deepEqual([parseArgs(['--reset']).world, parseArgs(['--reset']).reset], ['test', true]);
     assert.throws(() => parseArgs(['--nope']), /unknown option/);

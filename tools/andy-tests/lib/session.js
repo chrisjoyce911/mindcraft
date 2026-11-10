@@ -280,6 +280,26 @@ export class Session {
         return out;
     }
 
+    // settleAfterRestart: a restarted agent's LLM answers "Agent process
+    // restarted." from its chat history and may start a job by itself (seen:
+    // !layaFarm right after a reset). Watch watchMs; if andy got busy, !stop
+    // him and wait until he is idle, so the next test starts clean.
+    async settleAfterRestart({ watchMs = 10000 } = {}) {
+        const mind = await this.ensureMind();
+        const t0 = this.now();
+        const seen = [];
+        while (this.now() - t0 < watchMs) {
+            const label = mind.state()?.action?.current;
+            if (label && label !== 'Idle' && !seen.includes(label)) seen.push(label);
+            await this.sleep(500);
+        }
+        const busy = seen.length > 0 || !mind.state()?.action?.isIdle;
+        if (!busy) return { stopped: false, saw: [] };
+        await this.command('!stop', 500);
+        const w = await this.waitIdle({ timeout: 15000, grace: 0, settle: 1000 });
+        return { stopped: true, saw: seen, idle: w.idle };
+    }
+
     async botStart({ profiles, waitMs = 120000 } = {}) {
         const bot = await this.testBot();
         this.useWorld('test');
@@ -371,6 +391,16 @@ export class Session {
     async chestContents(x, y, z) {
         const tester = await this.ensureTester();
         return { at: { x, y, z }, items: await tester.chest(x, y, z) };
+    }
+
+    // countBlocks: {count, center} of blocks named `name` within radius of
+    // center (andy's position when center is null).
+    async countBlocks(name, center = null, radius = 6) {
+        const tester = await this.ensureTester();
+        const c = center || (await this.state())?.gameplay?.position;
+        if (!c) throw new Error("andy's position is unknown");
+        const at = { x: Math.floor(c.x), y: Math.floor(c.y), z: Math.floor(c.z) };
+        return { count: await tester.countBlocks(name, at, radius), center: at };
     }
 
     // ---- waiting ----

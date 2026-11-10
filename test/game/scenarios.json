@@ -2,7 +2,8 @@
   "defaults": {
     "timeout": 120000,
     "grace": 6000,
-    "settle": 3000
+    "settle": 3000,
+    "idleFail": 30000
   },
   "tests": [
     {
@@ -260,15 +261,28 @@
       "requires": [
         "farm"
       ],
-      "description": "A chest 3 blocks east with a sign saying andy beside it. Starting a farm job makes andy look for a signed chest and adopt it. Only works while andy has NO home chest saved (a fresh start with load_memory false), so it runs before the other home chest tests.",
+      "description": "A chest 3 blocks east with a sign saying andy beside it. Starting a farm job makes andy look for a signed chest and adopt it. Andy looks for the home chest only once the farm loop runs, so the test runs at the farm site (water close by) and gives him a hoe and seeds; at a dry spot the job stops at \"No water near here\" first. Only works while andy has NO home chest saved (a fresh start with load_memory false), so it runs before the other home chest tests.",
       "setup": [
         {
-          "site": "base"
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
+        {
+          "site": "farm"
         },
         {
           "tp": {
             "dx": 2
           }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_hoe"
+        },
+        {
+          "cmd": "/give {andy} wheat_seeds 4"
         },
         {
           "cmd": "/setblock {x+3} {y} {z} chest"
@@ -371,14 +385,15 @@
           "say": "andy this is your chest"
         },
         {
-          "waitReply": "my chest now|Home chest set",
+          "waitReply": "my chest now|Home chest set at",
           "timeout": 20000
         }
       ],
       "checks": [
         {
           "type": "reply",
-          "match": "my chest now|Home chest set at {x-3} {y} {z}"
+          "match": "Home chest set at {x-3} {y} {z}",
+          "note": "only !setHomeChest prints this line; an LLM saying it set the chest doesn't count"
         }
       ]
     },
@@ -446,12 +461,16 @@
         },
         {
           "type": "reply",
-          "match": "Harvested"
+          "match": "Harvested ([5-9]|\\d{2,}) wheat",
+          "note": "the farm job's own count line, not any mention of harvesting"
         },
         {
           "type": "log",
           "task": "farm",
-          "match": "\"harvest\""
+          "match": {
+            "action": "harvest",
+            "outcome": "done"
+          }
         },
         {
           "type": "idle"
@@ -515,8 +534,17 @@
           "match": "No water near here"
         },
         {
+          "type": "log",
+          "task": "farm",
+          "match": {
+            "action": "find_water",
+            "outcome": "no-water"
+          },
+          "note": "the farm job looked for water and found none (not some other stop)"
+        },
+        {
           "type": "reply",
-          "match": "Harvested",
+          "match": "Harvested [1-9]",
           "none": true
         },
         {
@@ -550,7 +578,7 @@
       "requires": [
         "farm"
       ],
-      "description": "The same dry sky platform, but andy has a water bucket: he digs a pond (farm log action pond) instead of giving up.",
+      "description": "The same dry sky platform, but andy has a water bucket: he digs a pond and pours the water in (a farm log pond step with outcome done, and water within 6 blocks of him afterwards) instead of giving up.",
       "setup": [
         {
           "site": "dry"
@@ -590,12 +618,14 @@
         {
           "waitLog": {
             "task": "farm",
-            "match": "\"pond\""
+            "match": {
+              "action": "pond"
+            }
           },
           "timeout": 180000
         },
         {
-          "wait": 3000
+          "wait": 10000
         },
         {
           "andy": "!stop"
@@ -605,7 +635,19 @@
         {
           "type": "log",
           "task": "farm",
-          "match": "\"pond\""
+          "match": {
+            "action": "pond",
+            "outcome": "done"
+          },
+          "note": "a pond attempt that failed doesn't count"
+        },
+        {
+          "type": "block",
+          "block": "water",
+          "near": "andy",
+          "radius": 6,
+          "min": 1,
+          "note": "the pond's water is really there (no water within 64 of the platform before)"
         },
         {
           "type": "reply",
@@ -640,6 +682,10 @@
       "grace": 20000,
       "description": "Chat \"andy go mine coal 5\" with a stone pickaxe, torches and bread: he ends with 5+ more coal. (Coal unloaded into a home chest doesn't show in his inventory.)",
       "setup": [
+        {
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
         {
           "site": "mine"
         },
@@ -700,8 +746,12 @@
       "requires": [
         "mine"
       ],
-      "description": "!layaMine(\"iron\", 3) with the v2 mine plan: andy announces the entrance, stairs down (Y drops 4+ during the run) and gets 3 raw iron.",
+      "description": "!layaMine(\"iron\", 3) with the v2 mine plan: andy announces the entrance, stairs down (4+ `down` steps done in laya-mine and his Y 4+ below the start) and gets 3 raw iron. Iron showing at the surface by the mine site doesn't pass it: the announcement and the staircase steps are required.",
       "setup": [
+        {
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
         {
           "site": "mine"
         },
@@ -734,6 +784,16 @@
           "match": "iron mine starts at"
         },
         {
+          "type": "log",
+          "task": "mine",
+          "match": {
+            "action": "/^down/",
+            "outcome": "done"
+          },
+          "min": 4,
+          "note": "staircase steps, not just collecting ore in reach"
+        },
+        {
           "type": "position",
           "axis": "y",
           "during": "min",
@@ -743,11 +803,6 @@
           "type": "inventory",
           "item": "raw_iron",
           "min": 3
-        },
-        {
-          "type": "log",
-          "task": "mine",
-          "min": 5
         },
         {
           "type": "idle"
@@ -779,8 +834,12 @@
       "requires": [
         "mine"
       ],
-      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone (keeping 32) into the chest.",
+      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone (keeping 32) into the chest. Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
       "setup": [
+        {
+          "reset": true,
+          "note": "independent of earlier tests: fresh terrain and no saved home chest"
+        },
         {
           "site": "mine"
         },
@@ -922,6 +981,10 @@
         },
         {
           "wait": 6000
+        },
+        {
+          "cmd": "/execute positioned {x} {y} {z} if entity @e[type=husk,distance=..48]",
+          "replyMs": 800
         }
       ],
       "wait": false,
@@ -935,9 +998,15 @@
           "entity": "husk"
         },
         {
+          "type": "serverReply",
+          "match": "Test failed",
+          "note": "no husk within 48 blocks: it died, not just wandered out of andy's sight"
+        },
+        {
           "type": "actionSeen",
-          "match": "self_defense|defend|attack|mode:",
-          "after": "following"
+          "match": "self_defense|laya_defending|defend|attack",
+          "after": "following",
+          "note": "a defence mode or fight action; any other mode (item_collecting…) doesn't count"
         },
         {
           "type": "actionSeen",
@@ -1024,6 +1093,13 @@
           "type": "stat",
           "field": "hunger",
           "min": 15
+        },
+        {
+          "type": "stat",
+          "field": "hunger",
+          "since": "hungry",
+          "min": 1,
+          "note": "his food went up after he got hungry"
         }
       ],
       "cleanup": [
