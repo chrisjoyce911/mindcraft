@@ -16,6 +16,12 @@ Each has a recommendation; phase 1 can start once Q1–Q4 are answered.
 | Q10 | Commands the command model can't emit (`!inventory`, `!consume`, `!attack`, `!stay`, …) used by players by hand | keep as typed commands / only what the scenarios and the command model use | keep the 18 the command model emits; others dropped unless you name them |
 | Q11 | Cut-over gate | 16/16 suite twice + first day from scratch (proposed); add a live-play hour? | add one live-play hour on your world before deleting `src/` |
 | Q12 | Fixes landing in the old bot meanwhile | port forward each phase (proposed) / freeze the old bot after phase 3 | port forward until phase 5, then freeze except crash fixes |
+| Q13 | Cobble and stone | mine (rules2's proposal) / gather | mine (settled with rules2's scope) |
+| Q14 | Night work | `mine coal`/`mine iron` at night / only sleep and rest | allow `mine` at night (chores v1.1 has night-mine) |
+| Q15 | `store` versus the director's `unload` | one (unload only) / both (store as a chores step, unload when full mid-job) | both: unload is safety-level, store is tidying |
+| Q16 | A player's command that fails with `missing-X` ("craft a stone pickaxe" from nothing) | say what is missing and stop / let chores v2 plan toward it with a `Want <item>` line | say and stop at first; `Want` later as a chores prompt version |
+| Q17 | place as one model or split into `place` (stations, bed, saplings) and `light` (torches) | one / split | start as one; split if its check misses on torches |
+| Q18 | Model size per card (2–4 layers, width 64–128, < 1 h per slot) | as proposed / per-model tuning by trainctl | as proposed; trainctl reports the training time per job |
 
 ## Risks you should know about
 

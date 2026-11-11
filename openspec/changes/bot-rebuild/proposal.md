@@ -29,6 +29,16 @@ The bugs are in our layer, not in mineflayer, so we keep mineflayer and rebuild 
 - Modes are gone: defend/flee/eat/heal/escape/unload are director activities; andy defends only when andy or a player
   was attacked; stuck handling belongs to the running actuator.
 - Jobs survive a restart (typed progress in `laya-job.json`); all `laya-*.jsonl` logs and state files keep their format.
+- **Specialised skill models** (user, 18:40–18:55):
+  - Chores v2 answers with the model to use and its target (`hunt`, `farm`, `gather logs|seeds|wool|sand`,
+    `mine cobble|coal|iron`, `craft <item>`, `place <thing>`) or a single step (`cook`, `store`, `sleep`, `rest`).
+  - Its state summarises the pack and the home chest, keeps the player kit apart, and shows each model's recent
+    result.
+  - Small single-skill models do the steps: farm, mine and craft exist; hunt, gather and place are new.
+  - Code runs one step at a time; today's 25 hand-written chores and their fixed amounts go away.
+  - Each model has a card: skill and out of scope, short state, answers, rules v1, check, size, and correction by a
+    short retrain via the controller `/job`.
+  - The laya-go side is rules2's `skill-models` change.
 - When the new bot passes the suite and a first-day-from-scratch test, it becomes the default and the old `src/` is
   deleted.
 
@@ -66,6 +76,8 @@ mineflayer, pathfinder, minecraft-data, prismarine-item, vec3, socket.io (target
 - `bot-commands`: typed commands, legacy parser at the boundary, no LLM.
 - `bot-models`: golaya client, byte-identical state text, typed answers, log format kept.
 - `bot-harness`: mindserver-compatible API, launch contract, observable idle.
+- `bot-skills`: chores picks the model 1:1, summary state, single-purpose skill models, one renderer per model,
+  corrections with no bot change.
 
 ## Impact
 

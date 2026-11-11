@@ -6,6 +6,10 @@ each model's state text against laya-go's samples.
 
 ## 0. Decide (blocks phase 1)
 - [ ] 0.1 User answers questions.md (TypeScript setup, test runner, andy-only vs multi-bot, UI/viewer, cut-over date).
+- [ ] 0.3 Reconcile §11 (chores v2 answers and state, model cards for hunt/gather/place, craft v2.2, mine targets) with
+      laya-go's `skill-models` change (`~/lnkz/laya-go-rules2/openspec/changes/skill-models`, its `skills-spec.md`):
+      same question names, answer words, state lines and golden requests. Record differences here; laya-go's game
+      definitions win.
 - [ ] 0.2 Freeze the harness contract: record the mindserver messages and full-state shape the suite and MCP use
       (`test/andy_tests_*` as fixtures).
 
@@ -49,14 +53,21 @@ Done means: follow/come/give/store scenarios pass; a restart test (kill mid-foll
 - [ ] 5.2 mine (mine model v2, mine plan, floor/drop checks, veins, torches, unload at home, mine memory).
 - [ ] 5.3 farm (farm model v2, water, pond, seeds, unload).
 - [ ] 5.4 hunt.
-- [ ] 5.5 chores planner (chores model, home, stumps/saplings, wool from string) producing jobs.
+- [ ] 5.5 hunt, gather and place skill jobs (design §11.5): renderer, questions, typed answer, rules v1, golden test, a
+      game scenario each. They run on rules v1 until laya-go serves the models.
+- [ ] 5.6 chores v2 (design §11.2–11.3): pack and chest summaries, the kit apart, results per model; answers map 1:1 to
+      skill jobs or single steps (cook, store, sleep, rest). Chores v1.1 stays available as the stopgap until v2 is
+      served.
+- [ ] 5.7 Correction path: `andy_logs` (or a small tool) turns a `laya-<model>.jsonl` line into a correction case in
+      the format laya-go's controller `/job` takes.
 
 Done means for each: its scenarios pass, its unit tests (ported from `test/laya_<task>*.test.js`) pass, its log
 matches the fixture. Port every fix the old bot gets meanwhile.
 
 ## 6. Cut-over
 - [ ] 6.1 Full suite 16/16 on the new bot, twice in a row, zero process exits.
-- [ ] 6.2 First day from scratch through the first night: alive, home chest set, chores done (as round 2's test).
+- [ ] 6.2 First day from scratch through the first night with chores v2 and the skill models (or their rules): alive,
+      home chest set, base placed, no dead end (the same failed answer three times in a row).
 - [ ] 6.3 Measure as 1.3; write the before/after report.
 - [ ] 6.4 User accepts; `ANDY_BOT` default → new.
 

@@ -59,11 +59,13 @@ bot/src/
   models/       LayaClient (HTTP, /v1/models + /v1/decisions, backoff, served prompt version) and one
                 module per model: render(state) → text (byte-identical to laya-go golden), questions, parse(answer)
                 → typed Decision, rules fallback
-  jobs/         Job types (follow, come, stay, mine, farm, craft, gather, hunt, give, store, setHome), each a
-                step loop: facts → model/rules → actuator; typed Progress for persistence
+  jobs/         Job types (follow, come, stay, give, store, setHome) and one skill job per skill model (§11: farm,
+                mine, craft, hunt, gather, place), each a step loop: facts → skill model/rules → one typed step →
+                one actuator call; typed Progress for persistence
   director/     the arbiter: JobStack, Activity decision (director model + rules), activity runners
                 (defend, flee, eat, heal, unload), the tick loop
-  chores/       the chores planner (what to do when idle and chores are on) — produces Jobs, never acts
+  chores/       chores v2 (§11.2): when idle with chores on, picks the skill and target (or one single step) —
+                produces a SkillTask, never acts
   command/      chat → command model → typed Command; Command → Job/Stop/Reply; the legacy `!cmd(...)` parser
   home/         places (home chest, table, bed), mine memory, stumps — persisted JSON store
   harness/      mindserver-compatible socket.io server + process launcher contract (test tools, MCP)
@@ -270,3 +272,344 @@ tasks.md for phases and "done means".
 | TypeScript slows iteration with parallel tabs | old bot keeps getting fixes until cut-over; port fixes forward per phase |
 | Two codebases for a while | time-box: cut-over target after phase 5; old `src/` deleted in phase 7 |
 | mineflayer upgrade temptation | pin 4.33.0 + patches for the rebuild; upgrade is a separate change |
+
+## 11. Specialised skill models (user decisions 2026-11-11 18:40 and 18:50)
+
+Each model does one explicit thing and is trained for that only. Today's chores model picks one of 25 chores, and each
+chore is a hand-written routine in `chores_actions.js` (`ACTUATORS`) with its amounts fixed in code (4 or 16 logs, 6
+or 14 cobble, 16 seeds). After the change:
+
+- **Chores picks the specialised model to use, with its target.** Each answer maps 1:1 to one model (or one single
+  step), so nothing decides anything in between. "Food" alone is not an answer, because it could mean hunt or farm:
+  chores picks `hunt` or `farm` itself.
+- **The skill model picks the steps.** Code runs **one step at a time** and decides nothing beyond the step.
+
+```
+chores answer (typed SkillTask) ──► that skill's model ──► typed Step ──► one actuator call ──► Outcome
+        ▲                                                                                        │
+        └──── recent result per model (done / failed: reason, age) ◄────────────── task ends ◄────┘
+```
+
+There is **no delegation between skills**. A skill that lacks something ends with `failed: missing <item>`, and
+chores, seeing that result, picks the skill that gets it (for example `gather logs`).
+
+**Consistency with laya-go.** The laya-go side (games, rules, data, training) is tab rules2's laya-go OpenSpec change
+`skill-models` (`~/lnkz/laya-go-rules2/openspec/changes/skill-models`, proposal written 18:37). Its shared
+`skills-spec.md` holds the authoritative state lines, answer words, caps and golden requests. Where this section and
+that spec differ, **the laya-go game definitions win**; tasks.md 0.3 records the reconciliation.
+
+- **Already aligned with rules2's proposal:**
+  - Models: farm, mine, craft, hunt, gather, place.
+  - Mine covers stone, cobble, coal, ores and night mining.
+  - Gather covers logs, seeds, wool and sand.
+  - Craft (data v2.2) owns the whole recipe chain and never takes the player kit.
+  - Hunt leaves two of each kind near the base and searches out to 193.
+  - Place works on a top-down grid of the base.
+- **Not yet in rules2's proposal (it predates 18:50):**
+  - The chores answers below replace its 10 goals plus a "goal runner" in bot code. With 1:1 answers there is no goal
+    runner.
+  - The chores state below (pack and chest summaries, kit apart, recent results per model) replaces "v1.1 lines with
+    Blocked".
+
+### 11.1 Models after the change
+
+| Model | Status | Does one thing | Asked by |
+|---|---|---|---|
+| director | stays | Activity (continue/defend/flee/eat/heal/unload/resume/idle) | director loop |
+| command | stays | player chat → command | command/ |
+| defend, eat, follow | stay | fight steps, when/what to eat, follow steps | director activities, follow job |
+| **chores** (v2) | changed | picks the next skill and its target (§11.2) | director, when idle with chores on |
+| farm | exists | farm steps (till, plant, water, harvest, breed, pond…) | farm skill |
+| mine | exists | mine steps for cobble, coal and ores (plan, tunnel, collect, torch, unload) | mine skill |
+| craft | exists, data v2.2 | the whole recipe chain (log → planks → sticks → item), smelting included | craft skill |
+| **hunt** | new | which animal, attack or pick up, when enough | hunt skill |
+| **gather** | new | logs, seeds, wool, sand: which tree or source, when enough | gather skill |
+| **place** | new | where a table, furnace, chest, torch, bed or sapling goes | place skill |
+
+### 11.2 Chores v2: answers
+
+Each answer is one model plus a target, or one single step:
+
+| Answer (question `Do`, plus `Target` where shown) | Runs | Target words |
+|---|---|---|
+| `hunt` | hunt model | none (hunt decides the animal and when enough) |
+| `farm` | farm model | none (any crop) |
+| `gather` + `logs\|seeds\|wool\|sand` | gather model | the resource |
+| `mine` + `cobble\|coal\|iron` | mine model | the resource (iron = raw_iron) |
+| `craft` + item | craft model | a short item list: wooden/stone/iron pickaxe, axe, sword, shovel, hoe; torch; crafting_table, furnace, chest, bed; bread; player kit |
+| `place` + thing | place model | crafting_table, furnace, chest, bed, torches, saplings |
+| `cook` | one step: smelt raw food at the furnace (craft actuator `smelt`) | none |
+| `store` | one step: put the pack in the home chest (keep list as today) | none |
+| `sleep` | one step: sleep in the bed | none |
+| `rest` | one step: stand at home for N s (nothing worth doing) | none |
+
+`unload` stays the director's activity (§5.2). Whether `store` is the same as unload is open (Q15).
+
+```ts
+type ChoresAnswer =
+  | { do: 'hunt' } | { do: 'farm' }
+  | { do: 'gather'; target: 'logs' | 'seeds' | 'wool' | 'sand' }
+  | { do: 'mine'; target: 'cobble' | 'coal' | 'iron' }
+  | { do: 'craft'; target: CraftTarget }
+  | { do: 'place'; target: 'crafting_table' | 'furnace' | 'chest' | 'bed' | 'torches' | 'saplings' }
+  | { do: 'cook' } | { do: 'store' } | { do: 'sleep' } | { do: 'rest' };
+```
+
+### 11.3 Chores v2: state
+
+The state is a summary, never full item lists: **counts by kind**.
+
+- **Pack and chest separately.** Both what andy carries and what is in the home chest are shown.
+- **The player kit apart.** It is its own line and never counted as available.
+- **Recent results per model.** Each model's last outcome is shown.
+
+Proposed lines (the laya-go game decides the exact words):
+
+```
+Chores.
+Time day Biome forest Home chest
+Pack logs 3 planks 0 sticks 2 cobble 0 coal 0 iron 0 food 2 raw 1 seeds 0 wool 0 sand 0 saplings 2 torches 0 free 24
+Chest logs 12 planks 0 sticks 0 cobble 20 coal 4 iron 0 food 0 raw 0 seeds 6 wool 1 sand 0 saplings 0 torches 0
+Tools axe wooden pickaxe wooden sword none hoe none shovel none     # best carried, by tier
+Kit pickaxe stone axe stone shovel none sword none food 8 torches 16 # in the chest, reserved, never available
+Base table yes furnace no chest yes bed no lit no
+Farm yes ready no
+Near trees 49 stone 49 coal 97 sand none water 49 grass 49           # the search size it was found in (49/97/193) or none
+Animals cow 3 pig 0 sheep 2 chicken 1 rabbit 0                      # within the search
+Results hunt done 3m gather failed no-trees 1m mine none craft failed missing-sticks 0m place done 12m farm none
+```
+
+- **Kinds are the same in Pack and Chest:** logs, planks, sticks, cobble, coal, iron, food (cooked or ready to eat),
+  raw, seeds, wool, sand, saplings, torches; counts capped at 999.
+- **Results:** one entry per model and per single step, as `<model> none | done <age> | failed <reason> <age>`.
+  - Reasons come from a closed list per model: `no-trees`, `no-animals`, `missing-<kind>`, `no-spot`, `no-path`,
+    `full`, `timeout`, `stopped`.
+  - Age is a bucket: `0m 1m 3m 10m old`.
+- **What the line replaces:** today's `Failed <chores>` line (and laya-go's proposed `Blocked`). Chores learns "craft
+  failed missing-sticks just now → craft sticks / gather logs" from it.
+- **The kit:** a separate line, and kit items are subtracted from Chest. Craft and store never take them (as today's
+  `kitIn`).
+
+### 11.4 Skill tasks and steps
+
+```ts
+type Skill = 'farm' | 'mine' | 'craft' | 'hunt' | 'gather' | 'place';
+type Purpose = 'chores' | 'player';
+interface SkillTask { skill: Skill; target: string | null; count: number | null; purpose: Purpose }  // count null: the model decides when enough
+type SkillEnd = { how: 'done' } | { how: 'failed'; reason: FailReason; item?: string } | { how: 'stopped' };
+type HuntStep   = { act: 'attack'; animal: Animal } | { act: 'pickup' } | { act: 'search' } | { act: 'done' } | { act: 'stop'; why: FailReason };
+type GatherStep = { act: 'cut'; tree: TreeKind } | { act: 'break'; block: 'grass' | 'sand' } | { act: 'shear' } | { act: 'pickup' }
+                | { act: 'replant' } | { act: 'search' } | { act: 'done' } | { act: 'stop'; why: FailReason };
+type PlaceStep  = { act: 'place'; item: Placeable; cell: Cell } | { act: 'clear'; cell: Cell } | { act: 'done' } | { act: 'stop'; why: FailReason };
+```
+
+- **Player commands use the same skills:**
+  - "mine 8 iron" → mine iron ×8
+  - "get 16 logs" → gather logs ×16
+  - "hunt cows for leather" → hunt with a target
+  - "craft a stone pickaxe" → craft
+- **A player's skill that fails missing something** ends with that reason, and andy says it ("I need sticks"), as
+  today's `jobFailedMessage`.
+- **Open (Q16):** whether a player's craft job should, like chores, pick the next skill itself.
+
+### 11.5 Model cards (user go-ahead 2026-11-11 18:55: small, tight, single-skill)
+
+Every model is **small and does one skill**. Each card below gives:
+- **Skill:** the one thing the model does, and what is explicitly out of scope.
+- **State:** a short state, a few lines with only the facts that skill needs.
+- **Answers:** a small answer set.
+- **Rules v1:** the baseline its training data comes from.
+- **Check:** how it is checked.
+- **Size and correction:** its target size, and how a mistake is corrected.
+
+**Prefer splitting a model over growing one:** a new fact or answer that serves a different skill means a new model.
+State lines and words are this side's proposal. laya-go's `skill-models` games are authoritative (§11, tasks 0.3).
+
+**Common to every card:**
+- **Size:** 2–4 layers, width 64–128, trained in under about 1 h on one slot of the controller.
+- **Check, laya-go side:** the game's check (the model agrees with rules v1 on ≥ 98 % of held-out situations, ≥ 99 %
+  on safety-relevant ones). The golden request is checked byte for byte.
+- **Check, bot side:** the renderer's golden test, plus one game scenario for the skill.
+- **Correction:**
+  1. Take a wrong step from `laya-<model>.jsonl`. Each line holds the exact state text, the answer and the outcome.
+  2. Write the right answer as a case in the game's corrections set.
+  3. Submit a short retrain **from the current model** through the controller's `/job` (minutes, not a full run).
+  4. golaya hot-reloads it, and the bot picks up the prompt version from `/v1/models`. The bot changes nothing.
+  5. A correction that needs a new state fact is a new prompt version. If the fact belongs to another skill, it is a
+     split instead.
+
+#### chores (v2): which skill next
+- **Skill:** pick the next skill and its target, or one single step (§11.2).
+- **Out of scope:** how any skill is done, amounts, where things go, and safety (that is the director).
+- **State:** §11.3 (about 10 lines: time, pack and chest summaries, tools, kit, base, farm, near, animals, results).
+- **Answers:** `Do` (10 words) and `Target` (only the words valid for that `Do`; `none` otherwise).
+- **Rules v1:** today's chores v1.1 priority order, rewritten to these answers.
+  - A result `failed missing-X` → the skill that gets X.
+  - Failed less than 3 m ago → not the same answer again.
+  - At night → `sleep` (bed) / `mine coal` / `rest`.
+- **Check:** the common check. A dead end (the same failing answer 3 times) counts as a check failure.
+
+#### hunt: get meat or a drop from animals
+- **Skill:** choose the animal, attack, pick up, widen the search, decide when enough.
+- **Out of scope:** cooking (`cook`), fighting hostiles (defend), shearing (gather), breeding (farm).
+- **State:**
+  ```
+  Hunt.
+  Goal food                     # food | leather | feather, or xN
+  Have 3 Sword stone Health 14
+  Animals cow 3 6 pig 0 none sheep 2 14 chicken 1 9   # count ≤ 9, nearest distance bucket (4/8/16/32/none)
+  Herd cow 3 sheep 2 Search 49 Drops 1
+  ```
+- **Answers:** `Action` [attack, pickup, search, done, stop]; `Animal` [cow, pig, sheep, chicken, rabbit, none].
+- **Rules v1:**
+  - Drops first.
+  - Never below 2 of a kind in the herd.
+  - Prefer the nearest kind that gives the goal.
+  - `done` at the goal; with no count, enough = 8.
+  - Widen the search 49 → 97 → 193, then `stop`.
+- **Check:** the common check.
+- **Split candidate:** fishing would be a new model, not part of hunt.
+
+#### gather: collect a raw resource by hand
+- **Skill:** pick the source (which tree, grass, sand, a sheep to shear), cut or break, replant stumps, widen the
+  search, decide when enough.
+- **Out of scope:** stone, cobble and ores (mine), killing animals (hunt), crafting (craft).
+- **State:**
+  ```
+  Gather.
+  Goal logs                     # logs | seeds | wool | sand, or xN
+  Have 3 Axe wooden Shears no Sapling 2
+  Trees oak 4 6 birch 1 12 spruce 0 none   # kinds near, count ≤ 9 and nearest distance bucket
+  Tree 5 Stumps 2 Grass 4 Sheep 8 Sand none Search 49 Pack 12
+  ```
+- **Answers:** `Action` [cut, break, shear, pickup, replant, search, done, stop]; `Source` [oak, birch, spruce,
+  jungle, acacia, dark_oak, grass, sand, sheep, none].
+- **Rules v1:**
+  - Finish the tree it started.
+  - Replant a stump when holding a sapling.
+  - Shear only with shears; otherwise `stop missing-shears`.
+  - With no count, enough = logs 16, seeds 16, wool 3, sand 8.
+  - Widen the search 49 → 97 → 193.
+  - `done` when the pack is full.
+- **Check:** the common check.
+- **Split candidate:** if `Trees` and the shear/grass facts start to compete, split into `gather-wood` and
+  `gather-plants`.
+
+#### place: where a block goes in the base
+- **Skill:** choose the cell for a station, bed, torch or sapling; clear a cell; decide when done.
+- **Out of scope:** crafting the item (craft) and walking anywhere else (code walks to the cell).
+- **State:** a 7×7 top-down grid around home, one row per line. The cell legend is laya-go's (§11.7).
+  ```
+  Place.
+  Goal furnace Have 1
+  Row 1 . . . . . . .
+  ...                           # 7 rows
+  ```
+- **Answers:** `Action` [place, clear, done, stop]; `Cell` [49 cells, none].
+- **Rules v1:**
+  - Stations 1–3 cells from home and next to each other (table by furnace by chest).
+  - Never on farmland, a path or next to water or lava.
+  - A bed with a roof when possible.
+  - Torches on dark cells, at least 3 apart.
+  - Saplings at least 2 cells from stations.
+  - `done` when placed; for torches, when no dark cell is left.
+  - `stop no-spot` when no cell fits.
+- **Check:** the common check, plus never a cell on farmland, a path or next to water or lava (100 %).
+- **Split candidate, decide with rules2 (Q17):** the grid is the largest state here. If one model can't learn both
+  "stations together" and "torches on dark, spaced" at this size, split into `place` (stations, bed, saplings) and
+  `light` (torches).
+
+#### craft (v2.2 data): make an item from what is carried and in the chest
+- **Skill:** the recipe chain from logs (planks, sticks, then the item), smelting, and taking from the chest.
+- **Out of scope:** getting raw materials (ends `missing-X`), placing stations (ends `missing-crafting_table` /
+  `missing-furnace`), and the player kit's items, which it never takes.
+- **State and answers:** today's craft prompt v2 (`Craft.` with Goal, Have, Other, Chest, Near, Inventory; Action,
+  Item, Count). The prompt is unchanged; only the data is new.
+- **Rules v1:** craft's rules, with `gather`/`place` answered as an end, not a walk.
+- **Check:** the common check. Size as today, or smaller if it trains well.
+
+#### mine and farm: as today (prompt v2)
+- **mine:**
+  - **Skill:** dig to a target (cobble, coal, iron, other ores), with the plan, torches and unload.
+  - **Out of scope:** surface gathering and fights.
+- **farm:**
+  - **Skill:** till, plant, water, pond, harvest, breed.
+  - **Out of scope:** getting seeds from grass (gather) and cooking.
+- **Both:** the prompt, state and answers are unchanged. Corrections go through the same `/job` loop.
+
+#### director, command, defend, eat, follow
+Unchanged. They are already single-skill.
+
+### 11.6 Bot side of every model
+
+One shared client (`models/client.ts`) and **one folder per model** with the same four files:
+
+```
+models/<name>/render.ts     facts → state text (byte-identical to laya-go's golden request; the only prompt text)
+models/<name>/questions.ts  question set per prompt version
+models/<name>/answer.ts     answer words → that model's typed union (anything else: malformed → rules)
+models/<name>/rules.ts      rules v1 (the fallback, and what the laya-go data came from)
+```
+
+- **Settings:** `decision_models.tasks` gains `hunt`, `gather` and `place`; `chores` moves to `prompt: v2`. Each has
+  server, model, prompt, timeout, min_confidence and log_steps, as the others do.
+- **Before a model is served,** its rules decide. That way the skill jobs can be built and tested in the game before
+  laya-go has trained anything.
+- **Adding a model is adding a folder.** Nothing else in the bot changes shape.
+
+### 11.7 Place grid (bot side)
+
+The bot sends the 7×7 grid around home, north up, home in the middle. The cell words are laya-go's to fix; this side
+proposes `.` open floor, `#` blocked, `~` water/lava near, `f` farmland, `p` path, `T` table, `F` furnace, `C` chest,
+`B` bed, `t` torch, `s` sapling, `d` dark open floor (light < 8), `H` home.
+
+Code turns the chosen cell into a block position (floor plus 1). It refuses a cell that has changed since the state was
+read, ending with `failed no-spot`.
+
+### 11.8 Craft and mine
+
+- **Craft, data v2.2 (prompt unchanged per rules2):**
+  - The model owns the chain from logs.
+  - Its `gather` action is answered by ending the craft with `failed missing-<kind>` (chores then picks the gathering
+    skill).
+  - Its `place` action is answered by ending with `failed missing-crafting_table` or `missing-furnace` (chores then
+    picks place).
+  - The player kit is never taken.
+- **Mine:** takes the targets cobble, coal and iron (and night mining, as rules2 says), each with an optional count.
+  With no count, the mine model decides when enough.
+
+### 11.9 What code keeps, and where today's 25 chores go
+
+Code executes single steps only:
+- `cut oak` = path to the nearest reachable oak log and dig it.
+- `place furnace 2-3` = place it on that cell.
+- `attack cow` = attack the nearest cow outside the herd reserve the state named.
+
+Sensors build the facts above. No amounts, orders or recipe chains stay in code.
+
+| Today's chore(s) | Chores v2 answer |
+|---|---|
+| gather_logs, stock_logs | `gather logs` (amount: the gather model) |
+| get_seeds | `gather seeds` |
+| gather_wool | `gather wool` (shears) or `hunt` (sheep) |
+| gather_cobble, stock_cobble | `mine cobble` |
+| night_mine | `mine coal` / `mine iron` |
+| place_table, place_furnace, place_chest | `place crafting_table/furnace/chest` (crafting it first is `craft …`) |
+| craft_wood_tools, craft_stone_tools, craft_sword | `craft <tool>` |
+| make_torches, light_base | `craft torch`, `place torches` |
+| make_beds | `craft bed`, `place bed` |
+| start_farm, tend_farm | `farm` |
+| hunt_food | `hunt` |
+| cook_food | `cook` |
+| replant_saplings | `place saplings` (or gather's own `replant` after cutting) |
+| stock_kit | `craft player kit` (craft fills the kit and stores it) |
+| unload | director activity (stays); `store` (Q15) |
+| sleep, rest | `sleep`, `rest` |
+
+### 11.10 Logs
+
+- **Existing files keep their format.** `laya-*.jsonl` lines stay as they are. `laya-chores.jsonl` keeps its fields:
+  `chore` holds the answer as `do[ target]` (e.g. `gather logs`), and a new `prompt` field gives the version (`v2`).
+- **New files:** `laya-hunt.jsonl`, `laya-gather.jsonl` and `laya-place.jsonl`.
+  - They follow the craft log's shape: goal, state, answer fields, p, ms, source, rule, outcome, reason.
+  - They add `purpose` (`chores` or `player`).
