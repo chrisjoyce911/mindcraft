@@ -29,14 +29,20 @@ The choice of chore is a model's (aim: no decision logic outside the Laya models
 - Setting `chores: true` (default on in the local settings) and chat "andy do your chores" / "andy take a break".
 
 ## Chore priority spec v1 (source of the training data)
-First day: logs ≥ 4 → crafting table placed in base → wooden pickaxe (+ axe) → **if water is in the work area: wooden
-hoe, seeds from grass, a 16-block farm by the water** (renewable food first) → cobblestone ≥ 14 → stone pickaxe,
-stone sword/axe, furnace placed → food: hunt to ~half a stack of meat, cook it → wool ×3 (sheep) → bed placed →
-chest placed (becomes the home chest if none) → **player kit in the home chest** (pickaxe, axe, shovel, sword of
-his best tier, 8 cooked food, 16 torches; upgraded with each tier, never taken for his own use) → stock to 64 logs and 64 cobblestone, mining whole coal/copper veins seen.
-First night (before dusk): torches ≥ 16 (coal, else charcoal from logs) → light the base (one torch per 12 blocks,
-ring the base) → shelter in the base (needs the blueprint model; until then skip) → at night: sleep if a bed is placed,
-else mine from the home staircase; never wander the surface at night.
+First day (user, 2026-11-11: food, light and an axe early):
+1. logs ≥ 4 → crafting table placed in base;
+2. wooden axe (tool and first weapon) and wooden pickaxe;
+3. if water is in the work area: wooden hoe, seeds from grass, a 16-block farm by the water (renewable food);
+4. cobblestone ≥ 14 → stone axe, stone pickaxe, furnace placed;
+5. food: hunt to ~half a stack of meat and cook it;
+6. light: torches ≥ 16 (coal, else charcoal from logs), light the base (a torch per 12 blocks, ring the base);
+7. chest placed (becomes the home chest if none) → wool ×3 and a bed → player kit in the home chest (pickaxe, axe,
+   shovel, sword of his best tier, 8 cooked food, 16 torches; upgraded each tier, never taken for his own use);
+8. stock to 64 logs and 64 cobblestone, mining whole coal/copper veins seen; stone sword later.
+Food and light come back first whenever they run short: fewer than 8 food items → food chore next (after an axe);
+fewer than 8 torches or an unlit base with dusk within ~2 minutes → light chore next.
+Night: shelter in the base (needs the blueprint model; until then skip) → sleep if a bed is placed, else mine from
+the home staircase; never wander the surface at night.
 What next: seeds from grass → hoe → wheat farm by water in the work area, lit → tend farms (harvest/replant/unload)
 whenever ready → iron: tools, armour, shield → fence and light the work area → animal pens and breeding → better home.
 Biome: no trees in the work area → search wider for wood, plant saplings near base; snowy → rabbits for food,

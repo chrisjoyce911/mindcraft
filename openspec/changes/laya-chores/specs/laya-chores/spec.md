@@ -104,3 +104,18 @@ block. When the bot cuts a tree anywhere in the work area it SHALL plant one of 
 #### Scenario: tree cut
 - **WHEN** the bot fells a birch 30 blocks from home and picks up a birch sapling
 - **THEN** it plants that sapling where the birch stood
+
+### Requirement: Food, light and an axe first
+The chores priority spec SHALL order the first day as: logs, crafting table, wooden axe and pickaxe, the early farm
+(when water is in the work area), stone axe, pickaxe and furnace, food (hunt and cook to about 32), torches and
+lighting the base, then chest, bed, player kit and stock. Whenever the bot carries fewer than 8 food items, a food
+chore SHALL come next once it has an axe; whenever it has fewer than 8 torches, or the base is unlit and dusk is less
+than about 2 minutes away, a light chore SHALL come next. With no sword the bot SHALL fight with its best axe.
+
+#### Scenario: food runs low mid-stock
+- **WHEN** the bot is gathering cobblestone for stock with a stone axe and 5 food items
+- **THEN** its next chore is hunting or harvesting food, before more stock
+
+#### Scenario: dusk with no torches
+- **WHEN** it is 1 minute before dusk, the base is unlit and the bot has 2 coal and 4 sticks
+- **THEN** its next chore crafts torches and lights the base
