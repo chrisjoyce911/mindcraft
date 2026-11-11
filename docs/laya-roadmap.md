@@ -45,10 +45,12 @@ Phases (each gated by the strict suite and a live play):
 
 - [ ] mine v2 (`mine-p`: staircase + branch mine, Pack/Unload): served after the strict v1 baseline; in-game run and comparison.
 - [ ] farm v2 (`farm-p`: crop, Pack/Unload, pond, find_water) and command v2 (`command-p`: `farm`, `home`): served when trained; in-game runs and comparison.
-- [ ] Fix the stone pickaxe craft bug found by the baseline (`craft planks` reported failed although the planks were made; `act.craft` count check in `src/agent/library/skills.js`).
+- [ ] Fix the stone pickaxe craft bug found by the baseline (`craft planks` reported failed although the planks were made; `act.craft` count check in `src/agent/library/skills.js`). **Change:** Mindcraft `fix-craft-planks`.
 - [ ] Merge the test fixes (`baseline-fixes`) and restart weakest-first cycling (with mine, farm and command on their v2 configs).
 
 ## 1. Mine v3 (one retrain)
+
+**Changes:** laya-go `mine-v3`, Mindcraft `laya-mine-v3`. The ore memory commands are in `laya-commands-v3`.
 
 1. **Opportunist mining**: valuable non-target ores near the tunnel are visible to the model (a new cell kind) and collected when the pickaxe can mine them; diamonds and emeralds are worth a longer detour. Andy walks back onto the plan afterwards.
 2. **Ore memory**: ores seen but not mined (wrong pickaxe, skipped) are saved with position and kind; "andy go get the diamonds you saw" goes there, crafting the needed pickaxe first. Collected ore is removed from memory.
@@ -57,6 +59,8 @@ Phases (each gated by the strict suite and a live play):
 5. **Torch supply** (user, 2026-11-10): torch = 1 stick + 1 coal *or charcoal* → 4 torches. Before a mine job, top up to ~16 torches (take from the home/`andy mine` chest first). While mining, craft whenever torches < 4 and coal + sticks/planks are carried (not once per job, as today's `triedTorches` does), and always collect coal near the tunnel. With no coal, make charcoal: smelt logs in a furnace (8 cobblestone, which he always has), fuelled by planks/logs; about 3 logs give 8 torches. If he runs out deep down, keep mining (coal is common down to Y 0) and refill from the next coal; never leave the staircase unlit.
 
 ## 2. Farm v3 (one retrain)
+
+**Changes:** laya-go `farm-v3`, Mindcraft `laya-farm-v3`. Lots, the shed and the composter are built through `laya-build`; auto farm upkeep is in `laya-build` (upkeep) and `laya-chores`. The open questions have defaults in both proposals, from the research: one combined crop field with alternating crop pairs per lot, and separate fields for cane, melons/pumpkins, trees and the ranch.
 
 Design from `docs/research/farming.md` (wiki-checked mechanics and layouts).
 
@@ -73,12 +77,16 @@ Design from `docs/research/farming.md` (wiki-checked mechanics and layouts).
 
 ## 3. Storage: purpose chests
 
+**Change:** Mindcraft `laya-purpose-chests`.
+
 - A sign reading `andy <purpose>` on a chest gives it a purpose: `andy farm tools` (hoes, buckets, shears, torches, fence materials), `andy seeds` (seeds, saplings, bone meal), `andy produce`, `andy mine` (top of the staircase), `andy wood` (tree farm). A plain `andy` sign is the home chest.
 - Unload to the nearest chest whose purpose fits, else the home chest; the model's Home distance becomes the distance to the nearest suitable chest.
 - Before a job, take its tools and seeds from the job's chest before crafting new ones.
 - A farm plan includes building its shed (chests + signs) by the gate.
 
 ## 4. Build (blueprint) model: new
+
+**Changes:** laya-go `build-game`, Mindcraft `laya-build`. Build order, refined by the user on 2026-11-10 after the research: observers and comparators need nether quartz, so redstone farms wait for the Nether. The order is egg collector → cow crusher → cane and tree lots → observer farms → villager crop and iron farms (moving villagers is a later change).
 
 - One model that builds any blueprint: follow the plan, fetch or craft the materials, place blocks in a safe order (water before hoppers, redstone last), check the result. Blueprints are data files, not models; adding a design needs no retraining. Auto farms are not a model of their own.
 - Build order: fenced lots, sheds and composter → chicken egg/cooker farm, observer sugar cane farm → melon/pumpkin farm, cow breeder → iron farm (hardest: moving 3 villagers and a zombie into place) → houses → railways.
@@ -89,10 +97,14 @@ Design from `docs/research/farming.md` (wiki-checked mechanics and layouts).
 
 ## 5. Chores model and chores mode: new
 
+**Changes:** laya-go `chores-game`, Mindcraft `laya-chores`.
+
 - **Chores mode**: after ~30 s idle with nothing assigned, chores on and a home chest set, andy asks the chores model for the most useful job, does it, and asks again. Any instruction from a player interrupts it (like defending); it resumes when idle. At night or in danger, safe jobs near home or none.
 - **Chores model** inputs: home and purpose chest stock (logs, food, seeds, cobblestone, iron…), each farm's state (ready to harvest, unlit, unfenced, below size, auto farm output stalled), time of day, health, food, danger. Output: the job (tend a farm, expand a farm, tree farm, lumber, compost, mine for a shortfall, empty auto farms, rest).
 
 ## 6. Supporting commands
+
+**Changes:** laya-go `command-v3`, Mindcraft `laya-commands-v3`. `!layaChores` itself is in `laya-chores`.
 
 New `!commands` in Mindcraft, and new intents in the next command-model retrain (with varied phrasings):
 
@@ -111,6 +123,8 @@ New `!commands` in Mindcraft, and new intents in the next command-model retrain 
 Site memory works like `home_chest`: one remembered place per site name.
 
 ## 7. Training infrastructure
+
+**Changes:** laya-go `training-throughput` (faster training), Mindcraft `game-test-promotion` (the in-game promotion gate).
 
 - Faster training: the Studio GPU sits at ~39% because batches are prepared on one CPU core per run. Bigger batches and multi-core batch preparation in laya-go (2–3× expected).
 - In-game test results become part of promotion: a new model is served only if it also does at least as well as the current one on the strict suite.
