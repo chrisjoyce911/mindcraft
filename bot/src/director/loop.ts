@@ -11,6 +11,7 @@ import { decideEat, eatSituation, type EatDecision } from '../models/eat/index.j
 import type { Act } from '../actuators/bot.js';
 import { JobStack, type JobEntry } from './stack.js';
 import type { RunnerFactory } from './jobs.js';
+import { legacyName } from '../log/legacyLine.js';
 import {
     DEFAULT_TIMING, runDefend, runEat, runEscape, runFlee, runHeal, runnerFor,
     type ActivityCtx, type ActivityEnd, type ActivityLog, type Timing,
@@ -60,7 +61,7 @@ export interface DirectorDeps {
     say(text: string): void;
     sink: DecisionSink;
     timing?: Partial<Timing>;
-    /** Builds a job's runner (phase 4); none yet: jobs can't run. */
+    /** Builds a job's runner (jobs/); without it no job can run. */
     runners?: RunnerFactory;
     /** Nothing to do (chores arrive in 5.6). */
     onIdle?: () => void;
@@ -98,8 +99,12 @@ export class Director {
     private nextEatAt = 0;
     private quietUntil = 0;
     private askedFoodAt = 0;
-    private ended: { name: ActivityRunnerName; at: number } | null = null;
+    private lastEnded: { name: ActivityRunnerName; at: number } | null = null;
     private eatRefused: { food: number; until: number } | null = null;
+    /** ended() waiters per job */
+    private waiters = new Map<JobEntry, ((e: JobEnd) => void)[]>();
+    /** how each job that left the stack ended (an instant job can end before ended() is asked) */
+    private endings = new WeakMap<JobEntry, JobEnd>();
     /** the last decision (tests, status) */
     last: DirectorDecision | null = null;
     lastEat: EatDecision | null = null;
@@ -136,22 +141,51 @@ export class Director {
     /** stop: a player's stop clears the stack and frees the body (≤ the lease's 2 s overrun). */
     stop(): Promise<void> { return this.clear('stop'); }
 
+    /**
+     * ended resolves once the job leaves the stack: how it ended by itself, or cancelled when it is replaced,
+     * stopped or cleared by death. A job that already left resolves at once with how it ended.
+     */
+    ended(job: JobEntry): Promise<JobEnd> {
+        const known = this.endings.get(job);
+        if (known) return Promise.resolve(known);
+        if (!this.stack.has(job)) return Promise.resolve({ how: 'cancelled' });
+        return new Promise(resolve => {
+            const list = this.waiters.get(job) ?? [];
+            list.push(resolve);
+            this.waiters.set(job, list);
+        });
+    }
+
+    private settle(job: JobEntry, end: JobEnd): void {
+        if (!this.endings.has(job)) this.endings.set(job, end);
+        const list = this.waiters.get(job);
+        this.waiters.delete(job);
+        for (const r of list ?? []) r(end);
+    }
+
     private async clear(why: 'stop' | 'death'): Promise<void> {
         this.generation++;
+        for (const j of [...this.stack.entries, ...this.waiters.keys()]) this.settle(j, { how: 'cancelled' });
         this.stack.clear();
         this.current = null;
         this.quietUntil = 0;
-        this.ended = null;
+        this.lastEnded = null;
         this.eatRefused = null;
         await this.deps.lease.release();
         if (why === 'death') this.deps.sink.note('death: stack cleared');
     }
 
     /** startJob: a player's (or a chore's) job replaces the top job and runs (player > job: no decision needed). */
-    async startJob<P>(spec: JobSpec, origin: JobOrigin, progress: P, by?: string): Promise<JobEntry<P> | null> {
+    async startJob<P>(spec: JobSpec, origin: JobOrigin, progress: P, by?: string, opts: { doneSay?: string } = {}): Promise<JobEntry<P> | null> {
+        const replaced = this.stack.job();
         const entry = this.stack.start(spec, origin, progress, by);
+        if (opts.doneSay) entry.doneSay = opts.doneSay;
+        if (replaced) this.settle(replaced, { how: 'cancelled' });
         this.generation++;
-        if (!(await this.runJob(entry as JobEntry))) return null;
+        if (!(await this.runJob(entry as JobEntry))) {
+            this.stack.drop(entry as JobEntry);
+            return null;
+        }
         return entry;
     }
 
@@ -217,7 +251,7 @@ export class Director {
             // an activity that just ended by itself isn't restarted at once for the same answer (no hot loop
             // when the answer and the activity's own end check disagree for a moment); the next tick may. A hit
             // is news: it isn't held.
-            if (!cur && event !== 'hurt' && this.ended?.name === name && this.now() - this.ended.at < RESTART_HOLD_MS) return 'hold';
+            if (!cur && event !== 'hurt' && this.lastEnded?.name === name && this.now() - this.lastEnded.at < RESTART_HOLD_MS) return 'hold';
             await this.runActivity(name);
             return name === answer ? undefined : name;
         }
@@ -281,7 +315,7 @@ export class Director {
         void held.result.then(r => {
             if (this.current?.id === id) this.current = null;
             const end = r.how === 'settled' ? r.value as ActivityEnd : r.how;
-            if (end !== 'stopped') this.ended = { name, at: this.now() };
+            if (end !== 'stopped') this.lastEnded = { name, at: this.now() };
             if (name === 'eat') {
                 const f = this.deps.facts(false);
                 this.eatRefused = end === 'no-eat' && f ? { food: f.food, until: this.now() + EAT_REFUSED_HOLD_MS } : null;
@@ -300,23 +334,36 @@ export class Director {
         this.stack.resumed(job);
         const id = ++this.seq;
         const gen = this.generation;
-        const run = async (signal: AbortSignal): Promise<JobEnd | null> => {
-            while (!signal.aborted) {
-                const f = this.deps.facts(false);
-                if (!f) return null;
-                const r = await runner.step(f, signal);
-                if (r.how === 'end') return r.end;
+        const run = async (signal: AbortSignal): Promise<{ end: JobEnd; say?: string } | null> => {
+            try {
+                while (!signal.aborted) {
+                    const f = this.deps.facts(false);
+                    if (!f) return null;
+                    const r = await runner.step(f, signal);
+                    if (r.how === 'end') return r.say !== undefined ? { end: r.end, say: r.say } : { end: r.end };
+                }
+                return null;
+            } finally {
+                try { runner.close?.(); } catch { /* a runner's summary never stops the bot */ }
             }
-            return null;
         };
-        const held = await this.deps.lease.take(`job:${job.spec.kind}`, run);
+        const held = await this.deps.lease.take(`action:${legacyName(job.spec)}`, run);
         this.current = { id, name: 'job', held, job };
         void held.result.then(r => {
             if (this.current?.id === id) this.current = null;
             if (gen !== this.generation) return;
-            if (r.how === 'settled' && r.value) { this.stack.ended(job, r.value); void this.decide('job-end'); }
-            else if (r.how === 'threw' && !(job.status === 'paused')) {
-                this.stack.ended(job, { how: 'failed', reason: String(r.error) });
+            if (r.how === 'settled' && r.value) {
+                const { end, say } = r.value as { end: JobEnd; say?: string };
+                const text = end.how === 'done' && job.doneSay ? job.doneSay : say;
+                if (text) this.deps.say(text);
+                this.stack.ended(job, end);
+                this.settle(job, end);
+                void this.decide('job-end');
+            } else if (r.how === 'threw' && !(job.status === 'paused')) {
+                const end: JobEnd = { how: 'failed', reason: String(r.error) };
+                this.deps.sink.note(`job ${job.spec.kind} threw: ${String(r.error)}`);
+                this.stack.ended(job, end);
+                this.settle(job, end);
                 void this.decide('job-end');
             }
         });

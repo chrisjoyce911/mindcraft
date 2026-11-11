@@ -116,7 +116,19 @@ step as expected (4.2); no mode (grep, check:deps, live modes "none", `!setMode`
   `test/fixtures/laya-logs/branches/command.jsonl` (recorded by `tools/laya-logs/record-command.mjs`) byte for byte.
   Home's "That's my chest now." rides on the plan (`doneSay`) for 4.2. Live: report
   `bots/andy/logs/game-tests/bot-rebuild-4.1-2026-11-12.md`.
-- [ ] 4.2 Jobs follow (follow model), come, stay, give, store, setHome; `home/` places in today's format.
+- [x] 4.2 Jobs follow (follow model), come, stay, give, store, setHome; `home/` places in today's format.
+  (2026-11-12) `bot/src/models/follow/` is the follow model: state v1/v2, questions, the veto as rules, the answer.
+  `bot/src/home/` has `chest.ts` (a home_chest.js port) and `places.ts`: memory.json `places`, read-modify-write that
+  keeps the other keys, atomic, saved at once; andy remembers `last_death_position` on death. `bot/src/jobs/` has
+  follow (one decision per step, the old branches and fallbacks, a summary line), come, stay, give, store and home
+  (the speaker's nearest chest), all with the old texts. Actuators: GoalXZ steps through `Motion.moveUntil`, chest
+  deposit, give/toss. The director leases a job as `action:<old name>` (followPlayer, goToPlayer, …), says the
+  job's end line (or the plan's doneSay), and has `ended(job)`, so a plan's jobs run one after another and stop at
+  the first that isn't done. The golden v1/v2 requests, the ported laya_follow_state/loop and laya_home_chest tests,
+  and laya-follow.jsonl (the live line plus `branches/follow.jsonl` from `tools/laya-logs/record-follow.mjs`) all
+  pass byte for byte; npm test 181/181. Live: follow, defend (pause → resume of the follow job), home-chest-command
+  and home-chest-chat pass, as do come/stay/give/store by hand; the phase-3 four were re-run and pass. Report
+  `bots/andy/logs/game-tests/bot-rebuild-4.2-2026-11-12.md`. Eat as a job (`!consume`) still says "can't yet".
 - [ ] 4.3 Persistence: `laya-job.json` (typed), `memory.json` places, `laya-chores.json`, `laya-mines.json` in today's formats; restore paused within 10 min.
 
 Done means: follow/come/give/store scenarios pass; a restart test (kill mid-follow) resumes.

@@ -43,6 +43,10 @@ export type DefendRule = (typeof DEFEND_RULES)[number];
 export const FALLBACK_WHYS = ['no-answer', 'low-confidence', 'disagree', 'veto', 'nothing-to-defend', 'not-hungry', 'malformed'] as const;
 export type FallbackWhy = (typeof FALLBACK_WHYS)[number];
 
+/** Why a follow step fell back to the pathfinder follow (the old follow.js FALLBACK_REASONS, in order). */
+export const FOLLOW_FALLBACKS = ['no-answer', 'low-confidence', 'wait', 'veto', 'stuck'] as const;
+export type FollowFallback = (typeof FOLLOW_FALLBACKS)[number];
+
 /** Eat's safety vetoes (the old bot's eat.js safety()). */
 export const EAT_VETOES = ['not-carried', 'rare', 'danger', 'full', 'bad'] as const;
 export type EatVeto = (typeof EAT_VETOES)[number];

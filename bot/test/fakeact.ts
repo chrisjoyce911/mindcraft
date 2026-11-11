@@ -2,7 +2,7 @@
 // record every call with the lease holder at call time (so a test can check nothing moved the body
 // outside the lease), and a Director wired to them.
 import { BodyLease } from '../src/core/lease.js';
-import type { Act, ActBot, ActEntity, ActItem, Goal } from '../src/actuators/bot.js';
+import type { Act, ActBlock, ActBot, ActEntity, ActItem, Goal } from '../src/actuators/bot.js';
 import type { Facts, MobFact, Outcome } from '../src/types/index.js';
 import { Director, type DecisionSink, type DirectorLogEntry } from '../src/director/loop.js';
 import type { RunnerFactory } from '../src/director/jobs.js';
@@ -46,6 +46,20 @@ export interface World {
     /** called on each goTo (a test moves andy) */
     onGoTo?: () => void;
     removeMob(id: number): void;
+    /** Players by name (bot.player). */
+    players: Record<string, ActEntity>;
+    /** Blocks by "x,y,z" (blockAt, findBlocks); everything else is null. */
+    blocks: Record<string, ActBlock>;
+    /** What was put into containers ("x,y,z" → item → count). */
+    chests: Record<string, Record<string, number>>;
+    /** Items tossed. */
+    tossed: ActItem[];
+    /** waitCollect answers this (the player picked the toss up). */
+    collects: boolean;
+    /** openContainer rejects when set. */
+    openFails?: boolean;
+    /** called on each moveUntil (a follow step): a test moves andy into the column, or not. */
+    onStep?: (goal: unknown) => void;
 }
 
 const wait = (ms: number, signal?: AbortSignal) => new Promise<boolean>(r => {
@@ -54,14 +68,15 @@ const wait = (ms: number, signal?: AbortSignal) => new Promise<boolean>(r => {
     signal?.addEventListener('abort', () => { clearTimeout(t); r(false); }, { once: true });
 });
 
-export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?: Partial<Timing>; runners?: RunnerFactory; overrunMs?: number } = {}): World {
+export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?: Partial<Timing>; runners?: RunnerFactory; jobs?: (w: World) => RunnerFactory; overrunMs?: number } = {}): World {
     const lease = new BodyLease({ overrunMs: opts.overrunMs ?? 2000, log: e => w.notes.push(`${e.event} ${e.runner}`) });
     const w = {} as World;
     const rec = (what: string, arg?: unknown) => { w.calls.push({ what, arg, holder: lease.holderName }); };
     Object.assign(w, {
         facts: baseFacts(opts.facts), calls: [], entities: {}, items: opts.items ?? [], said: [], logs: [], eats: [], defends: [], notes: [],
-        lease, consumeMs: 30,
+        lease, consumeMs: 30, players: {}, blocks: {}, chests: {}, tossed: [], collects: true,
     });
+    const key = (p: { x: number; y: number; z: number }) => `${p.x},${p.y},${p.z}`;
     let held: ActItem | null = null;
     const bot: ActBot = {
         get entity() { return { position: w.facts.pos }; },
@@ -84,13 +99,59 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
         lookAt: async () => { rec('look'); },
         attack: e => { rec('attack', e.id); w.removeMob(e.id); },
         setControlState: (c, on) => rec(`control ${c} ${on}`),
-        blockAt: () => null,
+        blockAt: (x, y, z) => w.blocks[`${x},${y},${z}`] ?? null,
         findBlock: () => null,
+        username: 'andy',
+        player: name => w.players[name] ?? null,
+        findBlocks: (names, point, maxDistance, count) => Object.entries(w.blocks)
+            .filter(([, b]) => names.includes(b.name))
+            .map(([k]) => { const [x, y, z] = k.split(',').map(Number) as [number, number, number]; return { x, y, z }; })
+            .filter(p => Math.hypot(p.x - point.x, p.y - point.y, p.z - point.z) <= maxDistance)
+            .slice(0, count),
+        openContainer: async p => {
+            rec('open', key(p));
+            if (w.openFails) throw new Error('locked');
+            const box = (w.chests[key(p)] ??= {});
+            return {
+                deposit: async (name, count) => {
+                    rec('deposit', `${name} ${count}`);
+                    const it = w.items.find(i => i.name === name);
+                    if (!it || it.count < count) throw new Error(`not enough ${name}`);
+                    it.count -= count;
+                    if (!it.count) w.items.splice(w.items.indexOf(it), 1);
+                    box[name] = (box[name] ?? 0) + count;
+                },
+                close: () => rec('close'),
+            };
+        },
+        toss: async (name, count) => {
+            let n = 0;
+            for (const it of [...w.items]) {
+                if (it.name !== name || n >= count) continue;
+                const k = Math.min(count - n, it.count);
+                it.count -= k; n += k;
+                if (!it.count) w.items.splice(w.items.indexOf(it), 1);
+            }
+            rec('toss', `${name} ${n}`);
+            if (n) w.tossed.push({ name, count: n });
+            return n;
+        },
+        waitCollect: async (_player, ms, signal) => {
+            if (w.collects) return wait(5, signal);
+            await wait(Math.min(ms, 30), signal);
+            return false;
+        },
     };
     const motion = {
         moveFor: async (goal: unknown, ms: number, signal: AbortSignal): Promise<Outcome> => {
             rec('moveFor', goal);
             return (await wait(Math.min(ms, 20), signal)) ? { ok: true } : { ok: false, reason: 'cancelled' };
+        },
+        moveUntil: async (goal: unknown, ms: number, done: () => boolean, signal: AbortSignal): Promise<Outcome> => {
+            rec('moveUntil', goal);
+            w.onStep?.(goal);
+            if (!(await wait(Math.min(ms, 5), signal))) return { ok: false, reason: 'cancelled' };
+            return done() ? { ok: true } : { ok: false, reason: 'stuck' };
         },
         goTo: async (goal: unknown, signal: AbortSignal): Promise<Outcome> => {
             rec('goTo', goal);
@@ -101,6 +162,7 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
     };
     const goals = {
         follow: (e: ActEntity, range: number): Goal => ({ follow: e.id, range }),
+        xz: (x: number, z: number): Goal => ({ xz: [x, z] }),
         near: (p: { x: number }, range: number): Goal => ({ near: p.x, range }),
         invert: (g: Goal): Goal => ({ invert: g }),
     };
@@ -130,7 +192,7 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
         models: { director: () => null, eat: () => null, defend: () => null },
         say: t => w.said.push(t), sink,
         timing: { stepMs: 10, quietMs: 3000, checkMs: 0, ...(opts.timing ?? {}) },
-        ...(opts.runners ? { runners: opts.runners } : {}),
+        ...(opts.runners ? { runners: opts.runners } : opts.jobs ? { runners: (e: Parameters<RunnerFactory>[0]) => opts.jobs!(w)(e) } : {}),
     });
     return w;
 }

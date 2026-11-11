@@ -1,3 +1,4 @@
+import type { Facts } from './facts.js';
 // Job specs (design §3.1, §11.3). The legacy parser and the command model both produce these.
 export const ORES = ['coal', 'copper', 'iron', 'lapis', 'gold', 'redstone', 'diamond'] as const;
 export type Ore = (typeof ORES)[number];
@@ -28,3 +29,13 @@ export interface JobState<P = unknown> {
     pausedAt?: number;
 }
 export type JobEnd = { how: 'done' } | { how: 'failed' | 'blocked'; reason: string } | { how: 'cancelled' };
+
+/** A runner's step result; an end may carry what andy says (the old action's output line). */
+export type StepResult = { how: 'more' } | { how: 'end'; end: JobEnd; say?: string };
+
+/** What runs a job (jobs/): one bounded piece per step; it settles ≤ 250 ms after the signal aborts. */
+export interface JobStepper {
+    step(facts: Facts, signal: AbortSignal): Promise<StepResult>;
+    /** Called once when this run of the job ends (done, failed, paused, replaced or stopped). */
+    close?(): void;
+}

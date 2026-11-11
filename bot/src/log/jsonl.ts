@@ -1,4 +1,4 @@
-// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl and laya-command.jsonl,
+// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl and laya-follow.jsonl,
 // one JSON line per decision, in the old bot's format: the same fields in the same order with the same value
 // formats (src/agent/laya/{director,eat,defend,command}.js; test/fixtures/laya-logs pins them, bot/test/logs.test.ts checks
 // them byte for byte). The line builders are pure; JsonlLog appends `{time, ...line}` and never throws.
@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import type { LeaseEvent } from '../core/lease.js';
 import type { Command } from '../types/commands.js';
-import type { DefendAction, FallbackWhy } from '../types/decisions.js';
+import type { DefendAction, FallbackWhy, FollowFallback } from '../types/decisions.js';
 import { legacyLine } from './legacyLine.js';
 
 // What the builders read (log imports only types and core: a director entry, an EatDecision and a
@@ -34,7 +34,16 @@ export interface CommandLogInput {
     said?: { addressed: number; command: string; p: number; item: string; tier: string; count: string; ms: number };
 }
 
-export const LOG_TASKS = ['director', 'eat', 'defend', 'command'] as const;
+/** A follow step as the job logs it: the state, what the model said (when it answered), the veto, the outcome. */
+export interface FollowLogInput {
+    state: string;
+    asked?: { move: string; p: number; hazard: number; ms: number };
+    veto?: string;
+    outcome: 'stepped' | 'wait' | 'fallback';
+    reason?: FollowFallback;
+}
+
+export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow'] as const;
 export type LogTask = (typeof LOG_TASKS)[number];
 
 /** The director's line: the old Director.tick logDecision entry (no `acted`: that's the console's). */
@@ -68,6 +77,12 @@ export type DefendLine =
 export interface CommandLine {
     state: string; kind: 'run' | 'reply' | 'llm' | 'ignore'; reason?: string; lines?: string[]; ms?: number;
     addressed?: number; command?: string; p?: number; item?: string; tier?: string; count?: string;
+}
+
+/** The follow step line: the old follow.js logStep entry ({state, move, p, hazard, ms, veto, outcome, reason}). */
+export interface FollowLine {
+    state: string; move?: string; p?: number; hazard?: number; ms?: number; veto?: string;
+    outcome: 'stepped' | 'wait' | 'fallback'; reason?: FollowFallback;
 }
 
 /** The lease's stop-overrun line (design §4) shares the director's file. */
@@ -127,6 +142,18 @@ export function commandLine(d: CommandLogInput): CommandLine {
     return line;
 }
 
+/** followLine: the line for one follow step (the job writes it only when log_steps). */
+export function followLine(i: FollowLogInput): FollowLine {
+    const a = i.asked;
+    return {
+        state: i.state,
+        ...(a ? { move: a.move, p: a.p, hazard: a.hazard, ms: a.ms } : {}),
+        ...(i.veto ? { veto: i.veto } : {}),
+        outcome: i.outcome,
+        ...(i.reason ? { reason: i.reason } : {}),
+    };
+}
+
 /** stamp: the line as written, `time` first (the old `{ time, ...entry }`). */
 export function stamp(line: object, time: Date = new Date()): string {
     return JSON.stringify({ time: time.toISOString(), ...line });
@@ -139,7 +166,7 @@ export class JsonlLog {
 
     file(task: LogTask): string { return path.join(this.dir, `laya-${task}.jsonl`); }
 
-    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | StopOverrunLine | null): void {
+    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | StopOverrunLine | null): void {
         if (!line) return;
         try {
             if (!this.made) { fs.mkdirSync(this.dir, { recursive: true }); this.made = true; }

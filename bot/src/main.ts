@@ -16,8 +16,11 @@ import { promptOf } from './models/director/index.js';
 import { actBot, realGoals } from './actuators/bot.js';
 import { Director, type DecisionSink, type Models } from './director/loop.js';
 import type { Timing } from './director/activities.js';
-import type { Command, Places } from './types/index.js';
+import type { Command } from './types/index.js';
 import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
+import { PlaceStore } from './home/places.js';
+import { makeRunner, FOLLOW_DEFAULTS, type FollowSettings, type JobDeps } from './jobs/index.js';
+import { isFollowPrompt } from './models/follow/index.js';
 import { handleChat } from './command/handle.js';
 import { COMMAND_DEFAULTS, promptOf as commandPromptOf, type CommandOptions } from './models/command/index.js';
 
@@ -68,15 +71,19 @@ function timingOf(settings: Record<string, unknown>): Partial<Timing> {
     return t;
 }
 
-function loadPlaces(file: string): Places {
-    try {
-        const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as { places?: Record<string, unknown> };
-        const out: Places = {};
-        for (const [k, v] of Object.entries(doc.places ?? {})) {
-            if (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite)) out[k] = [v[0], v[1], v[2]] as [number, number, number];
-        }
-        return out;
-    } catch { return {}; }
+/** The follow task's settings (decision_models.tasks.follow; the old follow.js DEFAULTS). */
+function followOf(settings: Record<string, unknown>, model: FollowSettings['model'], served: string | undefined): FollowSettings {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.follow ?? {};
+    const num = (k: 'step_ms' | 'fallback_ms' | 'stuck_ms' | 'max_waits') => {
+        const v = t[k];
+        return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : FOLLOW_DEFAULTS[k];
+    };
+    const prompt = served ?? (typeof t.prompt === 'string' ? t.prompt : undefined);
+    return {
+        step_ms: num('step_ms'), fallback_ms: num('fallback_ms'), stuck_ms: num('stuck_ms'), max_waits: num('max_waits'),
+        log_steps: t.log_steps !== false, prompt: isFollowPrompt(prompt) ? prompt : FOLLOW_DEFAULTS.prompt, model,
+    };
 }
 
 async function main() {
@@ -117,6 +124,18 @@ async function main() {
     };
     let director: Director | null = null;
 
+    // 4.2: the remembered places (memory.json `places`, saved at once) and the jobs
+    const placeStore = new PlaceStore(path.join(botDir, 'memory.json'));
+    placeStore.onError = e => log(`[memory] saving places failed: ${String(e)}`);
+    const act = () => (body.bot && body.motion ? { bot: actBot(body.bot), motion: body.motion, goals: realGoals(body.bot) } : null);
+    const jobDeps: JobDeps = {
+        act,
+        places: placeStore,
+        follow: () => followOf(settings, enabled('follow') ? laya : null, laya.promptFor('follow')),
+        followLog: line => jsonl.write('follow', line),
+        note: text => log(`[laya] ${text}`),
+    };
+
     const say = (text: string) => { body.say(text); harness.output(text); };
 
     const handle = (from: string, message: string) => {
@@ -128,7 +147,7 @@ async function main() {
             const cmd = parseLegacy(message, from);
             if (typeof cmd === 'string') { say(cmd); return; }
             log(`parsed command: ${JSON.stringify(cmd)}`);
-            void run(cmd);
+            void run(cmd, from);
             return;
         }
         void handleChat(from, message, {
@@ -138,29 +157,43 @@ async function main() {
             carry: () => readFacts()?.items ?? [],
             nearestHostile: () => readFacts()?.mobs.find(m => m.dist <= 16)?.name ?? null,
             say,
-            run: cmd => { log(`command model: ${JSON.stringify(cmd)}`); return run(cmd); },
+            run: (cmd, doneSay) => { log(`command model: ${JSON.stringify(cmd)}`); return run(cmd, from, doneSay); },
             log: line => { if (logDecisions(settings)) jsonl.write('command', line); },
             note: log,
         }).catch(e => log(`command: ${String(e)}`));
     };
 
-    const run = async (cmd: Command) => {
+    /**
+     * run carries one Command out. A job runs until it ends: the returned promise says whether it ended done, so
+     * a plan of several jobs (give everything) runs them one after another and stops at the first that doesn't
+     * (failed, replaced by a new command, stopped).
+     */
+    const run = async (cmd: Command, from?: string, doneSay?: string): Promise<boolean> => {
         switch (cmd.kind) {
-            case 'stop': if (director) await director.stop(); else await lease.release(); return;
-            case 'reply': say(cmd.text); return;
-            case 'ignore': return;
+            case 'stop': if (director) await director.stop(); else await lease.release(); return true;
+            case 'reply': say(cmd.text); return true;
+            case 'ignore': return true;
             case 'inventory': {
                 const s = body.bot ? fullState(body.bot, name, activity(), places()) : null;
                 const items = Object.entries(s?.inventory.counts ?? {}).map(([k, v]) => `${k}: ${v}`);
                 say(items.length ? `INVENTORY: ${items.join(', ')}` : 'INVENTORY: Nothing');
-                return;
+                return true;
             }
-            case 'chores': say(`Chores aren't in the new bot yet.`); return;
-            case 'job': say(`I can't do ${cmd.job.kind} yet: jobs come in phase 4 of the new bot.`); return;
+            case 'chores': say(`Chores aren't in the new bot yet.`); return false;
+            case 'job': {
+                const d = director;
+                if (!d) return false;
+                const probe = makeRunner({ id: 'probe', spec: cmd.job, origin: 'player', progress: {}, status: 'running', startedAt: 0 }, jobDeps);
+                if (!probe) { say(`I can't do ${cmd.job.kind} yet in the new bot.`); return false; }
+                const entry = await d.startJob(cmd.job, 'player', {}, from, doneSay ? { doneSay } : {});
+                if (!entry) { say(`I can't do ${cmd.job.kind} yet in the new bot.`); return false; }
+                const end = await d.ended(entry);
+                return end.how === 'done';
+            }
         }
     };
 
-    const places = () => loadPlaces(path.join(botDir, 'memory.json'));
+    const places = () => placeStore.all();
     // 3.3: the sensors read Facts; 3.4: the director decides from them
     let sensors: Sensors | null = null;
     let detachSensors: (() => void) | null = null;
@@ -194,8 +227,9 @@ async function main() {
             director = new Director({
                 lease,
                 facts: fresh => (body.inGame ? sense.read(fresh) : null),
-                act: () => (body.bot && body.motion ? { bot: actBot(body.bot), motion: body.motion, goals: realGoals(body.bot) } : null),
+                act,
                 models, say, sink, timing: timingOf(settings),
+                runners: entry => makeRunner(entry, jobDeps),
             });
             // a hit on andy or a player is decided at once (the sensors' own listener ran first)
             bot.on('entityHurt', (e: { type?: string }) => { if (e === bot.entity || e.type === 'player') director?.event('hurt'); });
@@ -208,7 +242,12 @@ async function main() {
             time: new Date().toISOString(), event: 'spawn', ms: Date.now() - t0, logins: body.logins, rssMB: Math.round(process.memoryUsage().rss / 1048576),
         }) + '\n');
     });
-    body.on('death', () => director?.event('death'));
+    body.on('death', () => {
+        // the old agent remembered where andy died (today's behaviour)
+        const p = body.bot?.entity?.position;
+        if (p) placeStore.remember('last_death_position', { x: p.x, y: p.y, z: p.z });
+        director?.event('death');
+    });
     body.on('end', () => {
         void director?.dispose(); director = null;
         detachSensors?.(); detachSensors = null; sensors = null;

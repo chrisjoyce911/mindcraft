@@ -55,6 +55,25 @@ export class Motion {
         } finally { this.inFlight--; }
     }
 
+    /**
+     * moveUntil: set a fixed goal and poll every 50 ms until done() or ms (the follow step: GoalXZ until the
+     * bot stands in that column). ok when done; stuck after ms (the goal is cleared); cancelled on abort.
+     */
+    async moveUntil(goal: unknown, ms: number, done: () => boolean, signal: AbortSignal): Promise<Outcome> {
+        if (signal.aborted) return fail('cancelled');
+        this.inFlight++;
+        try {
+            try { this.bot.pathfinder.setGoal(goal); } catch (e) { return fail('error', String(e)); }
+            const end = Date.now() + ms;
+            while (Date.now() < end) {
+                if (!(await sleepFor(50, signal))) { this.stop(); return fail('cancelled'); }
+                if (done()) return OK;
+            }
+            try { this.bot.pathfinder.setGoal(null); } catch { /* not pathing */ }
+            return fail('stuck');
+        } finally { this.inFlight--; }
+    }
+
     goTo(goal: unknown, signal: AbortSignal, opts: GoToOptions = {}): Promise<Outcome> {
         if (signal.aborted) return Promise.resolve(fail('cancelled'));
         const t = withTimeout(opts.timeoutMs ?? this.defaultTimeoutMs, signal);

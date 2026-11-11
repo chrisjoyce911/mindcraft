@@ -23,8 +23,11 @@ export interface CommandDeps {
     /** The nearest hostile's name within 16, or null. */
     nearestHostile: () => string | null;
     say: (text: string) => void;
-    /** Runs one Command; doneSay: what to say when its job ends done (home's "That's my chest now."). */
-    run: (cmd: Command, doneSay?: string) => Promise<void> | void;
+    /**
+     * Runs one Command; doneSay: what to say when its job ends done (home's "That's my chest now."). Resolves
+     * false when the rest of the plan must not run (a job that didn't end done, or was replaced or stopped).
+     */
+    run: (cmd: Command, doneSay?: string) => Promise<boolean | void> | boolean | void;
     /** Writes a laya-command.jsonl line (log_decisions decides whether it is kept). */
     log: (line: CommandLine) => void;
     /** The console. */
@@ -49,7 +52,9 @@ export async function handleChat(from: string, message: string, deps: CommandDep
         case 'run':
             if (p.say) deps.say(p.say);
             for (const cmd of p.commands) {
-                try { await deps.run(cmd, p.doneSay); } catch (e) { deps.note?.(`[laya] command: run failed: ${String(e)}`); }
+                try {
+                    if (await deps.run(cmd, p.doneSay) === false) return;
+                } catch (e) { deps.note?.(`[laya] command: run failed: ${String(e)}`); }
             }
             return;
     }

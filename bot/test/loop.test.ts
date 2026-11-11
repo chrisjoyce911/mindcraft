@@ -293,7 +293,7 @@ test('resume after a fight: the job is paused under defend and resumes with its 
     const w = world({ runners: runners as never, items: [{ name: 'stone_sword', count: 1 }] });
     const job = await w.director.startJob({ kind: 'farm', crop: 'wheat', goal: { count: 3 } }, 'player', { n: 0 });
     assert.ok(job);
-    assert.equal(w.director.holder, 'job:farm');
+    assert.equal(w.director.holder, 'action:layaFarm');
     allowed = 1;
     assert.ok(await until(() => steps.length === 1));
     // a zombie hits andy: defend pauses the job
@@ -305,7 +305,7 @@ test('resume after a fight: the job is paused under defend and resumes with its 
     assert.equal(job.status, 'paused');
     assert.equal(w.director.stack.last, 'interrupted');
     // the zombie dies (the fake attack kills it), defend ends calm, the director answers resume
-    assert.ok(await until(() => w.director.holder === 'job:farm'), `holder ${w.director.holder}`);
+    assert.ok(await until(() => w.director.holder === 'action:layaFarm'), `holder ${w.director.holder}`);
     assert.ok(w.logs.some(l => l.answer === 'resume' && l.event === 'defend-done'), 'resume answered after the fight');
     assert.equal(job.status, 'running');
     allowed = 2;

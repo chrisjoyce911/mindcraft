@@ -5,7 +5,11 @@ import type { JobEnd, JobOrigin, JobSpec, JobState } from '../types/index.js';
 import { itemWord, JOB_KINDS, type DirectorJobKind, type JobView, type Last } from '../models/director/index.js';
 
 /** A job on the stack; left() is how many are left (from the runner's progress), null when it can't say. */
-export interface JobEntry<P = unknown> extends JobState<P> { left?: () => number | null }
+export interface JobEntry<P = unknown> extends JobState<P> {
+    left?: () => number | null;
+    /** What andy says when the job ends done, instead of the runner's line (a plan's doneSay: home's "That's my chest now."). */
+    doneSay?: string;
+}
 
 let nextId = 1;
 
@@ -93,6 +97,14 @@ export class JobStack {
         if (i < 0) return;
         this.items.splice(i, 1);
         this.last = end.how === 'cancelled' ? 'interrupted' : end.how;
+        this.changed();
+    }
+
+    /** drop: take a job off that never ran (its kind has no runner); Last is left as it was. */
+    drop(job: JobEntry): void {
+        const i = this.items.indexOf(job);
+        if (i < 0) return;
+        this.items.splice(i, 1);
         this.changed();
     }
 
