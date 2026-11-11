@@ -282,3 +282,25 @@ test('unload: never when nothing would go in (tools and kept seeds fill the pack
     await runFarm(u.bot, { crop: 'any' }, u.deps);
     assert.equal(u.calls.home, 0, 'the rule says unload (free 5, home 2) but nothing would go in');
 });
+
+test('produce the craft job takes from the home chest is not counted as harvested (5.3 review)', async () => {
+    // breed cow wheat with no wheat carried: getItem('wheat') → the craft job takes wheat from the home chest
+    const inv: Record<string, number> = {};
+    const { deps, calls, bot } = setupV2([reply('breed', 'cow', 'wheat'), ...Array(3).fill(reply('wait', 'none', 'none'))], { task: { max_steps_open: 4 } });
+    deps.inventory = () => ({ ...inv });
+    const craft = deps.craft;
+    deps.craft = async (item, n) => { inv[item] = (inv[item] ?? 0) + n; return craft(item, n); };
+    const c = await runFarm(bot, { crop: 'wheat', count: 1 }, deps);
+    assert.ok(calls.craft.some(([i]) => i === 'wheat'), 'wheat was fetched');
+    assert.equal(c.harvested, 0, 'taken from the chest, not harvested');
+    assert.notEqual(c.reason, 'count reached');
+});
+
+test('a full pack of kept things is said once (5.3 review)', async () => {
+    const u = setupV2(Array(3).fill(reply('wait', 'none', 'none')), {
+        home: { x: 2, y: Y0 + 1, z: 2 }, free: () => 0, inv: { iron_hoe: 1, wheat_seeds: 16, iron_shovel: 28 }, task: { max_steps_open: 3 },
+    });
+    await runFarm(u.bot, { crop: 'any' }, u.deps);
+    assert.equal(u.calls.home, 0);
+    assert.equal(u.said.filter(m => /full of things I keep/.test(m)).length, 1);
+});

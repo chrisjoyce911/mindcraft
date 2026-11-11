@@ -110,6 +110,7 @@ const MORE: FarmStep = { how: 'more' };
 /** What andy says when a farm job starts with the farm task off (the old farmWithLayaModel's line). */
 export const FARM_OFF = 'The Laya farm task is off (settings.decision_models.tasks.farm).';
 const FULL_NO_HOME = "My pack is full and I don't know a home chest (remember one as home_chest).";
+const FULL_OF_KEPT = "My pack is full of things I keep, so I can't pick up the harvest.";
 
 /** FarmRun is one run of a farm job (from a start or a resume until it ends or is paused): the old farmWithLaya's state. */
 export class FarmRun {
@@ -125,6 +126,7 @@ export class FarmRun {
     private bad = 0;
     private noUnloadUntil = 0;
     private warnedFull = false;
+    private warnedKept = false;
     private wentForWater = false;
     private origin: Vec3Like | null = null;
     /** The last done act and the state it was chosen on (a repeat on the same state did nothing). */
@@ -188,7 +190,10 @@ export class FarmRun {
     /** getItem gets an item a step needs and logs it (crafted / craft-failed). */
     private async getItem(w: FarmWorld, item: string, count: number, signal: AbortSignal): Promise<boolean> {
         bump(this.counters.crafted, item);
+        // the craft job may take produce from the home chest: that isn't harvested (count what came before, then move the mark)
+        this.credit(w);
         const ok = await w.craft(item, count, signal).catch(() => false);
+        this.lastProduce = this.produce(w);
         if (!signal.aborted) this.logStep(farmCraftLine(ok, item, count));
         return ok;
     }
@@ -303,7 +308,13 @@ export class FarmRun {
             }
             // nothing would go in (tools, food and the kept seeds fill the pack): no unload (5.3 live: the rule's
             // "nearly full, home near" otherwise sends andy to the chest every step)
-            if (home && this.steps >= this.noUnloadUntil && wantUnload(s.pack!, asked?.unload) && depositList(w.inventory(), this.keep(w)).length > 0) {
+            const toDeposit = home ? depositList(w.inventory(), this.keep(w)).length > 0 : false;
+            // a full pack of things kept (tools, food, keep_seeds): no drop can be picked up; say so once
+            if (home && s.pack!.free === 0 && !toDeposit && !this.warnedKept) {
+                this.warnedKept = true;
+                this.say(FULL_OF_KEPT);
+            }
+            if (home && toDeposit && this.steps >= this.noUnloadUntil && wantUnload(s.pack!, asked?.unload)) {
                 const ok = await this.goUnload(w, home, signal);
                 if (signal.aborted) return MORE;
                 if (!ok) { this.noUnloadUntil = this.steps + o.unload_retry_steps; this.counters.failed++; }

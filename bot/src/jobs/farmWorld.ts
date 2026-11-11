@@ -101,7 +101,7 @@ export function farmWorld(a: Act, deps: JobDeps, waterRadius: number, home: () =
             const after = inventory();
             const kept = items.map(i => ({ name: i.name, count: Math.min(i.count, i.count - ((before[i.name] ?? 0) - (after[i.name] ?? 0))) }))
                 .filter(i => i.count > 0);
-            const still = kept.length ? kept : left;
+            const still = kept; // left can over-report: not used
             if (still.length) note(`The home chest is full: still carrying ${list(still)}.`);
             return still.length === 0;
         },
