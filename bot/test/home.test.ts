@@ -82,6 +82,16 @@ test('places: a missing file is normal; a change writes {places} alone', () => {
     assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { places: {} });
 });
 
+test('places: reload reads the file again (the harness deleted memory.json before start-agent)', () => {
+    const file = tmpFile();
+    const s = new PlaceStore(file);
+    s.remember('home_chest', { x: 3, y: 64, z: -2 });
+    fs.rmSync(file);
+    assert.deepEqual(s.recall('home_chest'), [3, 64, -2], 'in memory until reloaded');
+    s.reload();
+    assert.equal(s.recall('home_chest'), null);
+});
+
 test('places: keeps every other memory.json key (the old bot shares the file); atomic; bad entries dropped', () => {
     const file = tmpFile();
     fs.mkdirSync(path.dirname(file), { recursive: true });

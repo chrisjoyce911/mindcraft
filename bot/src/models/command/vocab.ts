@@ -25,7 +25,8 @@ export const TIERS = ['wooden', 'stone', 'iron', 'diamond', NONE] as const;
 export type Tier = (typeof TIERS)[number];
 export const COUNTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '16', '20', '24', '32', '48', '64', 'all', 'any'] as const;
 export type CountWord = (typeof COUNTS)[number];
-export const CROPS = ['wheat', 'carrots', 'potatoes', 'beetroot'] as const;
+/** The Item question's crops: the job's crops (one source of truth, types/jobs.ts). */
+export { CROPS } from '../../types/jobs.js';
 export const TOOLS = ['pickaxe', 'axe', 'sword', 'shovel', 'hoe'] as const;
 export const ARMOR = ['helmet', 'chestplate', 'leggings', 'boots'] as const;
 /** The Item question's mobs (attack targets). */

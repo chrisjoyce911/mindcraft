@@ -150,7 +150,7 @@ test('ended: a replaced job ends cancelled; the kinds not built yet start nothin
     const b = await w.director.startJob({ kind: 'stay', seconds: -1 }, 'player', {});
     assert.deepEqual(await aEnd, { how: 'cancelled' });
     assert.deepEqual(await w.director.ended(a!), { how: 'cancelled' }, 'not on the stack: at once');
-    assert.equal(await w.director.startJob({ kind: 'farm', crop: 'wheat', goal: { count: 3 } }, 'player', {}), null);
+    assert.equal(await w.director.startJob({ kind: 'hunt', mob: 'cow', item: 'beef', count: 3 }, 'player', {}), null);
     assert.equal(w.director.stack.depth, 0, 'the director replaces the top job: main checks makeRunner first');
     void b;
     await w.director.stop();

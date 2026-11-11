@@ -23,6 +23,11 @@ export interface GoToOptions {
      * also on an abort or a timeout.
      */
     safe?: boolean;
+    /**
+     * farm: the farm movements for this goTo (the old farm_actions.js movements: no parkour, no sprint, no digging,
+     * farmland and crops avoided, so andy never tramples a field); put back after as safe's are. Wins over safe.
+     */
+    farm?: boolean;
 }
 
 /** sleepFor resolves true after ms, false as soon as the signal aborts (never rejects). */
@@ -42,7 +47,8 @@ export class Motion {
     /** moving: a goTo is in flight (the stuck watch counts only then). */
     get moving(): boolean { return this.inFlight > 0; }
     /** safeMovements builds the safe movements (body.ts: pathfinder Movements; null: a safe goTo uses the current ones). */
-    constructor(private readonly bot: MotionBot, private readonly defaultTimeoutMs = 60000, private readonly safeMovements: (() => unknown) | null = null) {}
+    constructor(private readonly bot: MotionBot, private readonly defaultTimeoutMs = 60000, private readonly safeMovements: (() => unknown) | null = null,
+        private readonly farmMovements: (() => unknown) | null = null) {}
 
     /** stop: clear the goal and controls now (the lease's body reset uses this too). */
     stop(): void {
@@ -92,9 +98,10 @@ export class Motion {
         const t = withTimeout(opts.timeoutMs ?? this.defaultTimeoutMs, signal);
         this.inFlight++;
         const pf = this.bot.pathfinder;
-        const swap = !!opts.safe && !!this.safeMovements && typeof pf.setMovements === 'function';
+        const make = opts.farm && this.farmMovements ? this.farmMovements : opts.safe ? this.safeMovements : null;
+        const swap = !!make && typeof pf.setMovements === 'function';
         const prev = swap ? pf.movements : undefined;
-        if (swap) { try { pf.setMovements!(this.safeMovements!()); } catch { /* the current ones then */ } }
+        if (swap) { try { pf.setMovements!(make!()); } catch { /* the current ones then */ } }
         const restore = () => { if (swap && prev) { try { pf.setMovements!(prev); } catch { /* best effort */ } } };
         return new Promise<Outcome>(resolve => {
             let done = false;

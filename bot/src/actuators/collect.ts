@@ -5,6 +5,7 @@
 import { race, isAborted, withTimeout, timedOut } from '../core/abort.js';
 import type { Outcome, Vec3Like } from '../types/index.js';
 import type { Act, ActBlock, ActEntity } from './bot.js';
+import type { GoToOptions } from '../core/motion.js';
 import { hold } from './equip.js';
 import { floorDrop } from './floor.js';
 import { wait } from './settle.js';
@@ -61,7 +62,7 @@ export async function digAt(a: Act, p: Vec3Like, signal: AbortSignal, ms = DIG_T
 }
 
 /** pickupNearby walks to each item on the ground within range, nearest first, until none is left or one won't come. */
-export async function pickupNearby(a: Act, signal: AbortSignal, range = PICKUP_RANGE): Promise<number> {
+export async function pickupNearby(a: Act, signal: AbortSignal, range = PICKUP_RANGE, go: GoToOptions = {}): Promise<number> {
     const nearest = (): ActEntity | null => {
         let best: ActEntity | null = null;
         const me = a.bot.entity.position;
@@ -73,7 +74,7 @@ export async function pickupNearby(a: Act, signal: AbortSignal, range = PICKUP_R
     };
     let item = nearest(), picked = 0;
     for (let i = 0; item && i < 16 && !signal.aborted; i++) {
-        const o = await a.motion.goTo(a.goals.follow(item, 1), signal, { timeoutMs: PICKUP_TIMEOUT_MS });
+        const o = await a.motion.goTo(a.goals.follow(item, 1), signal, { timeoutMs: PICKUP_TIMEOUT_MS, ...go });
         if (!o.ok && o.reason === 'cancelled') break;
         if (!(await wait(200, signal))) break;
         const prev = item;

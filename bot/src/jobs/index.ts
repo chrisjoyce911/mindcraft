@@ -1,5 +1,5 @@
-// The jobs (4.2: follow, come, stay, give, store, home; 5.1: craft, gather; 5.2: mine). makeRunner builds a job's
-// runner; null for the kinds that arrive later (farm, hunt: 5.x; eat as a job: not yet).
+// The jobs (4.2: follow, come, stay, give, store, home; 5.1: craft, gather; 5.2: mine; 5.3: farm). makeRunner builds a
+// job's runner; null for the kinds that arrive later (hunt: 5.4; eat as a job: not yet).
 import type { JobState, JobStepper } from '../types/index.js';
 import type { JobDeps, JobOf } from './deps.js';
 import { followRunner } from './follow.js';
@@ -10,13 +10,16 @@ import { storeRunner } from './store.js';
 import { homeRunner } from './home.js';
 import { craftRunner } from './craft.js';
 import { mineRunner } from './mine.js';
+import { farmRunner } from './farm.js';
 
 export * from './deps.js';
 export { summary, newCounters, followRunner, type FollowCounters, type FollowStepper } from './follow.js';
 export { craftRunner, craftStep, makeItem, type CraftWorld, type CraftProgress, type CraftRunContext } from './craft.js';
 export { jobFailedMessage } from './message.js';
 export { mineRunner, MineRun, mineSummary, newMineCounters, type MineWorld, type MineProgress, type MineRunContext, type MineCounters, type MineEnd, type MineStep } from './mine.js';
-export { mineWorld } from './mineWorld.js';
+export { mineWorld, homeFinder, makeOrCraft } from './mineWorld.js';
+export { farmRunner, FarmRun, farmSummary, newFarmCounters, FARM_OFF, type FarmWorld, type FarmProgress, type FarmRunContext, type FarmCounters, type FarmEnd, type FarmStep } from './farm.js';
+export { farmWorld } from './farmWorld.js';
 
 export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
     const s = job.spec;
@@ -30,6 +33,7 @@ export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
         case 'craft': return craftRunner(job as JobOf<'craft'>, deps);
         case 'gather': return craftRunner(job as JobOf<'gather'>, deps);
         case 'mine': return mineRunner(job as JobOf<'mine'>, deps);
+        case 'farm': return farmRunner(job as JobOf<'farm'>, deps);
         default: return null;
     }
 }

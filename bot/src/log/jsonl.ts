@@ -1,4 +1,4 @@
-// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl, laya-follow.jsonl, laya-craft.jsonl and laya-mine.jsonl,
+// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl, laya-follow.jsonl, laya-craft.jsonl, laya-mine.jsonl and laya-farm.jsonl,
 // one JSON line per decision, in the old bot's format: the same fields in the same order with the same value
 // formats (src/agent/laya/{director,eat,defend,command}.js; test/fixtures/laya-logs pins them, bot/test/logs.test.ts checks
 // them byte for byte). The line builders are pure; JsonlLog appends `{time, ...line}` and never throws.
@@ -54,7 +54,7 @@ export interface CraftLogInput {
 }
 export type CraftOutcome = 'did' | 'failed' | 'fallback' | 'done' | 'stop';
 
-export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine'] as const;
+export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm'] as const;
 export type LogTask = (typeof LOG_TASKS)[number];
 
 /** The director's line: the old Director.tick logDecision entry (no `acted`: that's the console's). */
@@ -169,6 +169,39 @@ export const mineLines = {
     unsafeRestart: (entrance: Pos, from: Pos, heading: string): MineLine => ({ restart: pos(entrance), from: pos(from), heading, reason: 'unsafe', outcome: 'restarted' }),
 };
 
+/**
+ * A farm step as the farm job logs it (the old farm.js `entry`): the state; the Unload probability (v2: present, maybe
+ * undefined); what the model said (model_action when it wasn't sure, v1); the banned answer; the answer (action,
+ * target, item: the answer's item, before a crop's seed is swapped in) and who chose it; the harvest.
+ */
+export interface FarmStepEntry {
+    state: string;
+    unload?: number | undefined;
+    model_action?: string; p?: number; ms?: number;
+    banned?: string;
+    action?: string; target?: string; item?: string; source?: string;
+    harvested?: number;
+}
+export type FarmOutcome = 'done' | 'failed' | 'veto' | 'wait' | 'low-confidence' | 'no-answer' | 'no-water' | 'went-to-water' | 'water-unreachable';
+
+/** The farm job's lines (the old farm.js logStep entries), each in the old field order. */
+export type FarmLine =
+    | (FarmStepEntry & { outcome: FarmOutcome; veto?: string; water?: Pos })
+    | { outcome: 'crafted' | 'craft-failed'; item: string; count: number };
+
+/** farmStepLine: a step entry with its outcome (and a veto or the water walked to), in the old field order. */
+export function farmStepLine(e: FarmStepEntry, outcome: FarmOutcome, extra: { veto?: string; water?: Pos } = {}): FarmLine {
+    const out: Record<string, unknown> = { state: e.state };
+    const keys = ['unload', 'model_action', 'p', 'ms', 'banned', 'action', 'target', 'item', 'source', 'harvested'] as const;
+    for (const k of keys) if (k in e) out[k] = e[k];
+    out.outcome = outcome;
+    if (extra.veto !== undefined) out.veto = extra.veto;
+    if (extra.water) out.water = pos(extra.water);
+    return out as FarmLine;
+}
+
+export const farmCraftLine = (ok: boolean, item: string, count: number): FarmLine => ({ outcome: ok ? 'crafted' : 'craft-failed', item, count });
+
 /** The lease's stop-overrun line (design §4) shares the director's file. */
 export type StopOverrunLine = LeaseEvent;
 
@@ -262,7 +295,7 @@ export class JsonlLog {
 
     file(task: LogTask): string { return path.join(this.dir, `laya-${task}.jsonl`); }
 
-    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | MineLine | StopOverrunLine | null): void {
+    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | MineLine | FarmLine | StopOverrunLine | null): void {
         if (!line) return;
         try {
             if (!this.made) { fs.mkdirSync(this.dir, { recursive: true }); this.made = true; }

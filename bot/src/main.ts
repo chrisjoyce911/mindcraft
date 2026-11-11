@@ -21,7 +21,7 @@ import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 import { PlaceStore } from './home/places.js';
 import { JobSaver, RESTORE_MAX_MS, RESTORE_MIN_MS, loadJobs, planRestore, readJobs, waitsFor } from './home/jobfile.js';
 import { loadChoresState } from './home/chores.js';
-import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, MINE_DEFAULTS, MINE_NUMBER_KEYS, MINE_PROMPTS, type CraftSettings, type FollowSettings, type JobDeps, type MineSettings, type MinePrompt } from './jobs/index.js';
+import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, MINE_DEFAULTS, MINE_NUMBER_KEYS, MINE_PROMPTS, farmOf, type CraftSettings, type FollowSettings, type JobDeps, type MineSettings, type MinePrompt } from './jobs/index.js';
 import { mineStore } from './home/mines.js';
 import { isFollowPrompt } from './models/follow/index.js';
 import { handleChat } from './command/handle.js';
@@ -171,6 +171,8 @@ async function main() {
         mine: () => mineOf(settings, enabled('mine') ? laya : null, laya.promptFor('mine')),
         mineLog: line => jsonl.write('mine', line),
         mines: mineStore(path.join(botDir, 'laya-mines.json')),
+        farm: () => farmOf(settings, enabled('farm') ? laya : null, laya.promptFor('farm')),
+        farmLog: line => jsonl.write('farm', line),
         chat: text => { if (settings.chat_ingame !== false) say(text); },
         note: text => log(`[laya] ${text}`),
         checkpoint: () => saver.save(),
@@ -284,7 +286,8 @@ async function main() {
         facts,
         settings: () => settings,
         message: handle,
-        start: () => { stopping = false; body.connect(); },
+        // start-agent: as the old bot's fresh agent process, the saved places are read again (the harness's reset deletes them)
+        start: () => { stopping = false; placeStore.reload(); body.connect(); },
         stop: () => { stopping = true; body.disconnect(); },
     }, log);
 

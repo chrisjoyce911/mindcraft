@@ -74,6 +74,8 @@ export interface World {
     /** A dig takes this long (Infinity: never settles); a dug block becomes this item in the pack (else its name). */
     digMs: number;
     drops: Record<string, string>;
+    /** called on each activateBlock (a farm test grows the crop or tills the ground). */
+    onActivateBlock?: (p: { x: number; y: number; z: number }, held: ActItem | null) => void;
     /** The held item (equip). */
     held(): ActItem | null;
 }
@@ -206,6 +208,8 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
         stopDigging: () => rec('stopDigging'),
         canHarvest: () => true,
         bestTool: () => null,
+        activateBlock: async (p, face) => { rec('activateBlock', `${key(p)} ${key(face)}`); w.onActivateBlock?.(p, held); },
+        activateEntity: async e => { rec('activateEntity', e.id); },
         placeBlock: async (against, face) => {
             rec('place', `${key(against)} ${key(face)}`);
             if (!held) throw new Error('nothing held');

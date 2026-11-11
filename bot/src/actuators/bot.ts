@@ -9,7 +9,7 @@ import type { GoToOptions } from '../core/motion.js';
 export interface ActEntity { id: number; name?: string | undefined; type?: string | undefined; username?: string | undefined; position: Vec3Like; height?: number; isValid?: boolean }
 export interface ActItem { name: string; count: number }
 /** A block as the actuators and the follow state read it (a mineflayer Block fits). metadata 0: a liquid's source. */
-export interface ActBlock { name: string; boundingBox?: string; metadata?: number; getProperties?: () => Record<string, unknown> }
+export interface ActBlock { name: string; boundingBox?: string; metadata?: number; getProperties?: () => Record<string, unknown>; getSignText?: () => unknown }
 /** An open container (a chest): its items, deposit and withdraw by item name, close. */
 export interface ActContainer {
     /** The container's own slots' items (not andy's inventory). */
@@ -89,6 +89,10 @@ export interface ActBot {
     canHarvest(p: Vec3Like): boolean;
     /** The carried item that digs the block at p fastest (the patched digTime), or null: the hand is as good. */
     bestTool(p: Vec3Like): string | null;
+    /** Use the held item on the block at p, on its face side (till, plant, bone meal: the old bot.activateBlock). */
+    activateBlock(p: Vec3Like, face: Vec3Like): Promise<void>;
+    /** Use the held item on an entity (feed an animal: bot.activateEntity). */
+    activateEntity(e: ActEntity): Promise<void>;
     /** Place the held block against the block at `against`, on its `face` side. */
     placeBlock(against: Vec3Like, face: Vec3Like): Promise<void>;
     /** Open the furnace block at p (rejects when it won't open). */
@@ -251,6 +255,16 @@ export function actBot(bot: Bot): ActBot {
             // a block the hand can't harvest: any tool that can
             if (!best && !b.canHarvest(null)) best = bot.inventory.items().find(it => b.canHarvest(it.type))?.name ?? null;
             return best;
+        },
+        activateBlock: async (p, face) => {
+            const b = bot.blockAt(v(p));
+            if (!b) throw new Error('no block there');
+            await bot.activateBlock(b, v(face));
+        },
+        activateEntity: async e => {
+            const ent = bot.entities[e.id];
+            if (!ent) throw new Error('no such entity');
+            await bot.activateEntity(ent);
         },
         placeBlock: async (against, face) => {
             const b = bot.blockAt(v(against));

@@ -43,6 +43,12 @@ export class PlaceStore implements PlaceBook {
         this.places = cleanPlaces(readDoc(file)?.places);
     }
 
+    /**
+     * reload reads the places from disk again: the harness's start-agent after a world reset (forgetAgent deleted
+     * memory.json; the old bot started a fresh process, which read it again).
+     */
+    reload(): void { this.places = cleanPlaces(readDoc(this.file)?.places); }
+
     all(): Places { return { ...this.places }; }
     recall(name: string): Place | null { const p = this.places[name]; return p ? [...p] : null; }
 

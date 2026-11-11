@@ -6,7 +6,8 @@ import type { Vec3Like } from '../types/index.js';
 import type { Act } from '../actuators/bot.js';
 import { collectOreAt, digBlock, walkTo } from '../actuators/ore.js';
 import { placeAt } from '../actuators/place.js';
-import { goHome, depositAtHome } from '../actuators/unload.js';
+import { goHome, depositAtHome, findSignedChest } from '../actuators/unload.js';
+import { homeAdopter } from '../home/adopt.js';
 import { eatFood } from '../actuators/eat.js';
 import { craftRecipe } from '../actuators/craft.js';
 import { wait } from '../actuators/settle.js';
@@ -27,7 +28,49 @@ const dist = (a: Vec3Like, b: Vec3Like) => Math.hypot(a.x - b.x, a.y - b.y, a.z 
 /** foodRank: the most filling food first; rotten flesh last (the old eatBestFood). */
 const points = (name: string) => (name === 'rotten_flesh' ? -1 : isKnownFood(name) ? FOODS[name].points : 0);
 
-export function mineWorld(a: Act, deps: JobDeps): MineWorld {
+/**
+ * makeOrCraft makes n more of item for a job (the old craftForTask): the craft model when its task is on, else the
+ * recipe rules alone (the ingredients first, from what is carried or a chest), else the plain recipe. True when the
+ * inventory grew (or the plain recipe reported done).
+ */
+export async function makeOrCraft(a: Act, deps: JobDeps, item: string, n: number, signal: AbortSignal, note: (m: string) => void): Promise<boolean> {
+    const have = () => a.bot.items().filter(i => i.name === item).reduce((k, i) => k + i.count, 0);
+    const before = have();
+    const s = settingsOf(deps)();
+    if (s.enabled) {
+        const r = await makeItem(deps, item, n, signal);
+        if (r.ok && have() > before) return true;
+        if (signal.aborted) return false;
+    }
+    const r = await makeItem(deps, item, n, signal, { settings: { ...CRAFT_DEFAULTS, max_steps: 20, enabled: true, model: null, log_steps: s.log_steps } });
+    if (r.ok && have() >= before + 1) return true;
+    if (signal.aborted) return false;
+    const c = await craftRecipe(a, item, Math.max(1, Math.ceil(n / (item === 'torch' ? 4 : 1))), signal);
+    if (c.message) note(c.message);
+    return c.ok;
+}
+
+/** homeOf: the saved home chest place, floored, or null. */
+export function homeOf(deps: JobDeps): Vec3Like | null {
+    const h = deps.places.recall(HOME_PLACE);
+    return h ? { x: Math.floor(h[0]), y: Math.floor(h[1]), z: Math.floor(h[2]) } : null;
+}
+
+/**
+ * homeFinder: the job's home(): the saved home chest, else a chest marked with a sign bearing andy's name (adopted
+ * as the home chest, looked for at most every 30 s; home/adopt.ts). One per job run, so the 30 s holds across steps.
+ */
+export function homeFinder(deps: JobDeps): () => Vec3Like | null {
+    return homeAdopter({
+        recall: () => homeOf(deps),
+        remember: c => deps.places.remember(HOME_PLACE, c),
+        find: () => { const a = deps.act(); return a ? findSignedChest(a) : null; },
+        say: text => { deps.note(text); deps.chat?.(text); },
+        ...(deps.now ? { now: deps.now } : {}),
+    });
+}
+
+export function mineWorld(a: Act, deps: JobDeps, home: () => Vec3Like | null = () => homeOf(deps)): MineWorld {
     const inventory = () => {
         const inv: Record<string, number> = {};
         for (const i of a.bot.items()) inv[i.name] = (inv[i.name] || 0) + i.count;
@@ -46,32 +89,13 @@ export function mineWorld(a: Act, deps: JobDeps): MineWorld {
             return a.bot.findBlocks(blocks, me, range, ORE_SCAN).sort((p, q) => dist(me, p) - dist(me, q));
         },
         freeSlots: () => a.bot.emptySlots?.() ?? 36,
-        home: () => {
-            const h = deps.places.recall(HOME_PLACE);
-            return h ? { x: Math.floor(h[0]), y: Math.floor(h[1]), z: Math.floor(h[2]) } : null;
-        },
+        home,
         hostiles: () => {
             const me = a.bot.entity.position;
             return Object.values(a.bot.entities).filter(e => e.position && isHostile({ ...e, position: e.position }) && dist(e.position, me) <= HOSTILE_RANGE).length;
         },
         isFood: name => a.bot.isFood(name),
-        craft: async (item, n, signal) => {
-            const have = () => inventory()[item] || 0;
-            const before = have();
-            const s = settingsOf(deps)();
-            if (s.enabled) {
-                const r = await makeItem(deps, item, n, signal);
-                if (r.ok && have() > before) return true;
-                if (signal.aborted) return false;
-            }
-            // the recipe rules alone: the ingredients first (logs → planks → sticks …), from what is carried or a chest
-            const r = await makeItem(deps, item, n, signal, { settings: { ...CRAFT_DEFAULTS, max_steps: 20, enabled: true, model: null, log_steps: s.log_steps } });
-            if (r.ok && have() >= before + 1) return true;
-            if (signal.aborted) return false;
-            const c = await craftRecipe(a, item, Math.max(1, Math.ceil(n / (item === 'torch' ? 4 : 1))), signal);
-            if (c.message) note(c.message);
-            return c.ok;
-        },
+        craft: (item, n, signal) => makeOrCraft(a, deps, item, n, signal, note),
         collect: async (o, blocks, drop, signal) => {
             const r = await collectOreAt(a, o, blocks, drop, signal);
             if (r.message) note(r.message);

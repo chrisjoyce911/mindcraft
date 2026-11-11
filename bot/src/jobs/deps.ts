@@ -2,7 +2,7 @@
 import type { JobSpec, JobState, JobStepper, ModelDecider } from '../types/index.js';
 import type { Act } from '../actuators/bot.js';
 import type { PlaceBook } from '../home/places.js';
-import type { CraftLine, FollowLine, MineLine } from '../log/jsonl.js';
+import type { CraftLine, FarmLine, FollowLine, MineLine } from '../log/jsonl.js';
 import type { FollowPrompt } from '../models/follow/index.js';
 import type { MineBook } from '../home/mines.js';
 import { PLAN_DEFAULTS, type PlanOptions } from '../models/mine/plan.js';
@@ -75,6 +75,63 @@ export const MINE_DEFAULTS: Omit<MineSettings, 'model' | 'enabled'> = {
 export const MINE_NUMBER_KEYS = (Object.keys(MINE_DEFAULTS) as (keyof typeof MINE_DEFAULTS)[])
     .filter(k => typeof MINE_DEFAULTS[k] === 'number') as Exclude<keyof typeof MINE_DEFAULTS, 'prompt' | 'max_steps' | 'log_steps'>[];
 
+export const FARM_PROMPTS = ['v1', 'v2', 'v2.1'] as const;
+/** The farm prompt: v1, v2 (crop, pack, Unload, pond and find_water), v2.1 (v2's prompt with v2.1's rules: the same here). */
+export type FarmPrompt = (typeof FARM_PROMPTS)[number];
+
+/** decision_models.tasks.farm (the old farm.js DEFAULTS' keys); enabled false: the task is off. */
+export interface FarmSettings {
+    enabled: boolean;
+    prompt: FarmPrompt;
+    /** Pause between steps (a wait: 4 ×; a low-confidence wait or a retry: 1 ×). */
+    step_ms: number;
+    /** Steps of timed farming (the minutes goal: 5.6). */
+    max_steps: number;
+    /** Steps of a count or open-ended goal (default: no limit). */
+    max_steps_open: number;
+    /** v1: no answers in a row before stopping. */
+    max_misses: number;
+    log_steps: boolean;
+    min_confidence: number;
+    /** Waits (or unsure answers) in a row with nothing growing before stopping. */
+    wait_limit: number;
+    /** How far to look for water. */
+    water_radius: number;
+    /** Seeds of each kind kept when unloading. */
+    keep_seeds: number;
+    unload_retry_steps: number;
+    /** A failed or vetoed action is banned on its cell for this many steps. */
+    ban_steps: number;
+    /** Failed or vetoed steps in a row before stopping. */
+    max_bad: number;
+    /** The farm model; null: no model (v2: the rules every step; v1: no answers, so it stops). */
+    model: ModelDecider | null;
+}
+export const FARM_DEFAULTS: Omit<FarmSettings, 'model' | 'enabled'> = {
+    prompt: 'v1', step_ms: 500, max_steps: 400, max_steps_open: Infinity, max_misses: 5, log_steps: true, min_confidence: 0.5,
+    wait_limit: 20, water_radius: 64, keep_seeds: 16, unload_retry_steps: 50, ban_steps: 20, max_bad: 6,
+};
+/** The farm settings' number keys (settings.js may set any). */
+export const FARM_NUMBER_KEYS = (Object.keys(FARM_DEFAULTS) as (keyof typeof FARM_DEFAULTS)[])
+    .filter(k => typeof FARM_DEFAULTS[k] === 'number') as Exclude<keyof typeof FARM_DEFAULTS, 'prompt' | 'log_steps'>[];
+
+/**
+ * The farm task's settings (decision_models.tasks.farm; the old farm.js DEFAULTS' keys). enabled false: the task is
+ * off (a farm job says so and ends). The served prompt version wins over the settings' prompt.
+ */
+export function farmOf(settings: Record<string, unknown>, model: FarmSettings['model'], served: string | undefined): FarmSettings {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.farm ?? {};
+    const out: FarmSettings = { ...FARM_DEFAULTS, enabled: t.enabled === true, log_steps: t.log_steps !== false, model };
+    for (const k of FARM_NUMBER_KEYS) {
+        const v = t[k];
+        if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = v;
+    }
+    const prompt = served ?? (typeof t.prompt === 'string' ? t.prompt : undefined);
+    if (prompt && (FARM_PROMPTS as readonly string[]).includes(prompt)) out.prompt = prompt as FarmPrompt;
+    return out;
+}
+
 export interface JobDeps {
     /** The actuator context, or null when not in game. */
     act(): Act | null;
@@ -91,6 +148,10 @@ export interface JobDeps {
     mine?: () => MineSettings;
     /** Writes a laya-mine.jsonl line. */
     mineLog?: (line: MineLine) => void;
+    /** The farm task's settings now (missing: the task is off). */
+    farm?: () => FarmSettings;
+    /** Writes a laya-farm.jsonl line. */
+    farmLog?: (line: FarmLine) => void;
     /** The mine memory (bots/<name>/laya-mines.json). */
     mines?: MineBook;
     /** Says something in game (the old chat dep; the mine's start line). */

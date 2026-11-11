@@ -24,6 +24,22 @@ export function safeMovements(bot: mineflayer.Bot): unknown {
     m.infiniteLiquidDropdownDistance = false;
     return m;
 }
+/** FARM_AVOID: the blocks the farm movements never step on (trampling farmland turns it back to dirt). */
+export const FARM_AVOID = ['farmland', 'wheat', 'carrots', 'potatoes', 'beetroots'] as const;
+
+/** farmMovements: no parkour, no sprint, no digging, farmland and crops avoided (the old farm_actions.js movements). */
+export function farmMovements(bot: mineflayer.Bot): unknown {
+    const m = new Movements(bot) as unknown as Record<string, unknown> & { blocksToAvoid: Set<number> };
+    m.allowParkour = false;
+    m.allowSprinting = false;
+    m.canDig = false;
+    m.dontCreateFlow = true;
+    for (const name of FARM_AVOID) {
+        const id = bot.registry.blocksByName[name]?.id;
+        if (id !== undefined) m.blocksToAvoid.add(id);
+    }
+    return m;
+}
 const { plugin: pvp } = pvpPkg as unknown as { plugin: mineflayer.Plugin };
 
 export interface BodyOptions { host: string; port: number; username: string; version: string; auth: 'offline' | 'microsoft' }
@@ -64,7 +80,7 @@ export class Body extends EventEmitter {
             if (this.firstSpawnMs === null) this.firstSpawnMs = Date.now() - this.startedAt;
             const pf = bot.pathfinder as unknown as { thinkTimeout: number };
             pf.thinkTimeout = 5000;
-            this.motion = new Motion(bot as unknown as ConstructorParameters<typeof Motion>[0], undefined, () => safeMovements(bot));
+            this.motion = new Motion(bot as unknown as ConstructorParameters<typeof Motion>[0], undefined, () => safeMovements(bot), () => farmMovements(bot));
             this.setState('in-game');
             this.log(`${this.opts.username} spawned.`);
             this.emit('spawn');

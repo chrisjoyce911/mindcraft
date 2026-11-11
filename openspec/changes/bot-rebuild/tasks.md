@@ -193,7 +193,24 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
   geometry). npm test 331/331. Live: mine-coal, mine-iron-staircase, unload-home-chest pass twice (unload-home-chest
   now mines 20 coal: with 2 the collect-first rule ends before any Unload); regression 6/6; kill -9 resume, defend
   interrupt, pickaxe wear-out and !stop by hand. Report `bots/andy/logs/game-tests/bot-rebuild-5.2-2026-11-12.md`.
-- [ ] 5.3 farm (farm model v2, water, pond, seeds, unload).
+- [x] 5.3 farm (farm model v2, water, pond, seeds, unload).
+  (2026-11-12) `bot/src/models/farm/` is the farm model (laya-go prompt v1/v2, rules v2.1 nearestDry; no drift from
+  laya-go cb1c791: the three requests are its testdata byte for byte): typed crops/items/actions/cells, view (readCell,
+  cell names, BY_DISTANCE, pond checks), state/stateV2 and the pack line, questions, typed answer, rules (decide, veto,
+  needed, farmKeep, Unload) and `decideFarmStep` in the old loop's order (model when sure, v2 rules / v1 wait, ban →
+  rules, dry wait → pond or find_water, the crop's seed, missing item, veto). `jobs/farm.ts` `FarmRun`: one old loop
+  iteration per step; starter kit, find water once, wait_limit, bans and max_bad, unload (v2) with a checkpoint;
+  progress `{harvested}` across resumes. `farmWorld.ts` + `actuators/farm.ts`: Motion `{farm}` movements (no parkour,
+  sprint or digging, farmland and crops avoided), till/plant checked with until, water/pond refused when it floods and
+  poured as an item use, breed, a water bucket only from a bucket or iron and water near. Home chest by sign
+  (`home/adopt.ts`, every 30 s), wired into the farm and the mine jobs. `laya-farm.jsonl` in the old shape (live line +
+  `branches/farm.jsonl`, 36 lines from `tools/laya-logs/record-farm.mjs`, byte for byte). All of test/laya_farm.test.js
+  ported (400 laya-go decisions too). Live fixes beyond the old bot: crop on farmland at head level read, a done step
+  repeated on the same state fails, produce picked up later counts, no unload with nothing to put in, start-agent
+  re-reads the places, and the harness anchors `site` steps on the site block. npm test 408/408. Live: home-chest-sign,
+  farm-water, farm-no-water, farm-bucket 4/4 in runs 5–8 (7, 8 on the final code); regression 9/9; kill -9 resume (10 → 21 harvested),
+  !stop, defend interrupt and unload keeping 16 seeds by hand. Report `bots/andy/logs/game-tests/bot-rebuild-5.3-2026-11-12.md`.
+  The minutes goal (`!layaFarm(minutes)`, chores tend_farm) is 5.6's.
 - [ ] 5.4 hunt.
 - [ ] 5.5 hunt, gather and place skill jobs (design §11, skills-spec v1 §2–4): renderer, questions, typed answer, rules v1, golden test, a
       game scenario each. They run on rules v1 until laya-go serves the models.

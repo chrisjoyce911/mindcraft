@@ -36,7 +36,7 @@ import { mineLines, mineStepLine, type MineLine, type MineStepEntry } from '../l
 import type { MineBook, MineRecord } from '../home/mines.js';
 import { MINE_DEFAULTS, type JobDeps, type JobOf, type MineSettings } from './deps.js';
 import { jobFailedMessage } from './message.js';
-import { mineWorld } from './mineWorld.js';
+import { homeFinder, mineWorld } from './mineWorld.js';
 
 export const MAX_STEPS = { v1: 300, v2: 2000 } as const;
 export const MINE_CELLS = 400;
@@ -629,9 +629,10 @@ export function mineRunner(job: JobOf<'mine'>, deps: JobDeps): JobStepper {
     const p = job.progress as MineProgress & LegacyProgress;
     const settings = settingsOf(deps);
     if (!settings().enabled) return legacyMine(spec, p, deps);
+    const home = homeFinder(deps);
     const run = new MineRun({
         ore: spec.ore, count: spec.count, progress: p, settings,
-        world: () => { const a = deps.act(); return a ? mineWorld(a, deps) : null; },
+        world: () => { const a = deps.act(); return a ? mineWorld(a, deps, home) : null; },
         mines: deps.mines ?? null,
         log: line => deps.mineLog?.(line),
         note: text => deps.note(text),
