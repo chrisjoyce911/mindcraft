@@ -40,6 +40,8 @@ export function check(s, step) {
     const have = s.have;
     if (action === 'done') return (have[s.goal] || 0) >= s.count ? null : 'goal-not-carried';
     if (!itemOptions(s).includes(item) || item === NONE) return 'bad-item';
+    // the goal is carried: no more of it (a second stone_pickaxe for a goal of 1)
+    if (item === s.goal && action !== 'store' && (have[s.goal] || 0) >= s.count) return 'goal-carried';
     const it = ITEMS[item];
     switch (action) {
     case 'gather':
@@ -123,6 +125,26 @@ export function plan(s) {
     return next(s.goal, s.count) || null;
 }
 
+// carried counts a generic item in the pack (items as deps.items() gives them).
+function carried(items, g) {
+    const s = situation(items, g, 1, { table: false, furnace: false, chest: false }, {});
+    return s.have[g] || 0;
+}
+
+// ingredientFromChest: a craft refused for a missing ingredient (why
+// "needs-<ingredient>") that the nearby chest is known to hold becomes a take
+// of what's missing (torch with coal in the chest: take the coal, then craft).
+export function ingredientFromChest(s, step, why) {
+    const m = /^needs-(.+)$/.exec(why || '');
+    if (!m || step.action !== 'craft' || !s.chestNear) return null;
+    const name = m[1];
+    const inChest = s.chest?.[name] || 0;
+    if (inChest <= 0) return null;
+    const need = (ITEMS[step.item]?.needs || []).find(([n]) => n === name || (name === 'charcoal' && n === 'coal'));
+    const want = need ? need[1] * Math.max(1, step.count || 1) - (s.have[name] || 0) : 1;
+    return { action: 'take', item: name, count: Math.max(1, Math.min(inChest, want)) };
+}
+
 // runCraft makes count of item (a laya-go generic name: "log" for any wood).
 // deps:
 //   client      laya-client ({decide})
@@ -145,6 +167,7 @@ export async function runCraft(item, count, deps) {
     if (!ITEMS[item]) return { ok: false, reason: `unknown-item ${item}`, steps: 0 };
     let chest = null;
     let steps = 0, fallbacks = 0;
+    const retried = new Set();
     while (steps < opts.max_steps) {
         if (deps.interrupted?.()) return { ok: false, reason: 'interrupted', steps };
         const near = deps.near();
@@ -159,8 +182,9 @@ export async function runCraft(item, count, deps) {
         const entry = { state: text, ...step, p, ms: r.ms };
         let why = p < opts.min_confidence ? 'low-confidence' : check(s, step);
         if (why) {
-            // the recipe rules take over for this step (as the follow veto does)
-            const ruled = plan(s);
+            // the recipe rules take over for this step (as the follow veto does):
+            // a craft missing an ingredient the chest has takes it first
+            const ruled = ingredientFromChest(s, step, why) || plan(s);
             if (!ruled) {
                 const done = (s.have[s.goal] || 0) >= s.count;
                 logStep({ ...entry, outcome: done ? 'done' : 'stop', reason: why });
@@ -175,17 +199,29 @@ export async function runCraft(item, count, deps) {
         let n = step.count;
         if (step.action === 'store') n = s.have[step.item] <= 64 || n >= 64 ? -1 : n; // 64 means all
         if (step.action === 'take' && chest) n = Math.min(n, chest[step.item] || n);
+        const before = carried(deps.items(), step.item);
         const ok = await deps.act[step.action](step.item, n);
         logStep({ ...entry, outcome: ok ? 'did' : 'failed' });
         if (!ok) {
             // a failed extra step after the goal is carried doesn't undo it
             const now = situation(deps.items(), item, count, deps.near(), chest || {});
             if ((now.have[now.goal] || 0) >= now.count) return { ok: true, reason: 'done', steps };
+            // a take the chest couldn't give: read the chest again and go on
+            // (once per item), so the next step sees what is really there
+            if (step.action === 'take' && !retried.has(step.item) && deps.readChest) {
+                retried.add(step.item);
+                chest = null;
+                continue;
+            }
             return { ok: false, reason: `${step.action} ${step.item} failed`, steps };
         }
         if (chest && (step.action === 'store' || step.action === 'take')) {
-            const moved = step.action === 'store' ? (n === -1 ? s.have[step.item] : n) : -n;
-            chest[step.item] = Math.max(0, (chest[step.item] || 0) + moved);
+            // what really moved (a take takes at least 8 of a material, a
+            // store may store all): the pack's change, else the asked count
+            const diff = carried(deps.items(), step.item) - before;
+            const asked = step.action === 'store' ? (n === -1 ? s.have[step.item] : n) : n;
+            const moved = step.action === 'store' ? (diff < 0 ? -diff : asked) : (diff > 0 ? diff : asked);
+            chest[step.item] = Math.max(0, (chest[step.item] || 0) + (step.action === 'store' ? moved : -moved));
         }
         if (step.action === 'place' && step.item === 'chest') chest = {};
     }
