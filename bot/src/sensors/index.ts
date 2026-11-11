@@ -39,10 +39,10 @@ export class Sensors {
     /** attach wires entityHurt/entityGone into Attacks; returns the detach. */
     attach(): () => void { return wireHurt(this.bot, this.attacks); }
 
-    /** read: the Facts now, or the same snapshot when read again within a tick. */
-    read(): Facts {
+    /** read: the Facts now, or the same snapshot when read again within a tick (fresh: read anyway, e.g. on a hurt event). */
+    read(fresh = false): Facts {
         const now = this.now();
-        if (this.cached && now - this.cached.t < this.tickMs) return this.cached;
+        if (!fresh && this.cached && now - this.cached.t < this.tickMs) return this.cached;
         const bot = this.bot;
         const pos = bot.entity.position;
         const mobs = scanMobs(bot, this.attacks, now);

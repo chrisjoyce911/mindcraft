@@ -11,6 +11,11 @@ import { startHarness } from './harness/server.js';
 import { fullState } from './harness/state.js';
 import { containsLegacyCommand, parseLegacy } from './harness/legacy.js';
 import { Sensors, factsLine, sensorBot } from './sensors/index.js';
+import { createLayaClient, decisionModels } from './models/client.js';
+import { promptOf } from './models/director/index.js';
+import { actBot, realGoals } from './actuators/bot.js';
+import { Director, type DecisionSink, type Models } from './director/loop.js';
+import type { Timing } from './director/activities.js';
 import type { Command, Places } from './types/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +25,23 @@ const CANNED = "Sorry, I only understand simple commands, like: follow me, come 
     "get 16 logs, craft a stone pickaxe, farm wheat, give me your coal, store everything, this is your chest.";
 
 function log(m: string) { console.log(m); }
+
+/** A task's number setting (decision_models.tasks.<task>.<key>), e.g. defend step_ms. */
+function taskNumber(settings: Record<string, unknown>, task: string, key: string): number | undefined {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const v = dm?.tasks?.[task]?.[key];
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+}
+
+function timingOf(settings: Record<string, unknown>): Partial<Timing> {
+    const t: Partial<Timing> = {};
+    const set = (k: keyof Timing, v: number | undefined) => { if (v !== undefined) t[k] = v; };
+    set('stepMs', taskNumber(settings, 'defend', 'step_ms'));
+    set('quietMs', taskNumber(settings, 'defend', 'quiet_ms'));
+    set('maxEngageMs', taskNumber(settings, 'defend', 'max_engage_ms'));
+    set('checkMs', taskNumber(settings, 'eat', 'check_ms'));
+    return t;
+}
 
 function loadPlaces(file: string): Places {
     try {
@@ -50,6 +72,35 @@ async function main() {
     });
     let stopping = false;
 
+    // decision models (3.1) and the decision log lines (3.5 makes them identical to the fixtures)
+    const laya = createLayaClient({ getConfig: () => decisionModels(settings), log });
+    const enabled = (task: string) => decisionModels(settings)?.tasks[task]?.enabled === true;
+    const models: Models = {
+        director: () => (enabled('director') ? { client: laya, prompt: promptOf(laya.promptFor('director')) } : null),
+        eat: () => (enabled('eat') ? laya : null),
+        defend: () => (enabled('defend') ? laya : null),
+    };
+    const logLine = (task: string, entry: object) => {
+        try { fs.appendFileSync(path.join(botDir, 'logs', `laya-${task}.jsonl`), JSON.stringify({ time: new Date().toISOString(), ...entry }) + '\n'); } catch { /* never stops the bot */ }
+    };
+    const sink: DecisionSink = {
+        director: e => {
+            log(`[laya] director: ${e.event} → ${e.answer} (${e.source} ${e.rule}${e.why ? `, ${e.why}` : ''}${e.acted ? `; ${e.acted}` : ''})`);
+            logLine('director', e);
+        },
+        eat: (d, outcome) => logLine('eat', {
+            state: d.state, eat: d.eat ? 1 : 0, food: d.food ?? 'none', ...(d.p !== undefined ? { p: d.p } : {}),
+            source: d.source, rule: d.rule, ...(d.why ? { why: d.why } : {}), ...(d.veto ? { veto: d.veto } : {}), outcome,
+        }),
+        defend: (d, outcome) => logLine('defend', {
+            state: d.state, action: d.answer, target: d.targetWord, weapon: d.weapon ?? 'none', ...(d.p !== undefined ? { p: d.p } : {}),
+            danger: d.danger, source: d.source, rule: d.rule, ...(d.why ? { why: d.why } : {}), ...(d.veto ? { veto: d.veto } : {}),
+            ...(d.override ? { override: d.override } : {}), outcome,
+        }),
+        note: text => log(`[laya] director: ${text}`),
+    };
+    let director: Director | null = null;
+
     const say = (text: string) => { body.say(text); harness.output(text); };
 
     const handle = (from: string, message: string) => {
@@ -65,7 +116,7 @@ async function main() {
 
     const run = async (cmd: Command) => {
         switch (cmd.kind) {
-            case 'stop': await lease.release(); return;
+            case 'stop': if (director) await director.stop(); else await lease.release(); return;
             case 'reply': say(cmd.text); return;
             case 'ignore': return;
             case 'inventory': {
@@ -75,12 +126,12 @@ async function main() {
                 return;
             }
             case 'chores': say(`Chores aren't in the new bot yet.`); return;
-            case 'job': say(`I can't do ${cmd.job.kind} yet: the new bot only spawns and idles (phase 2).`); return;
+            case 'job': say(`I can't do ${cmd.job.kind} yet: jobs come in phase 4 of the new bot.`); return;
         }
     };
 
     const places = () => loadPlaces(path.join(botDir, 'memory.json'));
-    // 3.3: the sensors read Facts; nothing decides from them yet (the director loop is 3.4)
+    // 3.3: the sensors read Facts; 3.4: the director decides from them
     let sensors: Sensors | null = null;
     let detachSensors: (() => void) | null = null;
     const facts = (): string | null => {
@@ -104,15 +155,31 @@ async function main() {
     body.on('chat', (from: string, message: string) => handle(from, message));
     body.on('spawn', () => {
         if (body.bot && !sensors) {
-            sensors = new Sensors(sensorBot(body.bot), { places });
+            sensors = new Sensors(sensorBot(body.bot), { places, moving: () => body.motion?.moving ?? false });
             detachSensors = sensors.attach();
+        }
+        if (body.bot && sensors && !director) {
+            const bot = body.bot, sense = sensors;
+            director = new Director({
+                lease,
+                facts: fresh => (body.inGame ? sense.read(fresh) : null),
+                act: () => (body.bot && body.motion ? { bot: actBot(body.bot), motion: body.motion, goals: realGoals(body.bot) } : null),
+                models, say, sink, timing: timingOf(settings),
+            });
+            // a hit on andy or a player is decided at once (the sensors' own listener ran first)
+            bot.on('entityHurt', (e: { type?: string }) => { if (e === bot.entity || e.type === 'player') director?.event('hurt'); });
+            bot.on('spawn', () => director?.event('spawn'));
+            director.start();
+            director.event('spawn');
         }
         log(`[metrics] spawned ${Date.now() - t0} ms after start (login ${body.logins})`);
         fs.appendFileSync(path.join(botDir, 'logs', 'bot-metrics.jsonl'), JSON.stringify({
             time: new Date().toISOString(), event: 'spawn', ms: Date.now() - t0, logins: body.logins, rssMB: Math.round(process.memoryUsage().rss / 1048576),
         }) + '\n');
     });
+    body.on('death', () => director?.event('death'));
     body.on('end', () => {
+        void director?.dispose(); director = null;
         detachSensors?.(); detachSensors = null; sensors = null;
         void lease.release();
         if (!stopping) setTimeout(() => { if (!stopping && body.state === 'offline') body.connect(); }, 5000);
@@ -127,6 +194,7 @@ async function main() {
     const shutdown = async () => {
         stopping = true;
         clearInterval(metrics);
+        await director?.dispose();
         await lease.release();
         body.disconnect();
         await harness.close();

@@ -4,6 +4,15 @@
 // ---- director (shared spec v1.3) ----
 export const ACTIVITIES = ['continue', 'defend', 'flee', 'eat', 'heal', 'unload', 'resume', 'idle'] as const;
 export type Activity = (typeof ACTIVITIES)[number];
+/** The director answers that run a safety activity (they pause a job under them, design §5.2). */
+export const SAFETY_ACTIVITIES = ['defend', 'flee', 'eat', 'heal'] as const;
+export type SafetyActivity = (typeof SAFETY_ACTIVITIES)[number];
+export const isSafety = (a: string): a is SafetyActivity => (SAFETY_ACTIVITIES as readonly string[]).includes(a);
+/**
+ * The runner a safety answer starts: its own name, except flee with Danger fire/fluid/drowning, which runs
+ * escape (design §5.3 "flee-danger → escape actuator"; not a new answer word).
+ */
+export type ActivityRunnerName = SafetyActivity | 'escape';
 /** The director prompt versions the bot can write (a served model on an older one is sent its own text). */
 export const DIRECTOR_PROMPTS = ['v1', 'v1.2', 'v1.3'] as const;
 export type DirectorPrompt = (typeof DIRECTOR_PROMPTS)[number];

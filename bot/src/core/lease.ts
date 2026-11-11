@@ -68,17 +68,20 @@ export class BodyLease {
         const id = ++this.seq;
         let overran!: () => void;
         const overrun = new Promise<Settled<T>>(r => { overran = () => r({ how: 'overrun' }); });
+        // the holder is recorded before the runner starts: its first (synchronous) body call is already
+        // under the lease
+        const holder: Holder = { name, controller, settled: Promise.resolve(), id, overran };
+        this.holder = holder;
         let runP: Promise<T>;
         try { runP = run(controller.signal); } catch (error) { runP = Promise.reject(error); }
         const own: Promise<Settled<T>> = runP.then(
             value => ({ how: 'settled', value }) as Settled<T>,
             error => ({ how: 'threw', error }) as Settled<T>,
         );
-        const settled = own.then(() => {
+        holder.settled = own.then(() => {
             // a runner that ends by itself frees the body (unless it already lost it)
             if (this.holder?.id === id) this.holder = null;
         });
-        this.holder = { name, controller, settled, id, overran };
         return { name, result: Promise.race([own, overrun]) };
     }
 

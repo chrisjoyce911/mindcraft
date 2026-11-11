@@ -250,7 +250,7 @@ Measured with the same test world, same seed, LLM off, by `tools/andy-tests` plu
 
 - TypeScript 5, `strict`, `noUncheckedIndexedAccess`; ESM; Node 22. Build with `tsc` to `bot/dist` (no bundler);
   dev with `tsx`. Tests with `node --test` on compiled output (same runner as today) or `vitest` — see questions.
-- Dependencies kept: `mineflayer` (4.33.0 + our patch), `mineflayer-pathfinder` (+patch), `minecraft-data` (+patch),
+- Dependencies kept: `mineflayer` (4.39.0 + our patch; 4.33.0 until 3.4), `mineflayer-pathfinder` (+patch), `minecraft-data` (+patch),
   `prismarine-item`, `vec3`, `socket.io` (harness), `mineflayer-pvp` (+patch) only if the attack actuator keeps it.
   Dropped: all LLM SDKs, `ses`, `canvas`, `node-canvas-webgl`, `three`, `prismarine-viewer`, `express` (the minimal status page, Q7, is served by
   the harness's own HTTP server), `google-translate-api-x`, `cheerio`, `mineflayer-collectblock`, `mineflayer-auto-eat`,
@@ -259,6 +259,10 @@ Measured with the same test world, same seed, LLM off, by `tools/andy-tests` plu
 - (Phase 2 finding, 2026-11-11) The old bot actually runs mineflayer 4.39.0 + minecraft-data 3.119.0 (since 2026-11-09);
   the 4.33.0 patch doesn't apply there. minecraft-data 3.97 can't be pinned with today's prismarine packages. Node is 20
   (the test world launches node@20), not 22. See `bots/andy/logs/game-tests/bot-rebuild-baseline-2026-11-11.md`.
+- (3.4, 2026-11-12, Q4 resolved) `bot/` pins mineflayer 4.39.0 with minecraft-data 3.119.0. On 4.33 any damage kicked
+  the bot (`invalid_player_movement`); on 4.39 it stays connected. The regenerated `bot/patches/mineflayer+4.39.0.patch`
+  keeps only the tool-material fix (`incorrect_for_wooden_tool` → `mineable/pickaxe` in digTime) and the 500 ms place
+  timeout; 4.39 already has the water dig-time and use_item rotation fixes upstream.
 
 ## 9. Migration
 
@@ -276,7 +280,7 @@ tasks.md for phases and "done means".
 | Harness drift (MCP tools break) | harness contract spec + the existing `test/andy_tests_*` run against both bots |
 | TypeScript slows iteration with parallel tabs | old bot keeps getting fixes until cut-over; port fixes forward per phase |
 | Two codebases for a while | time-box: cut-over target after phase 5; old `src/` deleted in phase 7 |
-| mineflayer upgrade temptation | pin 4.33.0 + patches for the rebuild; upgrade is a separate change |
+| mineflayer upgrade temptation | pin 4.39.0 + a small patch for the rebuild (Q4, 3.4); a further upgrade is a separate change |
 
 ## 10a. Decisions (user, 2026-11-11: all recommendations in questions.md accepted)
 
@@ -284,7 +288,7 @@ tasks.md for phases and "done means".
 - `tsc` → `bot/dist`, with `tsx` for development.
 - `node --test` on the compiled output.
 - `bot/` has its own `package.json` until phase 7.
-- mineflayer stays pinned at 4.33.0 with today's patches.
+- mineflayer is pinned (4.33.0 with today's patches until 3.4; then 4.39.0 with a small regenerated patch, Q4).
 - prismarine-viewer is dropped.
 - `mineflayer-pvp` is kept at first.
 

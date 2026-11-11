@@ -1619,6 +1619,297 @@
           "optional": true
         }
       ]
+    },
+    {
+      "name": "defend-fight",
+      "tags": [
+        "rebuild",
+        "defend"
+      ],
+      "timeout": 150000,
+      "description": "The defend scenario without its follow job (the new bot has no follow job until 4.2): a husk 5 blocks east of andy hits him (/damage by the husk). The director answers defend, andy kills the husk and frees the body (Idle at the end). Sets difficulty easy.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "anchor": true
+        },
+        {
+          "cmd": "/summon husk {x+5} {y} {z}"
+        },
+        {
+          "waitFor": {
+            "entity": "husk"
+          },
+          "timeout": 10000,
+          "optional": true
+        },
+        {
+          "cmd": "/damage {andy} 2 minecraft:mob_attack by @e[type=husk,limit=1,sort=nearest]"
+        },
+        {
+          "waitFor": {
+            "entity": "husk",
+            "present": false
+          },
+          "timeout": 90000
+        },
+        {
+          "wait": 6000
+        },
+        {
+          "cmd": "/execute positioned {x} {y} {z} if entity @e[type=husk,distance=..48]",
+          "replyMs": 800
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Summoned"
+        },
+        {
+          "type": "noEntity",
+          "entity": "husk"
+        },
+        {
+          "type": "serverReply",
+          "match": "Test failed",
+          "note": "no husk within 48 blocks: it died, not just wandered out of andy's sight"
+        },
+        {
+          "type": "actionSeen",
+          "match": "director:defend",
+          "after": "start"
+        },
+        {
+          "type": "log",
+          "task": "defend",
+          "match": {
+            "action": "fight"
+          },
+          "min": 1
+        },
+        {
+          "type": "actionSeen",
+          "match": "Idle",
+          "final": true,
+          "note": "the lease is free afterwards"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=husk,distance=..64]"
+        }
+      ]
+    },
+    {
+      "name": "flee-creeper",
+      "tags": [
+        "rebuild",
+        "defend"
+      ],
+      "timeout": 120000,
+      "description": "A creeper is summoned 6 blocks from andy; nobody is hurt. Andy must not swing at it (defend only attackers; the defend rules flee a close creeper) and gets away from it (flee-creeper, or the defend model's creeper override) and survives. Sets difficulty easy.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/gamemode creative {tester}"
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/effect give {andy} instant_health 1 3"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "anchor": true
+        },
+        {
+          "cmd": "/summon creeper {x+6} {y} {z}"
+        },
+        {
+          "wait": 25000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Summoned"
+        },
+        {
+          "type": "log",
+          "task": "defend",
+          "match": {
+            "action": "/fight|shield/",
+            "target": "/creeper/"
+          },
+          "max": 0,
+          "note": "never swings at the creeper"
+        },
+        {
+          "type": "position",
+          "axis": "dist",
+          "during": "max",
+          "min": 3,
+          "note": "he got away from where he stood"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=creeper,distance=..64]"
+        }
+      ]
+    },
+    {
+      "name": "night-survival",
+      "tags": [
+        "rebuild",
+        "defend"
+      ],
+      "timeout": 240000,
+      "description": "Night (time 13000, the daylight cycle stays locked) with two zombies and a skeleton 12-14 blocks from andy, who has an iron sword and 8 bread. For 150 s he only fights mobs that attack him (or flees), eats when he must, and is alive at the end with his sword (a death would drop it). Sets difficulty easy.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/gamemode creative {tester}"
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/give {andy} bread 8"
+        },
+        {
+          "cmd": "/effect give {andy} instant_health 1 3"
+        },
+        {
+          "cmd": "/time set 13000"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "anchor": true
+        },
+        {
+          "cmd": "/summon zombie {x+12} {y} {z}"
+        },
+        {
+          "cmd": "/summon zombie {x} {y} {z+13}"
+        },
+        {
+          "cmd": "/summon skeleton {x-14} {y} {z}"
+        },
+        {
+          "wait": 150000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Summoned"
+        },
+        {
+          "type": "inventory",
+          "item": "iron_sword",
+          "min": 0,
+          "note": "still has his sword: he did not die"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/time set 1000"
+        },
+        {
+          "cmd": "/kill @e[type=zombie,distance=..96]"
+        },
+        {
+          "cmd": "/kill @e[type=skeleton,distance=..96]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..32]"
+        }
+      ]
     }
   ]
 }

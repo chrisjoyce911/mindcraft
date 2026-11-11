@@ -42,7 +42,8 @@ Done means: a baseline report with every metric in design §7 filled in.
 
 Deps note (2026-11-11): minecraft-data 3.97.0 can't be pinned: today's prismarine-chunk 1.41 needs 3.119's version list
 (crash at login). `bot/` runs mineflayer 4.33.0 (+ its patch) with minecraft-data 3.119.0 (the 1.21.6 checksum patch is
-upstream there); Q4 (pin 4.39.0 + a small regenerated patch) is with the user.
+upstream there); Q4 (pin 4.39.0 + a small regenerated patch) is with the user. (2026-11-12, 3.4: Q4 done: `bot/` pins
+mineflayer 4.39.0 + `patches/mineflayer+4.39.0.patch` (tool-material fix, 500 ms place timeout); damage no longer kicks.)
 
 Done means: `bot_start` with `ANDY_BOT=new` joins the test world, `andy_status` and `andy_wait_idle` work, the
 lease overrun test passes.
@@ -72,7 +73,14 @@ lease overrun test passes.
   the eat/defend/director v1.3 goldens from a fake world. Live smoke (test world): hostiles/nearest, night, Player
   line via blame (5 s), lava → fire. Found: **any damage kicks the new bot** (`invalid_player_movement`, also with
   sensors off — body/mineflayer 4.33 physics, not 3.3); 3.4's defend needs it fixed (Q4's mineflayer 4.39 pin?).
-- [ ] 3.4 Director loop, JobStack, priorities, activities defend/flee/eat/heal/escape; defend-only-attackers.
+- [x] 3.4 Director loop, JobStack, priorities, activities defend/flee/eat/heal/escape; defend-only-attackers.
+  mineflayer 4.39.0 first (Q4; the kick on damage is gone). `bot/src/actuators/` (equip, eat, fight, avoid, escape,
+  approach; through Motion, incl. the new `moveFor`) and `bot/src/director/` (typed JobStack, JobRunner interface,
+  activities, the Director loop: events + 1 s tick, the eat model asked alongside, arbitration on the BodyLease, holds
+  against flapping: defend quiet, 1 s restart hold, eat-refused). Defend sees only attackers; defend-player walks to the
+  player first. Lease fix: the holder is set before the runner starts. 115 unit tests incl. ports of laya_director,
+  laya_defend, fix_round3/4 parts. Live (`bot-rebuild-3.4-2026-11-12.md`): eat, new defend-fight, flee-creeper and
+  night-survival (tag rebuild) pass; defend's follow steps wait for 4.2.
 - [ ] 3.5 Logs: `laya-director/eat/defend.jsonl` identical in format to the fixtures (1.2).
 
 Done means: golden green; suite scenarios for defend, flee, eat and night survival pass on the new bot; no mode exists.

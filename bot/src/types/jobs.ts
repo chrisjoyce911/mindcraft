@@ -24,5 +24,7 @@ export type JobOrigin = 'player' | 'chore';
 export interface JobState<P = unknown> {
     id: string; spec: JobSpec; origin: JobOrigin; by?: string; progress: P;
     status: 'running' | 'paused'; startedAt: number;
+    /** When an activity or a stop paused it. */
+    pausedAt?: number;
 }
 export type JobEnd = { how: 'done' } | { how: 'failed' | 'blocked'; reason: string } | { how: 'cancelled' };

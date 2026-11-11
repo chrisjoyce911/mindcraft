@@ -13,6 +13,16 @@ export interface MotionBot {
 
 export interface GoToOptions { timeoutMs?: number }
 
+/** sleepFor resolves true after ms, false as soon as the signal aborts (never rejects). */
+function sleepFor(ms: number, signal: AbortSignal): Promise<boolean> {
+    return new Promise(resolve => {
+        if (signal.aborted) return resolve(false);
+        const timer = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve(true); }, ms);
+        const onAbort = () => { clearTimeout(timer); resolve(false); };
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
+}
+
 export class Motion {
     /** how many times the goal was cleared by an abort (tests) */
     cleared = 0;
@@ -27,6 +37,22 @@ export class Motion {
         try { this.bot.pathfinder.setGoal(null); } catch { /* not pathing */ }
         try { this.bot.stopDigging(); } catch { /* not digging */ }
         try { this.bot.clearControlStates(); } catch { /* best effort */ }
+    }
+
+    /**
+     * moveFor: chase a dynamic goal (a GoalFollow, an inverted one) for ms, then clear it: the old
+     * defend actions' bounded move. ok after ms; cancelled (goal cleared at once) on abort.
+     */
+    async moveFor(goal: unknown, ms: number, signal: AbortSignal): Promise<Outcome> {
+        if (signal.aborted) return fail('cancelled');
+        this.inFlight++;
+        try {
+            try { this.bot.pathfinder.setGoal(goal, true); } catch (e) { return fail('error', String(e)); }
+            const ran = await sleepFor(ms, signal);
+            try { this.bot.pathfinder.setGoal(null); } catch { /* not pathing */ }
+            if (!ran) { this.stop(); return fail('cancelled'); }
+            return OK;
+        } finally { this.inFlight--; }
     }
 
     goTo(goal: unknown, signal: AbortSignal, opts: GoToOptions = {}): Promise<Outcome> {
