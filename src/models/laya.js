@@ -13,6 +13,14 @@ import agentSettings from '../agent/settings.js';
 
 const LOG_EVERY_MS = 60_000;
 
+// An unreachable server (connection refused, "fetch failed": a golaya
+// restart or blip) is retried once at once; if it is still unreachable it
+// isn't asked again for a back-off that doubles from BACKOFF_MIN_MS to
+// BACKOFF_MAX_MS, so the callers fall back (rules) without waiting each
+// time. Entering and leaving back-off is logged.
+export const BACKOFF_MIN_MS = 1_000;
+export const BACKOFF_MAX_MS = 10_000;
+
 // The failure reasons decide() counts.
 export const REASONS = ['disabled', 'timeout', 'unreachable', 'http', 'malformed', 'no_model'];
 
@@ -43,8 +51,9 @@ export function normalize(question, raw, minConfidence) {
 // createLayaClient makes a client. getConfig returns the decision_models
 // settings ({servers, tasks}); it is read on every call, so changes to the
 // settings take effect at once.
-export function createLayaClient(getConfig = () => agentSettings.decision_models, { log = console.warn } = {}) {
+export function createLayaClient(getConfig = () => agentSettings.decision_models, { log = console.warn, now = () => Date.now() } = {}) {
     const counters = new Map();
+    const backoff = new Map(); // server url -> {until, ms}
     const discovered = new Map(); // server url -> model id (or an Error)
     const lastLog = new Map();
 
@@ -132,12 +141,25 @@ export function createLayaClient(getConfig = () => agentSettings.decision_models
         const st = statsFor(task);
         st.asked++;
         const start = Date.now();
+        const off = backoff.get(t.url);
+        if (off && now() < off.until) return fail(task, 'unreachable', `backing off ${Math.ceil((off.until - now()) / 1000)} s`);
         try {
             const model = await modelFor(t);
             const body = JSON.stringify({ model, questions, state });
-            const reply = await fetchJSON(t.url + '/v1/decisions', {
+            const post = () => fetchJSON(t.url + '/v1/decisions', {
                 method: 'POST', headers: { 'content-type': 'application/json' }, body,
             }, t.timeout_ms);
+            let reply;
+            try {
+                reply = await post();
+            } catch (err) {
+                if (err.reason !== 'unreachable') throw err;
+                reply = await post(); // once more: most blips are over at once
+            }
+            if (off) {
+                backoff.delete(t.url);
+                log(`[laya] ${t.url}: reachable again`);
+            }
             const answers = {};
             for (const [name, q] of Object.entries(questions)) {
                 const a = normalize(q, reply.answers?.[name], t.min_confidence);
@@ -150,7 +172,13 @@ export function createLayaClient(getConfig = () => agentSettings.decision_models
             st.maxMs = Math.max(st.maxMs, ms);
             return { model: reply.model || model, ms, answers };
         } catch (err) {
-            return fail(task, err.reason || 'unreachable', err.message);
+            const reason = err.reason || 'unreachable';
+            if (reason === 'unreachable') {
+                const ms = off ? Math.min(BACKOFF_MAX_MS, off.ms * 2) : BACKOFF_MIN_MS;
+                backoff.set(t.url, { until: now() + ms, ms });
+                log(`[laya] ${t.url}: unreachable (${err.message}); rules decide, asking again in ${ms / 1000} s`);
+            }
+            return fail(task, reason, err.message);
         }
     };
 

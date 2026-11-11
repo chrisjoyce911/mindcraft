@@ -3,6 +3,7 @@ import settings from '../settings.js';
 import { parseGoal as parseFarmGoal } from '../laya/farm.js';
 import { nearestChestTo } from '../laya/pack_actions.js';
 import { isHomeName } from '../laya/home_chest.js';
+import { jobFailedMessage } from '../laya/job_message.js';
 
 // homeChestAdopter lets a Laya task save a chest marked by a sign with the
 // bot's name as the home chest (when none is saved), telling the player.
@@ -60,7 +61,13 @@ export async function runJob(agent, job) {
     const r = await agent.actions.runAction(`action:${job.name}`, async () => { result = await job.work(); }, { timeout: job.timeout ?? -1 });
     if (stack.has(job)) {
         if (r.interrupted && !r.timedout) stack.paused(job);
-        else stack.ended(job, !r.success ? 'blocked' : (result === false || result?.ok === false) ? 'failed' : 'done');
+        else {
+            const how = !r.success ? 'blocked' : (result === false || result?.ok === false) ? 'failed' : 'done';
+            stack.ended(job, how);
+            // a job that ends without doing it says why (a resumed job's
+            // output reaches no one else)
+            if (how !== 'done') agent.openChat(jobFailedMessage(job, result, r));
+        }
     }
     agent.director.tick('job-ended').catch(() => {});
     if (r.interrupted && !r.timedout) return;
