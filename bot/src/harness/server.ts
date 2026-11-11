@@ -18,7 +18,12 @@ export interface AgentLink {
     stop(): void;
 }
 
-export interface HarnessServer { io: Server; http: http.Server; output(text: string): void; statusChanged(): void; close(): Promise<void>; port: number }
+export interface HarnessServer {
+    io: Server; http: http.Server; output(text: string): void; statusChanged(): void;
+    /** Push the state to the listeners now (an action started or ended: a short one isn't missed between ticks). */
+    stateNow(): void;
+    close(): Promise<void>; port: number;
+}
 
 export function startHarness(port: number, agent: AgentLink, log: (m: string) => void = console.log): Promise<HarnessServer> {
     const server = http.createServer((req, res) => {
@@ -79,6 +84,7 @@ export function startHarness(port: number, agent: AgentLink, log: (m: string) =>
                 io, http: server, port: bound,
                 output: text => { io.emit('bot-output', agent.name, text); },
                 statusChanged: () => { io.emit('agents-status', statusList()); },
+                stateNow: () => { if (listeners.size) tick(); },
                 close: () => new Promise<void>(r => { if (timer) clearInterval(timer); io.close(() => r()); }),
             });
         });

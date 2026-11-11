@@ -389,7 +389,7 @@ test('driver: a chore starts only when idle, on, the stack empty and the restore
     await flush();
 });
 
-test('driver: chores off mid-chore stops it; a pause and resume keeps the same run', async () => {
+test('driver: chores off mid-chore stops it, with no run line; a pause and resume keeps the same run', async () => {
     const w = world({ runners: () => forever() });
     const { src, ended } = fakeSource();
     const d = new ChoreDriver({ chores: src, free: () => w.lease.isFree, note: () => {} });
@@ -401,9 +401,14 @@ test('driver: chores off mid-chore stops it; a pause and resume keeps the same r
     w.director.stack.resumed(job as never);
     assert.equal(ended.length, 0, 'a pause is not an end');
     await d.off(w.director);
+    assert.ok(await until(() => w.director.stack.depth === 0 && !d.busy));
+    assert.equal(ended.length, 0, 'withdrawn: no result');
+    // the next run (chores on again) ends normally
+    void d.idle(w.director);
+    assert.ok(await until(() => w.director.stack.job()?.origin === 'chore'));
+    await w.director.stop();
     assert.ok(await until(() => ended.length === 1));
-    assert.equal(choreReason(ended[0]!.end), 'interrupted');
-    assert.equal(w.director.stack.depth, 0);
+    assert.equal(choreReason(ended[0]!.end), 'interrupted', 'a stop is an interrupt');
     await w.director.stop();
 });
 
@@ -454,4 +459,15 @@ test('farm: a minutes goal ends done when the time is up', async () => {
     const r = await run.step(signal);
     assert.equal(r.how, 'end');
     assert.ok(r.how === 'end' && r.end.ok && r.end.reason === 'time up', JSON.stringify(r));
+});
+
+test('run lines: a forget line (a world reset) drops the runs before it', () => {
+    const f = path.join(tmp(), 'laya-chores.jsonl');
+    const t = new Date(1000).toISOString();
+    fs.writeFileSync(f, [
+        JSON.stringify({ time: t, event: 'run', skill: 'gather', target: 'logs', result: 'failed', reason: 'interrupted', minutes: 1 }),
+        JSON.stringify({ time: t, event: 'forget' }),
+        JSON.stringify({ time: t, event: 'run', skill: 'hunt', target: 'food', result: 'done', minutes: 1 }),
+    ].join('\n') + '\n');
+    assert.deepEqual(readRuns(f).map(x => x.skill), ['hunt']);
 });

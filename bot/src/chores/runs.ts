@@ -1,7 +1,7 @@
 // The chores Last line (skills-spec v1 §1 "Last", §7): the latest result of each (skill, target) run as a chore in
 // the last 10 minutes, latest first, at most 4. It is not kept in memory: it is rebuilt from laya-chores.jsonl's run
 // lines (their time is the run's end, real time) at start and on every ask, so a failure's 5-minute cooldown runs on
-// across a restart. Only the file's tail is read (the file grows).
+// across a restart. Only the file's tail is read (the file grows). A forget line (a world reset) drops the runs before it.
 import fs from 'fs';
 import {
     CHORES_MAX, LAST_WINDOW, isChorePair, isChoreReason,
@@ -50,7 +50,13 @@ export function runOf(line: string): RunEnd | null {
     return { at, skill: j.skill as ChoreSkill, target: j.target as ChoreTarget, done: false, reason: j.reason };
 }
 
-/** readRuns: the run lines in the file's tail (none when there is no file). */
+/**
+ * isForget: a forget line ({"event":"forget"}): the world before it is gone (the test harness's world reset writes
+ * one); runs before it don't count.
+ */
+const isForget = (line: string): boolean => line.includes('"forget"') && (() => { try { return JSON.parse(line).event === 'forget'; } catch { return false; } })();
+
+/** readRuns: the run lines in the file's tail after the last forget line (none when there is no file). */
 export function readRuns(file: string, tail: number = TAIL_BYTES): RunEnd[] {
     let fd: number | null = null;
     try {
@@ -61,7 +67,9 @@ export function readRuns(file: string, tail: number = TAIL_BYTES): RunEnd[] {
         fs.readSync(fd, buf, 0, buf.length, start);
         const lines = buf.toString('utf8').split('\n');
         if (start > 0) lines.shift(); // a cut first line
-        return lines.map(runOf).filter((r): r is RunEnd => r !== null);
+        let from = 0;
+        lines.forEach((l, i) => { if (isForget(l)) from = i + 1; });
+        return lines.slice(from).map(runOf).filter((r): r is RunEnd => r !== null);
     } catch {
         return [];
     } finally {

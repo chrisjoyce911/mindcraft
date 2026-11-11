@@ -93,6 +93,9 @@ export class Chores {
 
     get on(): boolean { return this.state.on; }
 
+    /** reload: the state from the file again (the harness's start-agent after a world reset wrote {"on":false}). */
+    reload(): void { this.state = loadChoresState(this.d.stateFile, this.d.settingOn); }
+
     /** setOn: chores on or off, saved at once. */
     setOn(on: boolean): void {
         this.state.on = on;

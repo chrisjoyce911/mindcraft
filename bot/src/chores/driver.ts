@@ -43,6 +43,8 @@ export class ChoreDriver {
     private choosing: object | null = null;
     /** The run on the stack, or null. */
     current: ChoreRun | null = null;
+    /** The run was withdrawn (chores turned off mid-run): it has no result, so no run line. */
+    private withdrawn: ChoreRun | null = null;
     private readonly now: () => number;
 
     constructor(private readonly d: DriverDeps) { this.now = d.now ?? Date.now; }
@@ -81,17 +83,25 @@ export class ChoreDriver {
             this.current = run;
             const end = await dir.ended(entry as never);
             this.current = null;
-            this.d.chores.ended(run, end);
+            if (this.withdrawn === run) this.d.note(`chores: ${run.label} withdrawn (chores off): no run line`);
+            else this.d.chores.ended(run, end);
         } catch (e) {
             this.d.note(`chores: ${e instanceof Error ? e.message : String(e)}`);
         } finally {
             if (this.choosing === slot) this.choosing = null;
             this.current = null;
+            this.withdrawn = null;
         }
     }
 
-    /** off: chores turned off: a chore on the stack stops (a player's job runs on). */
+    /**
+     * off: chores turned off: a chore on the stack stops (a player's job runs on). The run is withdrawn, not failed:
+     * no run line, so it isn't held back by a cooldown when chores come on again (a player's command or stop still
+     * ends a run interrupted).
+     */
     async off(dir: ChoreDirector | null): Promise<void> {
-        if (dir?.stack.job()?.origin === 'chore') await dir.stop();
+        if (dir?.stack.job()?.origin !== 'chore') return;
+        this.withdrawn = this.current;
+        await dir.stop();
     }
 }

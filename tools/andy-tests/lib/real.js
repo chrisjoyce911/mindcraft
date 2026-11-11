@@ -39,6 +39,8 @@ export function realDeps(config) {
             try { rmSync(`${config.botDir}/memory.json`, { force: true }); } catch { /* none */ }
             try { rmSync(`${config.botDir}/laya-job.json`, { force: true }); } catch { /* none */ }
             try { writeFileSync(`${config.botDir}/laya-chores.json`, JSON.stringify({ on: false })); } catch { /* no bot dir */ }
+            // chores v2's Last line is rebuilt from laya-chores.jsonl's run lines: the old world's runs end here
+            try { (await import('fs')).appendFileSync(`${config.botDir}/logs/laya-chores.jsonl`, JSON.stringify({ time: new Date().toISOString(), event: 'forget' }) + '\n'); } catch { /* no log dir */ }
         },
         makeBot: async () => {
             const [{ Bot }, { realBotDeps }] = await Promise.all([import('../../test-world/lib/bot.js'), import('../../test-world/lib/real.js')]);

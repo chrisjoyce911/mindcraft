@@ -1814,6 +1814,146 @@
       ]
     },
     {
+      "name": "chores2-no-trees",
+      "tags": [
+        "chores",
+        "rebuild"
+      ],
+      "timeout": 300000,
+      "description": "Chores v2 (the new bot, 5.6): every log within about 30 blocks of andy (the base's chest is his centre) is removed and he has no wood. He asks for a run and gets gather logs with Near trees 97 (or 193): the gather skill widens its search and he comes back with logs. The leaves go too (decaying leaves drop saplings, and saplings come first in the rules).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-34} {x-14} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-34} {x-14} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-13} {x-14} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-13} {x-14} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z+8} {x-14} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z+8} {x-14} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-34} {x+7} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-34} {x+7} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-13} {x+7} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-13} {x+7} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z+8} {x+7} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z+8} {x+7} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-34} {x+28} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-34} {x+28} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-13} {x+28} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-13} {x+28} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z+8} {x+28} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z+8} {x+28} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..64]"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "waitLog": {
+            "task": "chores",
+            "match": {
+              "event": "ask",
+              "skill": "gather",
+              "target": "logs"
+            }
+          },
+          "timeout": 120000,
+          "idleFail": false
+        },
+        {
+          "waitFor": {
+            "item": "oak_log|birch_log|spruce_log|dark_oak_log|jungle_log|acacia_log|cherry_log|mangrove_log|pale_oak_log",
+            "min": 1
+          },
+          "timeout": 180000,
+          "idleFail": false
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ask",
+            "skill": "gather",
+            "target": "logs",
+            "state": "/Near trees (97|193)/"
+          }
+        },
+        {
+          "type": "inventory",
+          "item": "oak_log|birch_log|spruce_log|dark_oak_log|jungle_log|acacia_log|cherry_log|mangrove_log|pale_oak_log",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "chores-first-day",
       "tags": [
         "chores",
@@ -1881,6 +2021,101 @@
             "event": "ended",
             "chore": "craft_wood_tools",
             "outcome": "done"
+          }
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "cmd": "/gamerule doDaylightCycle false"
+        },
+        {
+          "cmd": "/time set 1000"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "chores2-first-day",
+      "tags": [
+        "chores",
+        "slow",
+        "rebuild"
+      ],
+      "timeout": 1500000,
+      "description": "Chores v2 (the new bot, 5.6): a fresh reset, andy with nothing, the daylight cycle on from sunrise: one Minecraft day (20 minutes) of chores. The report shows how far he got (laya-chores.jsonl run lines: table, tools, farm, furnace, torches, chest, beds, kit); the checks ask only for the first steps (a crafting table placed and a wooden pickaxe made).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/time set 0"
+        },
+        {
+          "cmd": "/gamerule doDaylightCycle true"
+        },
+        {
+          "cmd": "/difficulty easy"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "wait": 1200000
+        },
+        {
+          "snapshot": "day-end"
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "crafting_table",
+            "result": "done"
+          }
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "craft",
+            "target": "wooden_pickaxe",
+            "result": "done"
           }
         },
         {

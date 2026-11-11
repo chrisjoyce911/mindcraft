@@ -104,6 +104,9 @@ export async function runStep(step, ctx) {
         case 'waitFor': {
             const r = await waitStep(step, ctx, () => stateTest(v, s.mind.state()), budget(60000));
             if (!r.ok) throw new StepFailed(waitFailure(r, `${JSON.stringify(v)} was still not true`) || `timed out waiting for ${JSON.stringify(v)}`);
+            // the state that met it is part of this step's timeline (it may have come in before the action began:
+            // a chore that starts at once during setup), so actionSeen sees what waitFor saw
+            { const st = s.mind.state(); if (st && s._onState) s._onState(st, s.now()); }
             break;
         }
         case 'waitReply': {

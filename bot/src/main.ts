@@ -136,12 +136,15 @@ async function main() {
     const body = new Body({ host: settings.host, port: settings.port, username: name, version: settings.minecraft_version, auth: settings.auth }, log);
     const lease = new BodyLease({
         resetBody: () => body.reset(),
+        // the harness's timeline sees every action, even one shorter than its 1 s tick
+        onHolder: () => { setImmediate(() => harnessRef?.stateNow()); },
         log: e => {
             log(`[laya] director: stop-overrun ${e.runner} (${e.waitedMs} ms)`);
             jsonl.write('director', e);
         },
     });
     let stopping = false;
+    let harnessRef: { stateNow(): void } | null = null;
 
     // decision models (3.1) and the decision log lines (3.5: the old bot's format, log/jsonl.ts)
     const laya = createLayaClient({ getConfig: () => decisionModels(settings), log });
@@ -327,15 +330,17 @@ async function main() {
     const readFacts = () => { try { return sensors && body.inGame ? sensors.read() : null; } catch { return null; } };
     const activity = () => ({ idle: lease.isFree, label: lease.isFree ? 'Idle' : lease.holderName ?? 'Acting' });
 
-    const harness = await startHarness(settings.mindserver_port, {
+    // eslint-disable-next-line prefer-const
+    const harness = harnessRef = await startHarness(settings.mindserver_port, {
         name,
         inGame: () => body.inGame,
         state: () => (body.bot && body.inGame ? fullState(body.bot, name, activity(), places()) : null),
         facts,
         settings: () => settings,
         message: handle,
-        // start-agent: as the old bot's fresh agent process, the saved places are read again (the harness's reset deletes them)
-        start: () => { stopping = false; placeStore.reload(); body.connect(); },
+        // start-agent: as the old bot's fresh agent process, the saved places and the chores state are read again (the
+        // harness's reset deletes the places and writes chores off)
+        start: () => { stopping = false; placeStore.reload(); chores.reload(); body.connect(); },
         stop: () => { stopping = true; body.disconnect(); },
     }, log);
 

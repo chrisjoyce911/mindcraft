@@ -12,6 +12,8 @@ export interface LeaseOptions {
     overrunMs?: number;
     resetBody?: () => void;              // clearControlStates, setGoal(null), stopDigging, pvp.stop
     log?: (e: LeaseEvent) => void;
+    /** Told after the holder changes (taken or freed): the harness pushes the state at once (5.6). Never throws into the lease. */
+    onHolder?: (name: string | null) => void;
     now?: () => number;
 }
 
@@ -31,8 +33,10 @@ export class BodyLease {
     private readonly resetBody: () => void;
     private readonly log: (e: LeaseEvent) => void;
     private readonly now: () => number;
+    private readonly onHolder: (name: string | null) => void;
 
     constructor(opts: LeaseOptions = {}) {
+        this.onHolder = opts.onHolder ?? (() => {});
         this.overrunMs = opts.overrunMs ?? 2000;
         this.resetBody = opts.resetBody ?? (() => {});
         this.log = opts.log ?? (() => {});
@@ -72,6 +76,7 @@ export class BodyLease {
         // under the lease
         const holder: Holder = { name, controller, settled: Promise.resolve(), id, overran };
         this.holder = holder;
+        this.changed();
         let runP: Promise<T>;
         try { runP = run(controller.signal); } catch (error) { runP = Promise.reject(error); }
         const own: Promise<Settled<T>> = runP.then(
@@ -80,7 +85,7 @@ export class BodyLease {
         );
         holder.settled = own.then(() => {
             // a runner that ends by itself frees the body (unless it already lost it)
-            if (this.holder?.id === id) this.holder = null;
+            if (this.holder?.id === id) { this.holder = null; this.changed(); }
         });
         return { name, result: Promise.race([own, overrun]) };
     }
@@ -101,6 +106,8 @@ export class BodyLease {
             this.log({ event: 'stop-overrun', runner: h.name, waitedMs: this.now() - t0 });
             h.overran();
         }
-        if (this.holder?.id === h.id) this.holder = null;
+        if (this.holder?.id === h.id) { this.holder = null; this.changed(); }
     }
+
+    private changed(): void { try { this.onHolder(this.holderName); } catch { /* never stops the lease */ } }
 }
