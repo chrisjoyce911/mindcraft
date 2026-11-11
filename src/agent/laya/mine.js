@@ -217,6 +217,7 @@ export function dropBelow(blockAt, x, y, z, max = 8) {
 // stands on) and the air under o (or under a one-block floor below it) is
 // deeper than maxDrop. The bot must step off o before digging it.
 export function floorDrop(blockAt, feet, o, maxDrop = 3) {
+    if (!feet || !o) return false;
     const f = { x: Math.floor(feet.x), y: Math.floor(feet.y), z: Math.floor(feet.z) };
     if (o.x !== f.x || o.z !== f.z || o.y !== f.y - 1) return false;
     return dropBelow(blockAt, o.x, o.y, o.z, maxDrop + 1) > maxDrop;

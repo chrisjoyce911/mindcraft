@@ -482,7 +482,8 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             if (!blocktypes.includes(block.name)) {
                 return false;
             }
-            if (floorDrop(at, bot.entity.position, block.position, MAX_SAFE_DROP)) {
+            // (findBlocks first asks with no position, by block type only)
+            if (block.position && floorDrop(at, bot.entity.position, block.position, MAX_SAFE_DROP)) {
                 return false;
             }
             if (exclude) {

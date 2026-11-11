@@ -22,6 +22,7 @@ test('floorDrop: the block under the feet over a cave is never dug from on top',
     // coal at 0 56 0 under feet 0 57 0; air from 55 down to 40 (a cave)
     const cave = world({ '0,56,0': 'coal_ore' }, { floor: 40 });
     assert.equal(floorDrop(cave, { x: 0.5, y: 57, z: 0.5 }, { x: 0, y: 56, z: 0 }), true);
+    assert.equal(floorDrop(cave, { x: 0, y: 57, z: 0 }, null), false, 'findBlocks asks with no position first');
     assert.equal(hollowUnder(cave, { x: 0, y: 56, z: 0 }), true);
     // standing beside it: digging it drops nobody
     assert.equal(floorDrop(cave, { x: 1.5, y: 57, z: 0.5 }, { x: 0, y: 56, z: 0 }), false);
