@@ -1,6 +1,7 @@
 # Proposal: rebuild andy's bot — lean, typed, no LLM leftovers
 
 Asked for by the user, 2026-11-11 (Brisbane). This change is the spec only: it does not authorise implementation.
+The user accepted every recommendation in questions.md (Q1–Q18) on 2026-11-11; design §10a records them.
 
 ## Why
 
@@ -29,16 +30,15 @@ The bugs are in our layer, not in mineflayer, so we keep mineflayer and rebuild 
 - Modes are gone: defend/flee/eat/heal/escape/unload are director activities; andy defends only when andy or a player
   was attacked; stuck handling belongs to the running actuator.
 - Jobs survive a restart (typed progress in `laya-job.json`); all `laya-*.jsonl` logs and state files keep their format.
-- **Specialised skill models** (user, 18:40–18:55):
-  - Chores v2 answers with the model to use and its target (`hunt`, `farm`, `gather logs|seeds|wool|sand`,
-    `mine cobble|coal|iron`, `craft <item>`, `place <thing>`) or a single step (`cook`, `store`, `sleep`, `rest`).
-  - Its state summarises the pack and the home chest, keeps the player kit apart, and shows each model's recent
-    result.
-  - Small single-skill models do the steps: farm, mine and craft exist; hunt, gather and place are new.
-  - Code runs one step at a time; today's 25 hand-written chores and their fixed amounts go away.
-  - Each model has a card: skill and out of scope, short state, answers, rules v1, check, size, and correction by a
-    short retrain via the controller `/job`.
-  - The laya-go side is rules2's `skill-models` change.
+- **Specialised skill models** (user, 18:40–18:55), as laya-go's shared `skills-spec.md` v1 (tab rules2,
+  `skill-models`):
+  - Chores v2 answers `(Skill, Target)`, which maps 1:1 to hunt, farm, gather, mine, craft or place, or to a rules
+    actuator (cook, store, sleep, ask, rest).
+  - Its state summarises Carry and Chest by kind, keeps the player kit apart, and has a `Last` line of recent run
+    results.
+  - Small single-skill models do the steps: hunt, gather and place are new; craft gets v2.2 data; farm and mine stay.
+  - Code runs one step at a time. Today's 25 hand-written chores and their fixed amounts go away.
+  - Corrections are cases plus a short retrain via trainctl `/job`.
 - When the new bot passes the suite and a first-day-from-scratch test, it becomes the default and the old `src/` is
   deleted.
 

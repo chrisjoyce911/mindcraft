@@ -1,8 +1,12 @@
 # Questions for the user (bot-rebuild)
 
-Each has a recommendation; phase 1 can start once Q1–Q4 are answered.
+**Answered 2026-11-11 (Brisbane): the user accepted every recommendation, Q1–Q18.** Q7: keep a minimal status page.
+Q10: keep the 18 commands the command model emits. Q13–Q17 also match laya-go's skills-spec v1 (design §11.8). The
+records are in design §10a.
 
-| # | Question | Options | Recommended |
+Each had a recommendation; the accepted answer is the "Recommended" column.
+
+| # | Question | Options | Recommended (accepted) |
 |---|---|---|---|
 | Q1 | TypeScript build setup | (a) `tsc` → `bot/dist`, `tsx` for dev; (b) a bundler (esbuild); (c) Node 22's type stripping, no build | (a): simplest, readable output, stack traces match |
 | Q2 | Test runner | (a) keep `node --test` (on compiled JS); (b) vitest | (a): same as today's 40 test files, no new tool |

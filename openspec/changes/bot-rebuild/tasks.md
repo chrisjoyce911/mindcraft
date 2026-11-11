@@ -5,8 +5,9 @@ Spec only so far: nothing below is started. Each phase's gate must pass before t
 each model's state text against laya-go's samples.
 
 ## 0. Decide (blocks phase 1)
-- [ ] 0.1 User answers questions.md (TypeScript setup, test runner, andy-only vs multi-bot, UI/viewer, cut-over date).
-- [ ] 0.3 Reconcile §11 (chores v2 answers and state, model cards for hunt/gather/place, craft v2.2, mine targets) with
+- [x] 0.1 User answers questions.md (2026-11-11: all recommendations accepted; design §10a) (TypeScript setup, test runner, andy-only vs multi-bot, UI/viewer, cut-over date).
+- [x] 0.3 Reconcile §11 (done 2026-11-11 against skills-spec v1; design §11.8. Re-check whenever skills-spec
+      changes) (chores v2 answers and state, model cards for hunt/gather/place, craft v2.2, mine targets) with
       laya-go's `skill-models` change (`~/lnkz/laya-go-rules2/openspec/changes/skill-models`, its `skills-spec.md`):
       same question names, answer words, state lines and golden requests. Record differences here; laya-go's game
       definitions win.
@@ -26,7 +27,8 @@ Done means: a baseline report with every metric in design §7 filled in.
 - [ ] 2.2 `types/` (facts, decisions, jobs, commands, outcomes).
 - [ ] 2.3 `core/` Body, connection, `abort.ts`, `motion.ts` (pathfinder owner, abort = clear goal), BodyLease with
       the 2 s overrun rule; tests incl. a never-settling actuator.
-- [ ] 2.4 `harness/`: mindserver-compatible socket.io server, full state, `send-message`, legacy `!cmd` parser.
+- [ ] 2.4 `harness/`: mindserver-compatible socket.io server, full state, `send-message`, legacy `!cmd` parser (the 18
+      command-model commands), minimal status page (Q7).
 - [ ] 2.5 `ANDY_BOT=new|old` in `tools/test-world/bot.js`; `main.ts` spawns and idles.
 
 Done means: `bot_start` with `ANDY_BOT=new` joins the test world, `andy_status` and `andy_wait_idle` work, the
@@ -53,10 +55,10 @@ Done means: follow/come/give/store scenarios pass; a restart test (kill mid-foll
 - [ ] 5.2 mine (mine model v2, mine plan, floor/drop checks, veins, torches, unload at home, mine memory).
 - [ ] 5.3 farm (farm model v2, water, pond, seeds, unload).
 - [ ] 5.4 hunt.
-- [ ] 5.5 hunt, gather and place skill jobs (design §11.5): renderer, questions, typed answer, rules v1, golden test, a
+- [ ] 5.5 hunt, gather and place skill jobs (design §11, skills-spec v1 §2–4): renderer, questions, typed answer, rules v1, golden test, a
       game scenario each. They run on rules v1 until laya-go serves the models.
-- [ ] 5.6 chores v2 (design §11.2–11.3): pack and chest summaries, the kit apart, results per model; answers map 1:1 to
-      skill jobs or single steps (cook, store, sleep, rest). Chores v1.1 stays available as the stopgap until v2 is
+- [ ] 5.6 chores v2 (skills-spec v1 §1): Carry/Chest/Made/Kit, Last from the run lines; answers map 1:1 to skill jobs
+      or rules actuators (cook, store, sleep, ask, rest). Chores v1.1 stays available as the stopgap until v2 is
       served.
 - [ ] 5.7 Correction path: `andy_logs` (or a small tool) turns a `laya-<model>.jsonl` line into a correction case in
       the format laya-go's controller `/job` takes.
