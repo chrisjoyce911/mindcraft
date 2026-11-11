@@ -66,3 +66,22 @@ export async function performActivity(activity, deps) {
     }
     return 'done';
 }
+
+// stopActivity ends the director's running action `label` (e.g.
+// "director:heal") and nothing else: it interrupts only while that action
+// is still the current one, so a mode that has taken over meanwhile
+// (laya_defending) is never interrupted. deps: currentLabel(), interrupt(),
+// executing(), idle() (called when nothing runs afterwards), sleep.
+// Returns whether the action ended within ms.
+export async function stopActivity(label, deps, ms = 3000) {
+    const sleep = deps.sleep || realSleep;
+    let waited = 0;
+    while (deps.currentLabel() === label) {
+        if (waited >= ms) return false;
+        deps.interrupt();
+        await sleep(STEP_MS);
+        waited += STEP_MS;
+    }
+    if (!deps.executing()) deps.idle?.();
+    return true;
+}

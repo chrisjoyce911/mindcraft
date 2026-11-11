@@ -9,7 +9,7 @@ import http from 'node:http';
 import { mkdtempSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { pause, performActivity } from '../src/agent/laya/activities.js';
+import { pause, performActivity, stopActivity } from '../src/agent/laya/activities.js';
 import { Director } from '../src/agent/laya/director.js';
 import { interruptBot } from '../src/agent/interrupt.js';
 import { MemoryBank } from '../src/agent/memory_bank.js';
@@ -87,6 +87,22 @@ test('Director: a different answer stops the running heal; a resumed job is not 
     d2.stack.resumed(job);
     assert.equal((await d2.tick()).activity, 'continue');
     assert.deepEqual(stops, ['heal']);
+});
+
+test('stopActivity: interrupts only the director action, never the mode that took over (husk death 2026-11-11 12:40)', async () => {
+    let label = 'director:heal', interrupts = 0, idles = 0, executing = true;
+    const deps = { currentLabel: () => label, executing: () => executing, idle: () => idles++, sleep: async () => {},
+        interrupt: () => { interrupts++; if (interrupts === 2) label = 'mode:laya_defending'; } }; // the mode starts
+    assert.equal(await stopActivity('director:heal', deps), true);
+    assert.equal(interrupts, 2, 'no interrupt once laya_defending runs');
+    assert.equal(idles, 0, 'the mode runs: no idle');
+    label = 'director:eat'; interrupts = 0; executing = false;
+    deps.interrupt = () => { interrupts++; label = ''; };
+    assert.equal(await stopActivity('director:eat', deps), true);
+    assert.equal(idles, 1, 'nothing runs afterwards: idle');
+    label = 'director:unload';
+    deps.interrupt = () => {};
+    assert.equal(await stopActivity('director:unload', deps, 300), false, 'gives up after ms');
 });
 
 // ---- 2. interrupts end a stuck collect; places are saved ----

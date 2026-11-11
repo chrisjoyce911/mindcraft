@@ -24,7 +24,7 @@ import { valuables } from './laya/mine_state.js';
 import { depositList } from './laya/mine.js';
 import { packDeps } from './laya/pack_actions.js';
 import { homeState } from './laya/home_chest.js';
-import { performActivity } from './laya/activities.js';
+import { performActivity, stopActivity } from './laya/activities.js';
 import { interruptBot } from './interrupt.js';
 import { handChoice } from './laya/hand.js';
 import Vec3 from 'vec3';
@@ -735,12 +735,17 @@ export class Agent {
 
     // _stopActivity ends the director's running activity (the director
     // answered something else): the action stops, then the bot is idle again.
+    // Only that action is interrupted: a mode that took over meanwhile runs on.
     async _stopActivity(activity) {
-        if (!(this.actions.currentActionLabel || '').startsWith('director:')) return;
+        const label = `director:${activity}`;
+        if (this.actions.currentActionLabel !== label) return;
         console.log(`[laya] director: stopping ${activity}`);
-        await this.actions.stop();
-        this.clearBotLogs();
-        this.bot.emit('idle');
+        await stopActivity(label, {
+            currentLabel: () => this.actions.currentActionLabel,
+            interrupt: () => this.requestInterrupt(),
+            executing: () => this.actions.executing,
+            idle: () => { this.clearBotLogs(); this.bot.emit('idle'); },
+        });
     }
 
     async update(delta) {

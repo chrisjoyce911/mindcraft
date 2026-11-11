@@ -6,7 +6,8 @@
 The director's eat, heal and unload SHALL check `bot.interrupt_code` at least every 100 ms and end when it is set,
 so a mode (laya_defending, unstuck, ...) or `!stop` takes over without the 10 s kill. When the director answers
 something other than the running eat, heal or unload, that activity SHALL be stopped; a resumed job SHALL NOT be
-stopped by a `continue` answer.
+stopped by a `continue` answer. Stopping it SHALL interrupt only that director action, never a mode that has taken
+over meanwhile.
 
 #### Scenario: a skeleton while healing with no food
 - **WHEN** andy heals at health 3 with no food and laya_defending interrupts
