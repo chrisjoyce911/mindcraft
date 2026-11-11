@@ -5,3 +5,4 @@ export * from './jobs.js';
 export * from './commands.js';
 export * from './events.js';
 export * from './models.js';
+export * from './skills.js';

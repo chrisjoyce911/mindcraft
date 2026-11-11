@@ -14,9 +14,12 @@ export interface JobEntry<P = unknown> extends JobState<P> {
 
 let nextId = 1;
 
-/** jobKind: the Job line's kind for a spec (hunt shows as attack; eat isn't a job kind there). */
+/**
+ * jobKind: the Job line's kind for a spec (hunt and the hunt skill show as attack, the gather skill as gather, a
+ * place as craft: the director's words are fixed by its prompt; eat isn't a job kind there).
+ */
 export function jobKind(spec: JobSpec): DirectorJobKind | null {
-    const k = spec.kind === 'hunt' ? 'attack' : spec.kind;
+    const k = spec.kind === 'hunt' || spec.kind === 'huntFood' ? 'attack' : spec.kind === 'gatherSkill' ? 'gather' : spec.kind === 'place' ? 'craft' : spec.kind;
     return (JOB_KINDS as readonly string[]).includes(k) ? (k as DirectorJobKind) : null;
 }
 
@@ -28,6 +31,9 @@ function jobItem(spec: JobSpec): string | null {
         case 'farm': return spec.crop;
         case 'craft': case 'gather': case 'store': case 'eat': return spec.item;
         case 'hunt': return spec.mob;
+        case 'huntFood': return 'food';
+        case 'gatherSkill': return spec.target;
+        case 'place': return spec.item;
         default: return null;
     }
 }
@@ -37,6 +43,8 @@ function jobCount(spec: JobSpec): number | 'any' {
         case 'mine': return spec.count === 'forever' ? 'any' : spec.count;
         case 'farm': return spec.goal === 'forever' ? 'any' : spec.goal.count;
         case 'craft': case 'gather': case 'hunt': case 'give': case 'store': return spec.count;
+        case 'huntFood': case 'gatherSkill': return spec.goal;
+        case 'place': return 1;
         default: return 'any';
     }
 }

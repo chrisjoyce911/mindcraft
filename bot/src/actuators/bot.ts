@@ -6,10 +6,12 @@ import { Vec3 } from 'vec3';
 import type { Outcome, Vec3Like } from '../types/index.js';
 import type { GoToOptions } from '../core/motion.js';
 
-export interface ActEntity { id: number; name?: string | undefined; type?: string | undefined; username?: string | undefined; position: Vec3Like; height?: number; isValid?: boolean }
+export interface ActEntity { id: number; name?: string | undefined; type?: string | undefined; username?: string | undefined; position: Vec3Like; height?: number; isValid?: boolean;
+    /** The entity's metadata (mineflayer's array; 1.21: 16 a baby, a sheep's 17 has 0x10 when sheared). */
+    metadata?: readonly unknown[] }
 export interface ActItem { name: string; count: number }
 /** A block as the actuators and the follow state read it (a mineflayer Block fits). metadata 0: a liquid's source. */
-export interface ActBlock { name: string; boundingBox?: string; metadata?: number; getProperties?: () => Record<string, unknown>; getSignText?: () => unknown }
+export interface ActBlock { name: string; boundingBox?: string; metadata?: number; /** Block light (mineflayer Block.light). */ light?: number; getProperties?: () => Record<string, unknown>; getSignText?: () => unknown }
 /** An open container (a chest): its items, deposit and withdraw by item name, close. */
 export interface ActContainer {
     /** The container's own slots' items (not andy's inventory). */
@@ -103,6 +105,8 @@ export interface ActBot {
     isFood(name: string): boolean;
     /** The planks a log crafts into (minecraft-data's recipes), or null. */
     planksFor(log: string): string | null;
+    /** The item an item entity on the ground is (getDroppedItem), or null (optional in fakes). */
+    droppedItem?(e: ActEntity): string | null;
 }
 
 /** The pathfinder goals the actuators use (opaque to them). */
@@ -305,6 +309,12 @@ export function actBot(bot: Bot): ActBot {
                 if ((recipes[id] ?? []).some(r => r.ingredients?.includes(logId))) return name;
             }
             return null;
+        },
+        droppedItem: e => {
+            try {
+                const ent = bot.entities[e.id] as unknown as { getDroppedItem?: () => { name: string } | null } | undefined;
+                return ent?.getDroppedItem?.()?.name ?? null;
+            } catch { return null; }
         },
     };
 }

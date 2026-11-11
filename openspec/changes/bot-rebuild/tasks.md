@@ -222,8 +222,25 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
   timeout/director/jobfile tests; npm test 423/423. Live: hunt-beef, hunt-none-near, attack-legacy 3/3 twice; regression
   7/7; kill -9 resume (target 6 kept, ended at 8), !stop and defend interrupt by hand. Report
   `bots/andy/logs/game-tests/bot-rebuild-5.4-2026-11-12.md`. Not ported: the water-mob self_preservation pause.
-- [ ] 5.5 hunt, gather and place skill jobs (design §11, skills-spec v1 §2–4): renderer, questions, typed answer, rules v1, golden test, a
+- [x] 5.5 hunt, gather and place skill jobs (design §11, skills-spec v1 §2–4): renderer, questions, typed answer, rules v1, golden test, a
       game scenario each. They run on rules v1 until laya-go serves the models.
+  (2026-11-12) `bot/src/models/{skill,hunt,gather,place}/`: laya-go games/{hunt,gather,place} v1 ported (State,
+  Questions, Decide, Harmful; place's 24-nearest candidates); `decideSkill`: the model when the task is on, the answer
+  well formed, sure (min_confidence 0.3) and not harmful, else rules v1 with why (rules, no-answer, malformed,
+  low-confidence, veto). `sensors/skills.ts`: directions (tie N/S), ⌊horizontal distance⌋, the 49/97/193 search square
+  around the run's start, adults (mooshroom = cow), drops within 16, trees (logs with leaves, clustered by column),
+  wood/wool/saplings counts, the place grid (CELL_TABLE, columnCell, 9×9 step 1; torches the 7×7 step-3 LIT_OFFSETS
+  chores' lit uses). Jobs `huntFood`, `gatherSkill`, `place` (`jobs/huntFood.ts`, `gatherSkill.ts`, `place.ts`,
+  `skillWorld.ts`): one model step per job step, progress {origin, search, steps, kills, repeat, skip} in
+  laya-job.json, typed `SkillFailReason` in JobEnd.reason (no_source, full, no_spot, missing_<item>, stuck, timeout);
+  place reads its cell again before placing; `home/centre.ts` baseCentre is the stand-in for 5.6's chooseCentre.
+  Logs laya-hunt/gather/place.jsonl (`skillLine`, correction tool reads them). Triggers (harness only) `!layaHunt(n)`,
+  `!layaGatherSkill("logs", n)` (layaGather stays 5.1's), `!layaPlace("furnace")`. Golden + 300 laya-go situations
+  per skill (state, options, rules, harmful), sensor and loop tests; npm test 455/455. Live: 4 skill scenarios ≥ 2×
+  each, gate 9/9 with the regression set, !stop, defend mid-gather and kill -9 resume by hand. Report
+  `bots/andy/logs/game-tests/bot-rebuild-5.5-2026-11-12.md`. The served hunt v1 model never answers done (keeps
+  hunting past the goal): the tasks stay off in settings.js until laya-go fixes it. Left for 5.6: chores calls the
+  jobs (purpose chore, chest counts), the real base centre, the director's Job words for the new kinds.
 - [ ] 5.6 chores v2 (skills-spec v1 §1): Carry/Chest/Made/Kit, Last from the run lines; answers map 1:1 to skill jobs
       or rules actuators (cook, store, sleep, ask, rest). Chores v1.1 stays available as the stopgap until v2 is
       served.

@@ -1,0 +1,30 @@
+{
+  "questions": {
+    "Action": {
+      "criteria": [
+        "attack",
+        "approach",
+        "collect",
+        "search",
+        "done",
+        "give_up"
+      ],
+      "instructions": "What should I do next to hunt?",
+      "type": "choice"
+    },
+    "Target": {
+      "criteria": [
+        "cow",
+        "pig",
+        "sheep",
+        "chicken",
+        "rabbit",
+        "drops",
+        "none"
+      ],
+      "instructions": "Which animal or drops?",
+      "type": "choice"
+    }
+  },
+  "state": "Hunt.\nGoal food 32 have 12\nAnimals cow 3 9 E pig 1 22 N sheep 0 none none chicken 2 30 S rabbit 0 none none\nDrops 2 3 W\nSearch 49"
+}

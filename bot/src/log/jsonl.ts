@@ -1,4 +1,5 @@
-// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl, laya-follow.jsonl, laya-craft.jsonl, laya-mine.jsonl and laya-farm.jsonl,
+// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl, laya-follow.jsonl, laya-craft.jsonl, laya-mine.jsonl and laya-farm.jsonl
+// (and 5.5's skill logs laya-hunt.jsonl, laya-gather.jsonl, laya-place.jsonl: new lines, skillLine below),
 // one JSON line per decision, in the old bot's format: the same fields in the same order with the same value
 // formats (src/agent/laya/{director,eat,defend,command}.js; test/fixtures/laya-logs pins them, bot/test/logs.test.ts checks
 // them byte for byte). The line builders are pure; JsonlLog appends `{time, ...line}` and never throws.
@@ -54,7 +55,37 @@ export interface CraftLogInput {
 }
 export type CraftOutcome = 'did' | 'failed' | 'fallback' | 'done' | 'stop';
 
-export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm'] as const;
+export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm', 'hunt', 'gather', 'place'] as const;
+/** The skill models with a log of their own (5.5). */
+export const SKILL_LOG_TASKS = ['hunt', 'gather', 'place'] as const;
+export type SkillLogTask = (typeof SKILL_LOG_TASKS)[number];
+
+/** What became of a skill step: carried out, the actuator failed, the goal is met, or the run ended (reason). */
+export type SkillOutcome = 'did' | 'failed' | 'done' | 'ended';
+/** A skill step as a skill job logs it (models/skill SkillDecision fits). */
+export interface SkillLogInput {
+    purpose: 'player' | 'chore';
+    goal: string;
+    state: string;
+    words: Readonly<Record<string, string>>;
+    source: 'model' | 'rules';
+    rule: string;
+    why?: string;
+    asked?: { words: Readonly<Record<string, string>>; p: number; ms: number };
+}
+/**
+ * The skill step line (5.5, design §5.6; laya-hunt.jsonl, laya-gather.jsonl, laya-place.jsonl): whose run (purpose),
+ * the goal, the state; what the model said (model: its words, p: the lowest top probability, ms) when it answered;
+ * who decided (source), why the rules took over (why), the rules' rule for the state, the words acted on (answer),
+ * and what became of them (outcome, reason).
+ */
+export interface SkillLine {
+    purpose: 'player' | 'chore'; goal: string; state: string;
+    model?: Record<string, string>; p?: number; ms?: number;
+    source: 'model' | 'rules'; why?: string; rule: string;
+    answer: Record<string, string>;
+    outcome: SkillOutcome; reason?: string;
+}
 export type LogTask = (typeof LOG_TASKS)[number];
 
 /** The director's line: the old Director.tick logDecision entry (no `acted`: that's the console's). */
@@ -283,6 +314,18 @@ export function craftLine(i: CraftLogInput): CraftLine {
     };
 }
 
+/** skillLine: the line for one skill step (the job writes it only when log_steps). */
+export function skillLine(d: SkillLogInput, outcome: SkillOutcome, reason?: string): SkillLine {
+    const a = d.asked;
+    return {
+        purpose: d.purpose, goal: d.goal, state: d.state,
+        ...(a && Object.keys(a.words).length ? { model: { ...a.words } } : {}),
+        ...(a ? { p: +a.p.toFixed(3), ms: a.ms } : {}),
+        source: d.source, ...(d.why ? { why: d.why } : {}), rule: d.rule,
+        answer: { ...d.words }, outcome, ...(reason ? { reason } : {}),
+    };
+}
+
 /** stamp: the line as written, `time` first (the old `{ time, ...entry }`). */
 export function stamp(line: object, time: Date = new Date()): string {
     return JSON.stringify({ time: time.toISOString(), ...line });
@@ -295,7 +338,7 @@ export class JsonlLog {
 
     file(task: LogTask): string { return path.join(this.dir, `laya-${task}.jsonl`); }
 
-    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | MineLine | FarmLine | StopOverrunLine | null): void {
+    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | MineLine | FarmLine | SkillLine | StopOverrunLine | null): void {
         if (!line) return;
         try {
             if (!this.made) { fs.mkdirSync(this.dir, { recursive: true }); this.made = true; }

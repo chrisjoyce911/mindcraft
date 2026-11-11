@@ -9,7 +9,7 @@
 // reads ours as null (no name), so the bots can swap on one world.
 import fs from 'fs';
 import path from 'path';
-import { CROPS, ORES, type JobFile, type JobSpec, type SavedJob } from '../types/index.js';
+import { CROPS, GATHER_GOALS, ORES, PLACE_ITEMS, type JobFile, type JobSpec, type SavedJob } from '../types/index.js';
 
 /** The spec's restore window (the old bot had 15 min). */
 export const MAX_AGE_MS = 10 * 60_000;
@@ -35,6 +35,9 @@ export function isJobSpec(v: unknown): v is JobSpec {
         case 'store': return str(v.item) && num(v.count);
         case 'eat': return str(v.item);
         case 'home': return true;
+        case 'huntFood': return num(v.goal) && v.goal >= 1 && (v.chest === undefined || num(v.chest));
+        case 'gatherSkill': return (GATHER_GOALS as readonly unknown[]).includes(v.target) && num(v.goal) && v.goal >= 1 && (v.chest === undefined || num(v.chest));
+        case 'place': return (PLACE_ITEMS as readonly unknown[]).includes(v.item);
         default: return false;
     }
 }
@@ -130,6 +133,9 @@ export function jobWords(s: JobSpec): string {
         case 'farm': return `farm ${counted(s.goal === 'forever' ? 'forever' : s.goal.count, s.crop)}`;
         case 'hunt': return `hunt for ${counted(s.count, s.item ?? s.mob)}`;
         case 'eat': return `eat ${words(s.item)}`;
+        case 'huntFood': return `hunt for ${s.goal} food`;
+        case 'gatherSkill': return `get ${counted(s.goal, s.target)}`;
+        case 'place': return `place the ${words(s.item)}`;
     }
 }
 

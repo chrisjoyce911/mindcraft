@@ -21,7 +21,7 @@ import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 import { PlaceStore } from './home/places.js';
 import { JobSaver, RESTORE_MAX_MS, RESTORE_MIN_MS, loadJobs, planRestore, readJobs, waitsFor } from './home/jobfile.js';
 import { loadChoresState } from './home/chores.js';
-import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, MINE_DEFAULTS, MINE_NUMBER_KEYS, MINE_PROMPTS, farmOf, type CraftSettings, type FollowSettings, type JobDeps, type MineSettings, type MinePrompt } from './jobs/index.js';
+import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, MINE_DEFAULTS, MINE_NUMBER_KEYS, MINE_PROMPTS, farmOf, skillOf, type CraftSettings, type FollowSettings, type JobDeps, type MineSettings, type MinePrompt } from './jobs/index.js';
 import { mineStore } from './home/mines.js';
 import { isFollowPrompt } from './models/follow/index.js';
 import { handleChat } from './command/handle.js';
@@ -173,6 +173,8 @@ async function main() {
         mines: mineStore(path.join(botDir, 'laya-mines.json')),
         farm: () => farmOf(settings, enabled('farm') ? laya : null, laya.promptFor('farm')),
         farmLog: line => jsonl.write('farm', line),
+        skill: task => skillOf(settings, task, enabled(task) ? laya : null),
+        skillLog: (task, line) => jsonl.write(task, line),
         chat: text => { if (settings.chat_ingame !== false) say(text); },
         note: text => log(`[laya] ${text}`),
         checkpoint: () => saver.save(),

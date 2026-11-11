@@ -23,6 +23,9 @@ export function legacyName(j: JobSpec): string {
         case 'give': return 'givePlayer';
         case 'store': return 'putInChest';
         case 'eat': return 'consume';
+        case 'huntFood': return 'layaHunt';
+        case 'gatherSkill': return 'layaGatherSkill';
+        case 'place': return 'layaPlace';
     }
 }
 
@@ -50,5 +53,8 @@ export function legacyLine(c: Command): string | null {
         case 'give': return `${n}(${q(j.player)}, ${q(j.item)}, ${j.count})`;
         case 'store': return `${n}(${q(j.item)}, ${j.count})`;
         case 'eat': return `${n}(${q(j.item)})`;
+        case 'huntFood': return `${n}(${j.goal})`;
+        case 'gatherSkill': return `${n}(${q(j.target)}, ${j.goal})`;
+        case 'place': return `${n}(${q(j.item)})`;
     }
 }

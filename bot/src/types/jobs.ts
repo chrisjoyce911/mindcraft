@@ -5,6 +5,19 @@ export type Ore = (typeof ORES)[number];
 export const CROPS = ['wheat', 'carrots', 'potatoes', 'beetroot'] as const;
 export type Crop = (typeof CROPS)[number];
 export type ItemName = string;
+/** The skill jobs' goals (skills-spec v1 §2–4): what gather collects and what place puts down. */
+export const GATHER_GOALS = ['logs', 'seeds', 'wool', 'saplings'] as const;
+export type GatherGoal = (typeof GATHER_GOALS)[number];
+export const PLACE_ITEMS = ['crafting_table', 'furnace', 'chest', 'bed', 'torch', 'saplings'] as const;
+export type PlaceItem = (typeof PLACE_ITEMS)[number];
+/**
+ * Why a skill run failed (design §11.3; the chores Last line's failed:<reason>): no_source (give_up with nothing
+ * left in the widest search), full (no free slot), no_spot (no cell for the thing, or the cell changed),
+ * missing_<item> (the thing to place isn't carried), stuck (the same step on the same state again and again),
+ * interrupted (cut short and not resumed), timeout (the step bound).
+ */
+export const SKILL_FAIL_REASONS = ['no_source', 'full', 'no_spot', 'stuck', 'interrupted', 'timeout'] as const;
+export type SkillFailReason = (typeof SKILL_FAIL_REASONS)[number] | `missing_${string}`;
 export type MobName = string;
 
 export type JobSpec =
@@ -16,6 +29,12 @@ export type JobSpec =
     | { kind: 'craft'; item: ItemName; count: number; legacy?: 'craftRecipe' }
     | { kind: 'gather'; item: ItemName; count: number; legacy?: 'collectBlocks' }
     | { kind: 'hunt'; mob: MobName; item: ItemName | null; count: number }
+    /** The hunt skill (5.5): food to have, carried plus chest (what the home chest holds less the kit, as the caller knows it). */
+    | { kind: 'huntFood'; goal: number; chest?: number }
+    /** The gather skill (5.5): logs (as wood), seeds, wool or saplings to have, carried plus chest. */
+    | { kind: 'gatherSkill'; target: GatherGoal; goal: number; chest?: number }
+    /** The place skill (5.5): put one carried thing in the base, where the place model says. */
+    | { kind: 'place'; item: PlaceItem }
     | { kind: 'give'; player: string; item: ItemName; count: number }
     | { kind: 'store'; item: ItemName; count: number }
     | { kind: 'eat'; item: ItemName }

@@ -2,7 +2,7 @@
 import type { JobSpec, JobState, JobStepper, ModelDecider } from '../types/index.js';
 import type { Act } from '../actuators/bot.js';
 import type { PlaceBook } from '../home/places.js';
-import type { CraftLine, FarmLine, FollowLine, MineLine } from '../log/jsonl.js';
+import type { CraftLine, FarmLine, FollowLine, MineLine, SkillLine, SkillLogTask } from '../log/jsonl.js';
 import type { FollowPrompt } from '../models/follow/index.js';
 import type { MineBook } from '../home/mines.js';
 import { PLAN_DEFAULTS, type PlanOptions } from '../models/mine/plan.js';
@@ -132,6 +132,32 @@ export function farmOf(settings: Record<string, unknown>, model: FarmSettings['m
     return out;
 }
 
+/**
+ * decision_models.tasks.<hunt|gather|place> (5.5). Unlike craft, a skill job runs with its task off or missing:
+ * rules v1 decide every step (the spec's fallback); enabled true asks the model (model set).
+ */
+export interface SkillSettings {
+    enabled: boolean;
+    min_confidence: number;
+    log_steps: boolean;
+    /** The served model; null: rules v1 alone. */
+    model: ModelDecider | null;
+}
+export const SKILL_DEFAULTS: Omit<SkillSettings, 'model' | 'enabled'> = { min_confidence: 0.3, log_steps: true };
+
+/** skillOf: a skill task's settings from settings.js (missing: off, rules v1). */
+export function skillOf(settings: Record<string, unknown>, task: SkillLogTask, model: ModelDecider | null): SkillSettings {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.[task] ?? {};
+    const mc = t.min_confidence;
+    return {
+        enabled: t.enabled === true,
+        min_confidence: typeof mc === 'number' && Number.isFinite(mc) && mc >= 0 ? mc : SKILL_DEFAULTS.min_confidence,
+        log_steps: t.log_steps !== false,
+        model: t.enabled === true ? model : null,
+    };
+}
+
 export interface JobDeps {
     /** The actuator context, or null when not in game. */
     act(): Act | null;
@@ -152,6 +178,10 @@ export interface JobDeps {
     farm?: () => FarmSettings;
     /** Writes a laya-farm.jsonl line. */
     farmLog?: (line: FarmLine) => void;
+    /** A skill task's settings now (5.5; missing: rules v1 alone). */
+    skill?: (task: SkillLogTask) => SkillSettings;
+    /** Writes a laya-<hunt|gather|place>.jsonl line. */
+    skillLog?: (task: SkillLogTask, line: SkillLine) => void;
     /** The mine memory (bots/<name>/laya-mines.json). */
     mines?: MineBook;
     /** Says something in game (the old chat dep; the mine's start line). */

@@ -2438,6 +2438,353 @@
           "cmd": "/kill @e[type=item,distance=..24]"
         }
       ]
+    },
+    {
+      "name": "skill-hunt-food",
+      "tags": [
+        "rebuild",
+        "hunt",
+        "skill"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "5.5 hunt skill: five cows near andy (iron sword, nothing else); !layaHunt(4) runs the hunt skill job (rules v1 with the hunt task off): approach and attack the nearest cow, pick up the beef, until he has 4 food; laya-hunt.jsonl has the steps.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z}"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z+2}"
+        },
+        {
+          "cmd": "/summon cow {x+6} {y} {z-2}"
+        },
+        {
+          "cmd": "/summon cow {x-4} {y} {z+3}"
+        },
+        {
+          "cmd": "/summon cow {x-5} {y} {z-3}"
+        },
+        {
+          "waitFor": {
+            "entity": "cow"
+          },
+          "timeout": 10000,
+          "optional": true
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaHunt(4)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "beef",
+          "min": 4
+        },
+        {
+          "type": "actionSeen",
+          "match": "layaHunt",
+          "after": "start"
+        },
+        {
+          "type": "log",
+          "task": "hunt",
+          "match": {
+            "rule": "attack",
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "log",
+          "task": "hunt",
+          "match": {
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "reply",
+          "match": "couldn't hunt",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy} beef"
+        }
+      ]
+    },
+    {
+      "name": "skill-gather-logs",
+      "tags": [
+        "rebuild",
+        "gather",
+        "skill"
+      ],
+      "timeout": 240000,
+      "grace": 20000,
+      "description": "5.5 gather skill: andy with a wooden axe at the base (forest edge); !layaGatherSkill(\"logs\", 6) runs the gather skill job (rules v1): approach the nearest tree (a log with leaves beside it), fell it whole, pick up, until he has 6 wood.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_axe 1"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaGatherSkill(\"logs\", 6)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "/_log$/",
+          "min": 6
+        },
+        {
+          "type": "log",
+          "task": "gather",
+          "match": {
+            "rule": "cut",
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "log",
+          "task": "gather",
+          "match": {
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "reply",
+          "match": "couldn't get",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        }
+      ]
+    },
+    {
+      "name": "skill-place-furnace",
+      "tags": [
+        "rebuild",
+        "place",
+        "skill"
+      ],
+      "timeout": 120000,
+      "grace": 15000,
+      "description": "5.5 place skill: andy carries a furnace at the base; !layaPlace(\"furnace\") reads the 9×9 grid around the base centre, the place rules v1 pick a cell (next to a station first), and andy places it there: a furnace block near him, none carried.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace furnace"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} furnace 1"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaPlace(\"furnace\")"
+        }
+      ],
+      "checks": [
+        {
+          "type": "block",
+          "block": "furnace",
+          "near": "andy",
+          "radius": 8,
+          "min": 1
+        },
+        {
+          "type": "inventory",
+          "item": "furnace",
+          "absolute": true,
+          "max": 0
+        },
+        {
+          "type": "log",
+          "task": "place",
+          "match": {
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "reply",
+          "match": "couldn't place",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace furnace"
+        }
+      ]
+    },
+    {
+      "name": "skill-place-torch",
+      "tags": [
+        "rebuild",
+        "place",
+        "skill"
+      ],
+      "timeout": 120000,
+      "grace": 15000,
+      "description": "5.5 place skill at night: the torch grid is the 7×7 lit sample points (step 3, ±9) around the base centre; at midnight every floor point is dark, so the rules pick the nearest and andy puts one torch on the floor there.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace torch"
+        },
+        {
+          "cmd": "/time set midnight"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} torch 4"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaPlace(\"torch\")"
+        }
+      ],
+      "checks": [
+        {
+          "type": "block",
+          "block": "torch",
+          "near": "andy",
+          "radius": 12,
+          "min": 1
+        },
+        {
+          "type": "inventory",
+          "item": "torch",
+          "absolute": true,
+          "min": 3,
+          "max": 3
+        },
+        {
+          "type": "log",
+          "task": "place",
+          "match": {
+            "rule": "torch",
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace torch"
+        },
+        {
+          "cmd": "/time set day"
+        }
+      ]
     }
   ]
 }

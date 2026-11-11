@@ -14,10 +14,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * A task with a decision log: the new bot's eight plus the old bot's chores (laya-chores.jsonl). Its own list, not
+ * A task with a decision log: the new bot's eight, the old bot's chores (laya-chores.jsonl) and 5.5's skills. Its own list, not
  * jsonl.ts's LOG_TASKS, so the tool stands on its own while a task's log is still being added there.
  */
-export const CORRECTION_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm', 'chores'] as const;
+export const CORRECTION_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm', 'chores', 'hunt', 'gather', 'place'] as const;
 export type CorrectionTask = (typeof CORRECTION_TASKS)[number];
 export const isCorrectionTask = (s: string): s is CorrectionTask => (CORRECTION_TASKS as readonly string[]).includes(s);
 
@@ -32,6 +32,9 @@ export const QUESTION_NAMES: Readonly<Record<CorrectionTask, readonly string[]>>
     mine: ['Action', 'Hazard', 'Unload'],
     farm: ['Action', 'Target', 'Item', 'Unload'],
     chores: ['Chore', 'Skill', 'Target'],
+    hunt: ['Action', 'Target'],
+    gather: ['Action'],
+    place: ['Target'],
 };
 
 /** Who gave the answers in `answered`: the model, the rules (the line's step came from them), or nobody. */
@@ -141,9 +144,24 @@ export function answeredOf(task: CorrectionTask, line: Line): { answered: Answer
             const answered = { ...pick(line, { Action: 'action', Target: 'target', Item: 'item' }), ...unload };
             return { answered, by: Object.keys(answered).length === 0 ? 'none' : source === 'model' ? 'model' : 'rules' };
         }
+        case 'hunt': case 'gather': case 'place': {
+            // skillLine: `model` holds the model's words when it answered (even when the rules acted); else `answer`
+            // is the rules' words.
+            const said = words(line.model);
+            if (Object.keys(said).length) return model(said);
+            const answered = words(line.answer);
+            return { answered, by: byOf(answered, source) };
+        }
     }
 }
 const model = (answered: Answers): { answered: Answers; by: AnsweredBy } => ({ answered, by: byOf(answered) });
+
+/** words: a skill line's object of question → word (model or answer), the strings only. */
+function words(v: unknown): Answers {
+    const out: Answers = {};
+    if (v && typeof v === 'object' && !Array.isArray(v)) for (const [k, w] of Object.entries(v)) if (typeof w === 'string') out[k] = w;
+    return out;
+}
 
 /** parseRight: "Action=craft,Item=stick,Count=4" → answers (split on ",", then on the first "=" only). */
 export function parseRight(text: string): Answers {

@@ -2,7 +2,8 @@
 // "I couldn't make 1 wooden sword: take planks failed."
 import type { JobSpec } from '../types/index.js';
 
-const VERB: Partial<Record<JobSpec['kind'], string>> = { craft: 'make', gather: 'get', mine: 'mine', farm: 'farm', hunt: 'hunt for' };
+const VERB: Partial<Record<JobSpec['kind'], string>> = { craft: 'make', gather: 'get', mine: 'mine', farm: 'farm', hunt: 'hunt for',
+    huntFood: 'hunt for', gatherSkill: 'get', place: 'place' };
 
 /** what: the count and item a job is about, as the old args gave them ([item, n]; a hunt's [mob, item, n]). */
 function what(spec: JobSpec): [string | null, number | null] {
@@ -12,6 +13,9 @@ function what(spec: JobSpec): [string | null, number | null] {
         case 'mine': return [spec.ore, spec.count === 'forever' ? null : spec.count];
         case 'farm': return [spec.crop, spec.goal === 'forever' ? null : spec.goal.count];
         case 'eat': return [spec.item, null];
+        case 'huntFood': return ['food', spec.goal];
+        case 'gatherSkill': return [spec.target, spec.goal];
+        case 'place': return [`the ${spec.item}`, null];
         default: return [null, null];
     }
 }

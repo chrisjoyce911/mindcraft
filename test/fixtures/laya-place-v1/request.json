@@ -1,0 +1,36 @@
+{
+  "questions": {
+    "Target": {
+      "criteria": [
+        "E0 N3",
+        "W2 N2",
+        "E0 N2",
+        "E2 N2",
+        "W2 N1",
+        "W1 N1",
+        "E0 N1",
+        "E1 N1",
+        "E2 N1",
+        "W3 N0",
+        "W2 N0",
+        "W1 N0",
+        "E1 N0",
+        "E2 N0",
+        "E3 N0",
+        "W1 S1",
+        "E0 S1",
+        "E1 S1",
+        "E2 S1",
+        "W1 S2",
+        "E0 S2",
+        "E1 S2",
+        "E2 S2",
+        "E0 S3",
+        "none"
+      ],
+      "instructions": "Where should I place it?",
+      "type": "choice"
+    }
+  },
+  "state": "Place.\nItem furnace\nGrid 9 step 1\n#########\n#..,,...#\n#..C.T..#\n#.......#\n#...@...#\n#~~.....#\n#ff.....#\n#ff..s..#\n#########"
+}

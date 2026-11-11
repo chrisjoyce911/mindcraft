@@ -1,4 +1,5 @@
-// The jobs (4.2: follow, come, stay, give, store, home; 5.1: craft, gather; 5.2: mine; 5.3: farm; 5.4: hunt). makeRunner
+// The jobs (4.2: follow, come, stay, give, store, home; 5.1: craft, gather; 5.2: mine; 5.3: farm; 5.4: hunt; 5.5: the
+// hunt, gather and place skills). makeRunner
 // builds a job's runner; null for the kinds that arrive later (eat as a job: not yet).
 import type { JobState, JobStepper } from '../types/index.js';
 import type { JobDeps, JobOf } from './deps.js';
@@ -12,6 +13,9 @@ import { craftRunner } from './craft.js';
 import { mineRunner } from './mine.js';
 import { farmRunner } from './farm.js';
 import { huntRunner } from './hunt.js';
+import { huntFoodRunner } from './huntFood.js';
+import { gatherSkillRunner } from './gatherSkill.js';
+import { placeRunner } from './place.js';
 
 export * from './deps.js';
 export { summary, newCounters, followRunner, type FollowCounters, type FollowStepper } from './follow.js';
@@ -23,6 +27,11 @@ export { farmRunner, FarmRun, farmSummary, newFarmCounters, FARM_OFF, type FarmW
 export { farmWorld } from './farmWorld.js';
 export { huntRunner, huntStep, maxTries, type HuntWorld, type HuntProgress, type HuntRunContext } from './hunt.js';
 export { huntWorld } from './huntWorld.js';
+export { huntFoodRunner, huntFoodStep, type HuntFoodWorld, type HuntFoodProgress } from './huntFood.js';
+export { gatherSkillRunner, gatherSkillStep, type GatherSkillWorld, type GatherSkillProgress } from './gatherSkill.js';
+export { placeRunner, placeStep, type PlaceWorld } from './place.js';
+export { skillWorld } from './skillWorld.js';
+export { STUCK_REPEATS, maxSkillSteps } from './skill.js';
 
 export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
     const s = job.spec;
@@ -38,6 +47,9 @@ export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
         case 'mine': return mineRunner(job as JobOf<'mine'>, deps);
         case 'farm': return farmRunner(job as JobOf<'farm'>, deps);
         case 'hunt': return huntRunner(job as JobOf<'hunt'>, deps);
+        case 'huntFood': return huntFoodRunner(job as JobOf<'huntFood'>, deps);
+        case 'gatherSkill': return gatherSkillRunner(job as JobOf<'gatherSkill'>, deps);
+        case 'place': return placeRunner(job as JobOf<'place'>, deps);
         default: return null;
     }
 }
