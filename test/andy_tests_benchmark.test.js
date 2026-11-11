@@ -207,6 +207,6 @@ test('after a reset, a job andy starts by himself is stopped before the test goe
     const t = one({ name: 'r', setup: [{ reset: true }], action: [{ andy: '!inventory' }], checks: [] });
     const r = await runTest(b.session, t, { defaults });
     assert.equal(r.status, 'pass', r.reason);
-    assert.deepEqual(b.world.sent.map(x => x.message), ['!stop', '!inventory']);
+    assert.deepEqual(b.world.sent.map(x => x.message), ['!layaChores("off")', '!stop', '!layaChores("off")', '!inventory'], 'chores off before the test and again after the restart');
     assert.match(r.steps[0].out.join(' / '), /andy started action:layaFarm by himself after the restart: stopped/);
 });

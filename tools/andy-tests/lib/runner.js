@@ -140,6 +140,7 @@ export async function runStep(step, ctx) {
             if (r.andy) {
                 const st = await s.settleAfterRestart({ watchMs: step.settleMs ?? 10000 });
                 if (st.stopped) out.push(`andy started ${st.saw.join(', ') || 'something'} by himself after the restart: stopped`);
+                await ctx.chores?.();
             }
             // the template has no player data: tester joins in survival. He
             // left with the old server, so rejoin first (over RCON the
@@ -243,6 +244,9 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
         deadline: started + timeout, t0: started, tAction: null, serverReplies: [], vars: { andy: session.config.agent, tester: session.config.tester },
     };
     ctx.anchor = async () => Object.assign(ctx.vars, await session.andyBlock());
+    // chores (laya-chores): on only for tests tagged chores, so andy doesn't
+    // start work of his own between another test's steps
+    ctx.chores = () => session.command(`!layaChores("${(test.tags || []).includes("chores") ? "on" : "off"}")`, 300).catch(() => null);
     if (session.onTestWorld?.()) {
         try { ctx.vars.sites = (await session.testWorld()).sites?.sites; } catch { /* no sites: {site:…} stays as written */ }
     }
@@ -271,6 +275,7 @@ export async function runTest(session, test, { defaults = {}, report = null } = 
             return finish();
         }
         // 2. andy idle before we start
+        await ctx.chores();
         let w = await session.waitIdle({ timeout: 60000, grace: 0, settle: 1000 });
         if (w.timedOut) {
             await session.command('!stop', 500);

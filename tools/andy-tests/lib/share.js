@@ -17,8 +17,9 @@
 //   craft    outcome fallback: rules, fallback; else model
 //   defend   model (its fallbacks to the old modes aren't logged)
 //   eat      outcome fallback: rules, fallback; else model
+//   chores   ask lines by source
 
-export const SHARE_TASKS = ['command', 'director', 'follow', 'mine', 'farm', 'craft', 'defend', 'eat'];
+export const SHARE_TASKS = ['command', 'director', 'chores', 'follow', 'mine', 'farm', 'craft', 'defend', 'eat'];
 
 const FALLBACK_WHY = new Set(['low-confidence', 'no-answer', 'stop-early', 'off-plan', 'nothing-seen', 'nothing-to-block', 'no-torches']);
 
@@ -32,6 +33,8 @@ export function classify(task, e) {
             return e.kind === 'llm' ? d('rules', { fallback: true }) : d('model');
         case 'director':
             return e.source ? d(e.source === 'model' ? 'model' : 'rules') : null;
+        case 'chores': // ask lines (impossible and ended lines aren't decisions)
+            return e.event === 'ask' && e.source ? d(e.source === 'model' ? 'model' : 'rules') : null;
         case 'follow':
             if (!e.outcome) return null;
             if (e.outcome === 'fallback') return d('rules', e.reason === 'veto' ? { veto: true } : { fallback: true });

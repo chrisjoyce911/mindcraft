@@ -39,6 +39,9 @@ import { log, validateNameFormat, handleDisconnection } from './connection_handl
 // CHORES_HOLD_MS: after a player's !stop no chore starts for this long
 // (or until the player's next command).
 export const CHORES_HOLD_MS = 5 * 60_000;
+// PLAYER_GAP_MS: no chore starts this soon after a player's command (its
+// action may not have started yet).
+export const PLAYER_GAP_MS = 3000;
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -457,6 +460,8 @@ export class Agent {
     // job (a new Laya job replaces it itself); !stop clears the stack.
     _playerCommand(name) {
         if (!name) return;
+        this._playerSeq = (this._playerSeq || 0) + 1; // a chore being asked for now doesn't start (_startChore)
+        this._playerCmdAt = Date.now(); // nor one in the gap before the player's action starts
         if (name === '!stop') {
             this.director.stack.clear();
             this._choresHoldUntil = Date.now() + CHORES_HOLD_MS; // stop means stop: no chore for a while
@@ -783,15 +788,18 @@ export class Agent {
 
     // _choresHeld: a player's !stop holds chores for a while (until the
     // next player command or CHORES_HOLD_MS).
-    _choresHeld() { return Date.now() < (this._choresHoldUntil || 0); }
+    _choresHeld() { return Date.now() < (this._choresHoldUntil || 0) || Date.now() - (this._playerCmdAt || 0) < PLAYER_GAP_MS; }
 
     // _startChore asks for the next chore and runs it as a job of kind
     // chore on the job stack (the director answered idle, nothing runs).
     async _startChore() {
+        const seq = this._playerSeq || 0;
         const d = await this.choresRunner.next();
         if (!d) return;
-        // something started while it asked
-        if (!this.isIdle() || this.director.stack.depth > 0 || this.director.performing || !this._chores.on || this._choresHeld()) return;
+        // something started while it asked (a player's command may not be
+        // running yet: its sequence number says it came)
+        if ((this._playerSeq || 0) !== seq || !this.isIdle() || this.director.stack.depth > 0 || this.director.performing
+            || !this._chores.on || this._choresHeld()) return;
         const [kind, item] = CHORE_JOB[d.chore] || ['gather', 'none'];
         const chore = d.chore;
         console.log(`[laya] chores: ${chore} (${d.source}${d.source === 'rules' ? ' ' + d.rule : ''})`);

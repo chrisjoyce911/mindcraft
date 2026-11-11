@@ -25,8 +25,9 @@ const SEED_OF = { wheat_seeds: 'wheat', carrot: 'carrots', potato: 'potatoes', b
 const ANIMAL_DROP = { cow: 'beef', pig: 'porkchop', sheep: 'mutton', chicken: 'chicken', rabbit: 'rabbit', mooshroom: 'beef' };
 const GRASS = ['short_grass', 'grass', 'tall_grass', 'fern', 'large_fern'];
 const SOLID_GROUND = /(_block|dirt|stone|sand|gravel|podzol|mycelium|clay|terracotta|deepslate|andesite|diorite|granite|tuff|mud|moss_block|snow_block|coarse_dirt|rooted_dirt)$/;
-const OPEN = new Set(['air', 'cave_air', 'short_grass', 'grass', 'tall_grass', 'fern', 'large_fern', 'snow', 'dandelion', 'poppy',
-    'azure_bluet', 'oxeye_daisy', 'cornflower', 'dead_bush']);
+// isOpenBlock: a block a placed block can replace or stand in (air, grass,
+// flowers, leaf litter, snow layers): no collision box, not a fluid or fire.
+const isOpenBlock = b => !!b && b.boundingBox === 'empty' && !/water|lava|fire|portal|torch|sign|rail|button|lever|plate|_bed$/.test(b.name);
 
 const stopped = bot => !!bot.interrupt_code;
 const v = p => new Vec3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
@@ -212,7 +213,9 @@ export function sense(agent, cs, can = CAN) {
     const stone = nearOf(bot, ['stone', 'deepslate', 'andesite', 'diorite', 'granite'], centre, p => surfaceStone(bot, p));
     const coal = nearOf(bot, ['coal_ore', 'deepslate_coal_ore'], centre);
     const sand = nearOf(bot, ['sand', 'red_sand'], centre);
-    const water = nearOf(bot, ['water'], centre, p => (blockAt(bot, p.x, p.y, p.z)?.metadata ?? 1) === 0);
+    // a water source open to the sky (not an underground aquifer)
+    const water = nearOf(bot, ['water'], centre, p => (blockAt(bot, p.x, p.y, p.z)?.metadata ?? 1) === 0
+        && (blockAt(bot, p.x, p.y + 1, p.z)?.skyLight ?? 0) > 0 && blockAt(bot, p.x, p.y + 1, p.z)?.name !== 'water');
     const grass = nearOf(bot, GRASS, centre);
     const lit = litBase(bot, centre);
     const farm = farmFacts(bot, centre);
@@ -316,7 +319,7 @@ function freeSpot(bot, centre, { wide = false, skip = [] } = {}) {
     const busy = Object.values(bot.entities).filter(e => e.type === 'player' || e === bot.entity).map(e => v(e.position));
     const free = (x, y, z) => {
         const b = blockAt(bot, x, y, z), up = blockAt(bot, x, y + 1, z), below = blockAt(bot, x, y - 1, z);
-        return b && up && below && OPEN.has(b.name) && OPEN.has(up.name) && below.boundingBox === 'block'
+        return b && up && below && isOpenBlock(b) && isOpenBlock(up) && below.boundingBox === 'block'
             && !/farmland|path|leaves|water|lava/.test(below.name) && !busy.some(p => p.x === x && p.z === z && Math.abs(p.y - y) <= 1)
             && !skip.some(p => p.x === x && p.y === y && p.z === z);
     };
@@ -338,6 +341,12 @@ async function placeAt(agent, item, p) {
     const bot = agent.bot;
     if (!await goNear(bot, p, 3)) return false;
     agent._placingAt = { ...p, at: Date.now() };
+    // ground cover placeBlock doesn't replace (leaf litter, flowers): clear it first
+    const cover = blockAt(bot, p.x, p.y, p.z);
+    if (cover && cover.name !== 'air' && cover.name !== 'cave_air' && isOpenBlock(cover)
+        && !['grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern'].includes(cover.name)) {
+        try { await bot.dig(cover); } catch { /* placeBlock says why */ }
+    }
     try { await skills.placeBlock(bot, item, p.x, p.y, p.z); } catch { /* checked below */ }
     const b = blockAt(bot, p.x, p.y, p.z);
     return !!b && (b.name === item || (isBed(item) && isBed(b.name)) || (item === 'torch' && /torch/.test(b.name)));
@@ -401,7 +410,7 @@ async function lightBase(agent) {
     for (const p of cx.lit.dark.slice(0, 10)) {
         if (stopped(bot) || count(bot, 'torch') < 1) break;
         const b = blockAt(bot, p.x, p.y, p.z);
-        if (!b || !OPEN.has(b.name) || (b.light ?? 15) >= 8) continue;
+        if (!isOpenBlock(b) || (b.light ?? 15) >= 8) continue;
         if (await placeAt(agent, 'torch', p)) placed++;
     }
     return placed ? ok(`${placed} torches placed`) : fail(stopped(bot) ? 'stopped' : 'couldn\'t place a torch');
@@ -434,7 +443,7 @@ export function farmSite(bot, centre, water) {
             const x = w.x + dx, z = w.z + dz;
             for (const y of [w.y, w.y + 1]) {
                 const b = blockAt(bot, x, y, z), up = blockAt(bot, x, y + 1, z);
-                if (b && up && /^(grass_block|dirt)$/.test(b.name) && OPEN.has(up.name)) out.push({ x, y, z, d: Math.abs(dx) + Math.abs(dz) });
+                if (b && up && /^(grass_block|dirt)$/.test(b.name) && isOpenBlock(up)) out.push({ x, y, z, d: Math.abs(dx) + Math.abs(dz) });
             }
         }
         if (out.length >= 4) return out.sort((a, b) => a.d - b.d).slice(0, 16);
@@ -494,7 +503,7 @@ async function makeBeds(agent) {
             const f = b?.getProperties?.().facing;
             const side = f === 'north' || f === 'south' ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]];
             p = side.map(([dx, dz]) => ({ x: first.x + dx, y: first.y, z: first.z + dz }))
-                .find(q => OPEN.has(blockAt(bot, q.x, q.y, q.z)?.name || 'stone'));
+                .find(q => isOpenBlock(blockAt(bot, q.x, q.y, q.z)));
         }
         p ||= freeSpot(bot, agent._choreCtx.centre, { wide: true });
         if (!p) return fail('no room for a bed in the base');
@@ -597,7 +606,7 @@ function saplingSpot(bot, centre, used) {
     const placedNear = (x, y, z) => {
         for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 0; dy <= 1; dy++) {
             const b = blockAt(bot, x + dx, y + dy, z + dz);
-            if (b && !OPEN.has(b.name) && !/^(grass_block|dirt|water)$/.test(b.name) && !/leaves/.test(b.name)) return true;
+            if (b && !isOpenBlock(b) && !/^(grass_block|dirt|water)$/.test(b.name) && !/leaves/.test(b.name)) return true;
         }
         return false;
     };
@@ -606,7 +615,7 @@ function saplingSpot(bot, centre, used) {
         for (let dy = 2; dy >= -3; dy--) {
             const x = cx + dx, y = cy + dy, z = cz + dz;
             const g = blockAt(bot, x, y - 1, z), b = blockAt(bot, x, y, z), up = blockAt(bot, x, y + 1, z);
-            if (!g || !b || !up || !/^(grass_block|dirt|podzol|coarse_dirt)$/.test(g.name) || !OPEN.has(b.name) || !OPEN.has(up.name)) continue;
+            if (!g || !b || !up || !/^(grass_block|dirt|podzol|coarse_dirt)$/.test(g.name) || !isOpenBlock(b) || !isOpenBlock(up)) continue;
             if ((up.skyLight ?? 15) < 8 || nearTree(x, y, z) || placedNear(x, y, z)) continue;
             return { x, y, z };
         }
@@ -687,11 +696,27 @@ export const ACTUATORS = {
     rest: a => rest(a),
 };
 
-// runChore runs a chore's actuator; never throws.
+// runChore runs a chore's actuator; never throws. It returns within
+// STOP_MS of an interrupt even when a skill under it doesn't (the interrupt
+// stops the pathfinder and digging; what is left settles by itself), so a
+// mode or a player's command never waits for a chore (ActionManager kills
+// the process after 10 s).
+export const STOP_MS = 100;
 export async function runChore(agent, chore) {
     const f = ACTUATORS[chore];
     if (!f) return fail(`no actuator for ${chore}`);
-    try { return await f(agent); } catch (err) { return fail(err?.message || String(err)); }
+    const bot = agent.bot;
+    let timer = null;
+    const stop = new Promise(resolve => {
+        timer = setInterval(() => { if (stopped(bot)) resolve(fail('stopped')); }, STOP_MS);
+    });
+    try {
+        return await Promise.race([Promise.resolve().then(() => f(agent)), stop]);
+    } catch (err) {
+        return fail(err?.message || String(err));
+    } finally {
+        clearInterval(timer);
+    }
 }
 
 // playerAttack: the v1.2 Player fact from what the agent saw. hits:
