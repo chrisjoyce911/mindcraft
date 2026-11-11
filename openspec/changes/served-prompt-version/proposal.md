@@ -23,5 +23,5 @@ must write that version so a swap needs no settings change.
 - Modified: `laya-client`.
 
 ## Impact
-`src/models/laya.js`, `src/models/laya_check.js`, `settings.js` comment (the committed copy),
+`src/models/laya.js`, `src/models/laya_check.js`,
 `test/laya_served_prompt.test.js`, `docs/laya-client.md`. A running job keeps the prompt it started with.
