@@ -26,6 +26,7 @@ export const CHORE_JOB = {
     stock_logs: ['gather', 'log'], stock_cobble: ['mine', 'cobblestone'], craft_sword: ['craft', 'stone_sword'],
     tend_farm: ['farm', 'none'], replant_saplings: ['gather', 'sapling'], unload: ['store', 'none'], sleep: ['stay', 'bed'],
     night_mine: ['mine', 'coal_ore'], rest: ['stay', 'none'],
+    need_wood: ['stay', 'none'], need_cobble: ['stay', 'none'], need_coal: ['stay', 'none'], need_wool: ['stay', 'none'], need_food: ['stay', 'none'],
 };
 
 // MAX_ASKS: a model answer the bot can't start is logged as impossible and

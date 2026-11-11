@@ -147,7 +147,7 @@ export function ingredientFromChest(s, step, why) {
 
 // runCraft makes count of item (a laya-go generic name: "log" for any wood).
 // deps:
-//   client      laya-client ({decide})
+//   client      laya-client ({decide}), or null: the recipe rules (plan) only
 //   task        the craft task's settings (max_steps, min_confidence, log_steps)
 //   items()     → [{name, count}] the main inventory and hotbar
 //   near()      → {table, furnace, chest} stations close enough to use
@@ -175,12 +175,14 @@ export async function runCraft(item, count, deps) {
         const s = situation(deps.items(), item, count, near, chest || {});
         s.chestKnown = chest !== null;
         const text = state(s);
-        const r = await deps.client.decide('craft', text, questions(s));
-        if (!r) { logStep({ state: text, outcome: 'stop', reason: 'no-answer' }); return { ok: false, reason: 'no-answer', steps }; }
-        const step = { action: r.answers.Action.top, item: r.answers.Item.top, count: Number(r.answers.Count.top) };
-        const p = Math.min(r.answers.Action.topProbability, r.answers.Item.topProbability);
-        const entry = { state: text, ...step, p, ms: r.ms };
-        let why = p < opts.min_confidence ? 'low-confidence' : check(s, step);
+        // no client: the recipe rules alone (plan), every step
+        const r = deps.client ? await deps.client.decide('craft', text, questions(s)) : null;
+        if (!r && deps.client) { logStep({ state: text, outcome: 'stop', reason: 'no-answer' }); return { ok: false, reason: 'no-answer', steps }; }
+        const step = r ? { action: r.answers.Action.top, item: r.answers.Item.top, count: Number(r.answers.Count.top) }
+            : { action: 'done', item: NONE, count: 1 };
+        const p = r ? Math.min(r.answers.Action.topProbability, r.answers.Item.topProbability) : 0;
+        const entry = { state: text, ...step, p, ms: r?.ms ?? 0, ...(r ? {} : { source: 'rules' }) };
+        let why = !r ? 'rules' : p < opts.min_confidence ? 'low-confidence' : check(s, step);
         if (why) {
             // the recipe rules take over for this step (as the follow veto does):
             // a craft missing an ingredient the chest has takes it first

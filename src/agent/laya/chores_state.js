@@ -1,9 +1,16 @@
-// The chores model's state, question and rules: the chores shared spec v1
-// (Mindcraft chores sensor ↔ laya-go games/chores prompt v1 and rules v1,
-// laya-go openspec/changes/chores-v1/chores-spec.md). Pure (no mineflayer).
-// test/laya_chores.test.js checks the request against laya-go's golden
-// v1_sample_request.json byte for byte and the rules on 1000 of its
-// generated situations.
+// The chores model's state, question and rules: the chores shared spec v1.1
+// (Mindcraft chores sensor ↔ laya-go games/chores prompt v1.1 and rules
+// v1.1, laya-go openspec/changes/chores-v11-director-v13/chores-spec.md).
+// Pure (no mineflayer). test/laya_chores.test.js checks the request against
+// laya-go's golden v1.1_sample_request.json byte for byte and the rules on
+// 1000 of its generated situations.
+//
+// v1.1 (2026-11-11, live play 3: 26 rests in 40 minutes): Animals are
+// searches (49/97/193/none) like Near; hunting when food is low goes to 193;
+// Failed lists only chores whose latest failure is under 5 minutes old
+// (never rest or a need answer); five need answers (need_wood, need_cobble,
+// need_coal, need_wool, need_food) replace rest when something wanted is
+// missing with nothing near to provide it.
 //
 //   Chores.
 //   Home chest Time day Biome forest
@@ -16,7 +23,7 @@
 //   Farm yes ready no
 //   Kit pickaxe none axe none shovel none sword none food 0 torches 0
 //   Near trees 49 stone 49 coal 97 sand none water 49 grass 49
-//   Animals cow 2 pig 0 sheep 1 chicken 0 rabbit 0
+//   Animals cow 49 pig none sheep 97 chicken none rabbit none
 //   Ground saplings 2
 //   Can place no smelt no
 //   Failed none
@@ -31,7 +38,9 @@ export const NONE = 'none';
 export const CHORES = ['gather_logs', 'place_table', 'craft_wood_tools', 'get_seeds', 'start_farm', 'gather_cobble',
     'craft_stone_tools', 'place_furnace', 'hunt_food', 'cook_food', 'make_torches', 'light_base', 'place_chest', 'gather_wool',
     'make_beds', 'stock_kit', 'stock_logs', 'stock_cobble', 'craft_sword', 'tend_farm', 'replant_saplings', 'unload', 'sleep',
-    'night_mine', 'rest'];
+    'night_mine', 'rest', 'need_wood', 'need_cobble', 'need_coal', 'need_wool', 'need_food'];
+// NEEDS: the need answers (v1.1): tell the player, then stay like rest.
+export const NEEDS = ['need_wood', 'need_cobble', 'need_coal', 'need_wool', 'need_food'];
 
 export const QUESTIONS = {
     Chore: { criteria: CHORES.slice(), instructions: 'Which chore should I do next?', type: 'choice' },
@@ -46,7 +55,7 @@ export const RULES = ['unload', 'night-sleep', 'night-mine', 'night-rest', 'food
     'light-low-base', 'saplings', 'farm-ready', 'table', 'table-logs', 'wood-tools', 'wood-tools-logs', 'farm-seeds', 'farm-start',
     'farm-logs', 'stone-cobble', 'stone-tools', 'stone-logs', 'furnace', 'food-hunt', 'food-cook', 'light-torches', 'light-base',
     'chest', 'chest-logs', 'beds', 'beds-logs', 'beds-wool', 'kit-tools', 'kit-logs', 'kit-cobble', 'kit-food', 'kit-torches',
-    'kit-make-torches', 'stock-logs', 'stock-cobble', 'sword', 'rest'];
+    'kit-make-torches', 'stock-logs', 'stock-cobble', 'sword', 'need-wood', 'need-cobble', 'need-coal', 'need-wool', 'need-food', 'rest'];
 
 export const TIERS = [NONE, 'wooden', 'stone', 'iron', 'diamond'];
 export const HOMES = ['bed', 'chest', 'table', 'player', 'self'];
@@ -70,8 +79,9 @@ const nearWord = n => (SEARCHES.includes(n) ? String(n) : NONE);
 // coal, torches, food, raw, wool, seeds, saplings; pack; farm, ready;
 // kitPickaxe, kitAxe, kitShovel, kitSword, kitFood, kitTorches; near
 // {trees, stone, coal, sand, water, grass} (49/97/193 or null); animals
-// {cow, pig, sheep, chicken, rabbit}; ground; canPlace, canSmelt; failed
-// (chores, latest first).
+// {cow, pig, sheep, chicken, rabbit} (v1.1: 49/97/193 or null, the smallest
+// search an adult is in); ground; canPlace, canSmelt; failed (chores whose
+// latest failure is under 5 minutes old, latest first).
 
 // choresState writes the situation as the spec's state text.
 export function choresState(s) {
@@ -79,7 +89,7 @@ export function choresState(s) {
     const c = n => cap(n, MAX.count);
     const n = s.near || {}, a = s.animals || {};
     const food = c(s.food), raw = Math.min(c(s.raw), food);
-    const failed = [...new Set((s.failed || []).filter(x => CHORES.includes(x)))].slice(0, MAX.failed);
+    const failed = [...new Set((s.failed || []).filter(x => CHORES.includes(x) && x !== 'rest' && !NEEDS.includes(x)))].slice(0, MAX.failed);
     return ['Chores.',
         `Home ${oneOf(s.home, HOMES, 'self')} Time ${oneOf(s.time, TIMES, 'day')} Biome ${oneOf(s.biome, BIOMES, 'other')}`,
         `Base table ${yn(s.table)} furnace ${yn(s.furnace)} chest ${yn(s.chest)} lit ${yn(s.lit)}`,
@@ -91,7 +101,7 @@ export function choresState(s) {
         `Farm ${yn(s.farm)} ready ${yn(s.farm && s.ready)}`,
         `Kit pickaxe ${t(s.kitPickaxe)} axe ${t(s.kitAxe)} shovel ${t(s.kitShovel)} sword ${t(s.kitSword)} food ${cap(s.kitFood, MAX.kit)} torches ${cap(s.kitTorches, MAX.kit)}`,
         `Near trees ${nearWord(n.trees)} stone ${nearWord(n.stone)} coal ${nearWord(n.coal)} sand ${nearWord(n.sand)} water ${nearWord(n.water)} grass ${nearWord(n.grass)}`,
-        `Animals ${ANIMALS.map(k => `${k} ${cap(a[k], MAX.animal)}`).join(' ')}`,
+        `Animals ${ANIMALS.map(k => `${k} ${nearWord(a[k])}`).join(' ')}`,
         `Ground saplings ${cap(s.ground, MAX.ground)}`,
         `Can place ${yn(s.canPlace)} smelt ${yn(s.canSmelt)}`,
         `Failed ${failed.length ? failed.join(' ') : NONE}`,
@@ -107,13 +117,19 @@ export function possible(s, c) {
     return true;
 }
 
-const anyAnimal = s => ANIMALS.some(k => (s.animals?.[k] || 0) > 0);
+// animalsWithin: an adult animal of any kind within search d (v1.1).
+const animalsWithin = (s, d) => ANIMALS.some(k => SEARCHES.includes(s.animals?.[k]) && s.animals[k] <= d);
 const nearSome = (s, k) => SEARCHES.includes(s.near?.[k]);
 
-function torchable(s) {
+// torchNeed: what torches lack: need_coal with no fuel, else need_wood with
+// no sticks or wood, else null (torchable).
+function torchNeed(s) {
     const fuel = s.coal >= 1 || (nearSome(s, 'coal') && has(s.pickaxe, 'wooden')) || (s.furnace && s.canSmelt && s.wood >= 2);
-    return fuel && (s.sticks >= 1 || s.wood >= 1);
+    if (!fuel) return 'need_coal';
+    if (!(s.sticks >= 1 || s.wood >= 1)) return 'need_wood';
+    return null;
 }
+const torchable = s => torchNeed(s) === null;
 
 // kitTier: the player kit's tier: his pickaxe's, diamond as iron, iron only
 // when he can smelt.
@@ -130,7 +146,7 @@ function kitTools(s) {
     return !has(s.kitPickaxe, t) || !has(s.kitAxe, t) || !has(s.kitShovel, t) || !has(s.kitSword, t);
 }
 
-// decideChore is the spec's rules v1, in order: {chore, rule}.
+// decideChore is the spec's rules v1.1, in order: {chore, rule}.
 export function decideChore(s) {
     let d = null;
     const tr = (chore, rule, when) => {
@@ -140,7 +156,16 @@ export function decideChore(s) {
     const trees = nearSome(s, 'trees');
     const pick = has(s.pickaxe, 'wooden');
     const stone = nearSome(s, 'stone') && pick;
-    const logs = rule => tr('gather_logs', rule, trees);
+    // v1.1: the first item found missing on the way, answered when nothing
+    // else applies
+    let need = null;
+    const note = (c, when) => { if (when && !need) need = c; };
+    const logs = rule => { note('need_wood', !trees); return tr('gather_logs', rule, trees); };
+    const torches = rule => {
+        if (!possible(s, 'make_torches')) return false;
+        note(torchNeed(s), !!torchNeed(s));
+        return tr('make_torches', rule, torchable(s));
+    };
 
     if (tr('unload', 'unload', s.pack <= 3 && s.chest)) return d;
     if (s.time === 'night') {
@@ -148,11 +173,12 @@ export function decideChore(s) {
         return { chore: 'rest', rule: 'night-rest' };
     }
     if (s.food < 8 && has(s.axe, 'wooden')) {
-        if (tr('tend_farm', 'food-low-farm', s.farm && s.ready) || tr('hunt_food', 'food-low-hunt', anyAnimal(s))) return d;
+        if (tr('tend_farm', 'food-low-farm', s.farm && s.ready) || tr('hunt_food', 'food-low-hunt', animalsWithin(s, 193))) return d;
+        note('need_food', possible(s, 'hunt_food') && !animalsWithin(s, 193));
     }
     const unlitDusk = !s.lit && s.time === 'dusk';
     if (pick && (s.torches < 8 || unlitDusk)) {
-        if (tr('make_torches', 'light-low-torches', s.torches < 8 && torchable(s))
+        if ((s.torches < 8 && torches('light-low-torches'))
             || tr('light_base', 'light-low-base', unlitDusk && s.torches >= 8)) return d;
     }
     if (tr('replant_saplings', 'saplings', s.ground > 0 || s.saplings > 0) || tr('tend_farm', 'farm-ready', s.farm && s.ready)) return d;
@@ -174,13 +200,14 @@ export function decideChore(s) {
         const need = (tools ? 6 : 0) + (furnace ? 8 : 0);
         if (s.cobble < need) {
             if (tr('gather_cobble', 'stone-cobble', stone)) return d;
+            note('need_cobble', pick && !nearSome(s, 'stone') && possible(s, 'gather_cobble'));
         } else if (tools) {
             const sticks = s.wood >= 1 || s.sticks >= 2;
             if (tr('craft_stone_tools', 'stone-tools', sticks) || (!sticks && logs('stone-logs'))) return d;
         } else if (tr('place_furnace', 'furnace', true)) return d;
     }
-    if (tr('hunt_food', 'food-hunt', s.food < 32 && anyAnimal(s)) || tr('cook_food', 'food-cook', s.raw >= 1 && s.furnace)) return d;
-    if (tr('make_torches', 'light-torches', s.torches < 16 && torchable(s)) || tr('light_base', 'light-base', !s.lit && s.torches >= 8)) return d;
+    if (tr('hunt_food', 'food-hunt', s.food < 32 && animalsWithin(s, 97)) || tr('cook_food', 'food-cook', s.raw >= 1 && s.furnace)) return d;
+    if ((s.torches < 16 && torches('light-torches')) || tr('light_base', 'light-base', !s.lit && s.torches >= 8)) return d;
     if (!s.chest && possible(s, 'place_chest')) {
         if (tr('place_chest', 'chest', s.wood >= 2) || logs('chest-logs')) return d;
     }
@@ -188,7 +215,8 @@ export function decideChore(s) {
         const need = (s.bedMine ? 0 : 3) + (s.bedPlayer ? 0 : 3);
         if (s.wool >= need) {
             if (tr('make_beds', 'beds', s.wood >= 2) || logs('beds-logs')) return d;
-        } else if (tr('gather_wool', 'beds-wool', (s.animals?.sheep || 0) > 0)) return d;
+        } else if (tr('gather_wool', 'beds-wool', SEARCHES.includes(s.animals?.sheep))) return d;
+        else note('need_wool', possible(s, 'gather_wool'));
     }
     if (s.chest) {
         if (kitTools(s)) {
@@ -196,15 +224,17 @@ export function decideChore(s) {
                 if (logs('kit-logs')) return d;
             } else if (kitTier(s) === 'stone' && s.cobble < 9) {
                 if (tr('gather_cobble', 'kit-cobble', stone)) return d;
+                note('need_cobble', pick && !nearSome(s, 'stone') && possible(s, 'gather_cobble'));
             } else if (tr('stock_kit', 'kit-tools', true)) return d;
         }
         if (tr('stock_kit', 'kit-food', s.kitFood < 8 && s.food - s.raw >= 16)) return d;
         if (s.kitTorches < 16) {
-            if (tr('stock_kit', 'kit-torches', s.torches >= 24) || tr('make_torches', 'kit-make-torches', torchable(s))) return d;
+            if (tr('stock_kit', 'kit-torches', s.torches >= 24) || torches('kit-make-torches')) return d;
         }
     }
     if (tr('stock_logs', 'stock-logs', s.wood < 64 && trees) || tr('stock_cobble', 'stock-cobble', s.cobble < 64 && stone)) return d;
     if (tr('craft_sword', 'sword', !has(s.sword, 'stone') && has(s.pickaxe, 'stone') && s.cobble >= 2 && (s.wood >= 1 || s.sticks >= 1))) return d;
+    if (need) return { chore: need, rule: need.replace('_', '-') };
     return { chore: 'rest', rule: 'rest' };
 }
 
@@ -355,12 +385,14 @@ export function haveCounts(items, isFood) {
         food: n.food, raw: n.raw, wool: n.wool + Math.floor(n.string / STRING_PER_WOOL), seeds: n.seeds, saplings: n.saplings };
 }
 
-// recentFailed: chores that failed in the last 5 minutes, latest first, no
-// repeats, at most 3. failures: [{chore, at}].
+// recentFailed: chores whose latest failure is under 5 minutes old, latest
+// first, no repeats, at most 3, never rest or a need answer (v1.1: a chore
+// that fails again starts its 5 minutes again). failures: [{chore, at}].
 export function recentFailed(failures, now, windowMs = 5 * 60_000) {
     const out = [];
     for (const f of [...failures].sort((a, b) => b.at - a.at)) {
-        if (now - f.at > windowMs || out.includes(f.chore)) continue;
+        if (f.chore === 'rest' || NEEDS.includes(f.chore)) continue;
+        if (now - f.at >= windowMs || out.includes(f.chore)) continue;
         out.push(f.chore);
         if (out.length === MAX.failed) break;
     }

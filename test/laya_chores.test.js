@@ -19,7 +19,7 @@ function parseChores(text) {
         pack: n(L[7][1]), farm: y(L[8][1]), ready: y(L[8][3]),
         kitPickaxe: L[9][2], kitAxe: L[9][4], kitShovel: L[9][6], kitSword: L[9][8], kitFood: n(L[9][10]), kitTorches: n(L[9][12]),
         near: { trees: nr(L[10][2]), stone: nr(L[10][4]), coal: nr(L[10][6]), sand: nr(L[10][8]), water: nr(L[10][10]), grass: nr(L[10][12]) },
-        animals: { cow: n(L[11][2]), pig: n(L[11][4]), sheep: n(L[11][6]), chicken: n(L[11][8]), rabbit: n(L[11][10]) },
+        animals: { cow: nr(L[11][2]), pig: nr(L[11][4]), sheep: nr(L[11][6]), chicken: nr(L[11][8]), rabbit: nr(L[11][10]) },
         ground: n(L[12][2]), canPlace: y(L[13][2]), canSmelt: y(L[13][4]),
         failed: L[14][1] === 'none' ? [] : L[14].slice(1),
     };
@@ -30,20 +30,20 @@ const sample = {
     axe: 'stone', pickaxe: 'wooden', sword: 'none', hoe: 'none', shovel: 'none',
     wood: 3, sticks: 2, cobble: 12, coal: 0, torches: 0, food: 4, raw: 2, wool: 0, seeds: 0, saplings: 1, pack: 20, farm: true, ready: false,
     kitPickaxe: 'none', kitAxe: 'none', kitShovel: 'none', kitSword: 'none', kitFood: 0, kitTorches: 0,
-    near: { trees: 49, stone: 49, coal: 97, sand: null, water: 49, grass: 49 }, animals: { cow: 2, pig: 0, sheep: 1, chicken: 0, rabbit: 0 },
+    near: { trees: 49, stone: 49, coal: 97, sand: null, water: 49, grass: 49 }, animals: { cow: 49, pig: null, sheep: 97, chicken: null, rabbit: null },
     ground: 2, canPlace: false, canSmelt: false, failed: [],
 };
 
-test('golden: the chores request matches laya-go v1_sample_request.json byte for byte', () => {
-    const golden = JSON.parse(readFileSync(new URL('./fixtures/laya-chores-v1/request.json', import.meta.url), 'utf8'));
+test('golden: the chores request matches laya-go v1.1_sample_request.json byte for byte', () => {
+    const golden = JSON.parse(readFileSync(new URL('./fixtures/laya-chores-v11/request.json', import.meta.url), 'utf8'));
     const text = choresState(sample);
     assert.equal(text, golden.state);
     assert.equal(JSON.stringify({ questions: QUESTIONS, state: text }), JSON.stringify(golden));
     assert.deepEqual(decideChore(sample), { chore: 'hunt_food', rule: 'food-low-hunt' }, 'the spec says the sample is hunt_food');
 });
 
-test('rules and state agree with laya-go chores v1 on 1000 generated situations (f05b409)', () => {
-    const rows = readFileSync(new URL('./fixtures/laya-chores-v1/decisions.jsonl', import.meta.url), 'utf8').trim().split('\n').map(l => JSON.parse(l));
+test('rules and state agree with laya-go chores v1.1 on 1000 generated situations (0cbe811)', () => {
+    const rows = readFileSync(new URL('./fixtures/laya-chores-v11/decisions.jsonl', import.meta.url), 'utf8').trim().split('\n').map(l => JSON.parse(l));
     assert.equal(rows.length, 1000);
     const seen = new Set();
     for (const r of rows) {
@@ -99,5 +99,21 @@ test('sensor helpers', () => {
     assert.deepEqual(recentFailed([{ chore: 'a', at: 1 }, { chore: 'b', at: 5 }, { chore: 'a', at: 6 }, { chore: 'c', at: 7 }, { chore: 'd', at: 8 }], 10),
         ['d', 'c', 'a']);
     assert.deepEqual(recentFailed([{ chore: 'a', at: 0 }], 5 * 60_000 + 1), []);
-    assert.equal(CHORES.length, 25);
+    assert.deepEqual(recentFailed([{ chore: 'a', at: 0 }], 5 * 60_000), [], 'the 5 minutes are over');
+    assert.deepEqual(recentFailed([{ chore: 'rest', at: 9 }, { chore: 'need_wood', at: 9 }, { chore: 'a', at: 1 }], 10), ['a'], 'never rest or a need');
+    assert.deepEqual(recentFailed([{ chore: 'a', at: 0 }, { chore: 'a', at: 4 * 60_000 }], 6 * 60_000), ['a'], 'a new failure starts the 5 minutes again');
+    assert.equal(CHORES.length, 30);
+});
+
+test('chores v1.1: need answers instead of rest; hunting to 193 when food is low', () => {
+    // live play 3, 18:10: food 1, no animals within 97 (v1: never hunted)
+    const lp3 = { ...sample, home: 'chest', table: true, furnace: true, chest: true, lit: false, axe: 'stone', pickaxe: 'stone', sword: 'none',
+        wood: 80, sticks: 0, cobble: 122, coal: 31, torches: 13, food: 1, raw: 0, farm: false, ready: false, ground: 0, saplings: 0,
+        kitPickaxe: 'stone', kitAxe: 'stone', kitShovel: 'stone', kitSword: 'stone', kitFood: 1, kitTorches: 16, canPlace: true, canSmelt: true,
+        near: { ...sample.near, water: null }, animals: { cow: 193, pig: null, sheep: null, chicken: null, rabbit: null },
+        failed: ['make_torches', 'light_base', 'craft_sword'] };
+    assert.deepEqual(decideChore(lp3), { chore: 'hunt_food', rule: 'food-low-hunt' });
+    const none = { ...lp3, animals: { cow: null, pig: null, sheep: null, chicken: null, rabbit: null } };
+    assert.deepEqual(decideChore(none), { chore: 'need_food', rule: 'need-food' }, 'nothing to hunt: say so, not rest');
+    assert.match(choresState(none), /\nAnimals cow none pig none sheep none chicken none rabbit none\n/);
 });

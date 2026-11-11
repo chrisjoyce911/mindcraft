@@ -14,6 +14,7 @@ import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { readWindow, parseGrid, OFFSETS, QUESTIONS } from './follow_state.js';
 import { check } from './veto.js';
+import { stopped } from '../run_token.js';
 
 export const FALLBACK_REASONS = ['no-answer', 'low-confidence', 'wait', 'veto', 'stuck'];
 
@@ -63,7 +64,7 @@ export async function followWithLaya(bot, username, distance, deps) {
         await deps.fallback(player, distance, opts.fallback_ms);
     };
 
-    while (!bot.interrupt_code) {
+    while (!stopped(bot)) {
         if (bot.health < lastHealth) counters.damage += lastHealth - bot.health;
         lastHealth = bot.health;
         const pos = bot.entity.position, pp = player.position;

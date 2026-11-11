@@ -75,7 +75,13 @@ test('director: a model "defend" with nothing to defend is the rules\' answer', 
         under: false, free: 22, home: 5, valuables: 4, foodItems: 19, danger: 'none', last: 'done', player: null };
     let d = await nextActivity(calm, { client, task: { prompt: 'v1.2' } });
     assert.deepEqual([d.activity, d.source, d.why], ['idle', 'rules', 'nothing-to-defend']);
+    // v1.3: a zombie 6 off attacking nobody is not defended; a v1.2 model
+    // (no Me line) is held to the v1.3 rule there
     d = await nextActivity({ ...calm, hostiles: 1, nearest: { kind: 'zombie', dist: 6 } }, { client, task: { prompt: 'v1.2' } });
+    assert.deepEqual([d.activity, d.source], ['idle', 'rules']);
+    d = await nextActivity({ ...calm, hostiles: 1, nearest: { kind: 'zombie', dist: 6 } }, { client, task: { prompt: 'v1.3' } });
+    assert.deepEqual([d.activity, d.source, d.why], ['idle', 'rules', 'nothing-to-defend']);
+    d = await nextActivity({ ...calm, hostiles: 1, nearest: { kind: 'zombie', dist: 2 }, me: { attacked: true, by: 'zombie', dist: 2 } }, { client, task: { prompt: 'v1.3' } });
     assert.deepEqual([d.activity, d.source], ['defend', 'model']);
     d = await nextActivity({ ...calm, player: { name: 'tester', attacked: true, by: 'zombie', dist: 10 } }, { client, task: { prompt: 'v1.2' } });
     assert.deepEqual([d.activity, d.source], ['defend', 'model']);

@@ -37,6 +37,7 @@ export function realDeps(config) {
         forgetAgent: async () => {
             const { rmSync, writeFileSync } = await import('fs');
             try { rmSync(`${config.botDir}/memory.json`, { force: true }); } catch { /* none */ }
+            try { rmSync(`${config.botDir}/laya-job.json`, { force: true }); } catch { /* none */ }
             try { writeFileSync(`${config.botDir}/laya-chores.json`, JSON.stringify({ on: false })); } catch { /* no bot dir */ }
         },
         makeBot: async () => {

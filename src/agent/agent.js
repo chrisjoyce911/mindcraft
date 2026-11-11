@@ -32,7 +32,9 @@ import { performActivity, stopActivity } from './laya/activities.js';
 import { interruptBot } from './interrupt.js';
 import { handChoice } from './laya/hand.js';
 import Vec3 from 'vec3';
-import { runJob } from './commands/actions.js';
+import { runJob, restoreJob } from './commands/actions.js';
+import { saveJob, loadJob, restoreMessage } from './laya/job_save.js';
+import { Attacks, isAttacker, BLAME_RANGE, ME_MS } from './laya/attacks.js';
 import { getNearestEntityWhere, getInventoryCounts } from './library/world.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
 
@@ -71,6 +73,9 @@ export class Agent {
         this.memory_bank = new MemoryBank(() => this._savePlaces());
         this.self_prompter = new SelfPrompter(this);
         this.director = this._makeDirector();
+        this._jobPath = `./bots/${this.name}/laya-job.json`;
+        this._savedJob = loadJob(this._jobPath); // a player's job from before a restart
+        this.director.stack.onChange = stack => saveJob(this._jobPath, stack);
         this._initChores();
         convoManager.initAgent(this);
         await this.prompter.initExamples();
@@ -154,6 +159,7 @@ export class Agent {
               
                 this._setupEventHandlers(save_data, init_message);
                 this.startEvents();
+                this._restoreSavedJob();
               
                 if (!load_mem) {
                     if (settings.task) {
@@ -680,6 +686,9 @@ export class Agent {
             valuables: valuables(inv),
             foodItems: items.filter(i => foods[i.name] && !HARMFUL.has(i.name)).reduce((n, i) => n + i.count, 0),
             player: playerFact(bot, this._playerHits || {}),
+            me: this._meFact(),
+            // not in the state text: the laya_defending mode's own reach
+            attackerNear: hostiles.some(e => e.position.distanceTo(pos) <= 8 && this.isAttacker(e)),
             danger: dangerOf({
                 onFire: !!((bot.entity.metadata?.[0] ?? 0) & 1), inFire: /fire$/.test(here?.name || ''),
                 oxygen: bot.oxygenLevel, headInWater: head?.name === 'water',
@@ -724,6 +733,9 @@ export class Agent {
     // each one ends within ~100 ms of an interrupt.
     async _perform(activity) {
         const bot = this.bot;
+        // eating and healing stand still on purpose: not stuck
+        const still = activity === 'eat' || activity === 'heal';
+        if (still) bot.modes.pause('unstuck');
         const why = await performActivity(activity, {
             stopped: () => !!bot.interrupt_code,
             health: () => bot.health ?? 20,
@@ -736,8 +748,39 @@ export class Agent {
             unload: () => this._unload(),
             defend: () => this._defendPlayer(),
             flee: () => skills.avoidEnemies(bot, 24),
-        });
+        }).finally(() => { if (still) bot.modes.unpause('unstuck'); });
         if (why === 'stopped') console.log(`[laya] director: ${activity} stopped`);
+    }
+
+    // _meFact: director v1.3's Me line: the mob that hurt andy in the last
+    // 5 s, still alive ({attacked, by, dist}).
+    _meFact() {
+        const f = this.attacks?.selfFact(Date.now(), ME_MS);
+        if (!f?.attacked) return { attacked: false, by: 'none', dist: 0 };
+        const d = f.entity?.position ? Math.ceil(f.entity.position.distanceTo(this.bot.entity.position)) : 0;
+        return { attacked: true, by: f.by, dist: d };
+    }
+
+    // isAttacker: a mob attacking andy or a player lately (laya/attacks.js):
+    // the only mobs the fight modes act on (user decision 2026-11-11).
+    isAttacker(e) {
+        if (!this.attacks) return false;
+        const players = Object.values(this.bot.players || {}).map(p => p.entity).filter(p => p && p !== this.bot.entity).map(p => p.position);
+        return isAttacker(this.attacks, e, this.bot.entity.position, players);
+    }
+
+    // _restoreSavedJob: a player's job from before a restart goes back on
+    // the stack, paused (the director resumes it), or andy says it was lost.
+    _restoreSavedJob() {
+        const saved = this._savedJob;
+        this._savedJob = null;
+        if (!saved) return;
+        let job = null;
+        if (saved.fresh) {
+            try { job = restoreJob(this, saved.entry); } catch (err) { console.warn('[laya] job restore:', err?.message || err); }
+        }
+        console.log(`[laya] restart: job ${saved.entry.name} ${JSON.stringify(saved.entry.args)} ${job ? 'restored' : 'lost'}`);
+        this.openChat(restoreMessage(saved.entry, !!job));
     }
 
     // _defendPlayer: go to the attacked player and fight the attacker
@@ -762,6 +805,7 @@ export class Agent {
         this._chores = loadChoresState(this._choresPath, !!settings.chores);
         this._playerPlaced = [];
         this._playerHits = {};
+        this.attacks = new Attacks();
         this._saveChores = () => saveChoresState(this._choresPath, this._chores);
         const task = taskSettings('chores');
         this.choresRunner = new Chores({
@@ -817,13 +861,16 @@ export class Agent {
         const bot = this.bot;
         bot.layaHomeChest = () => this.homeChest(); // takeFromChest leaves the player kit in it
         bot.on('entityHurt', (entity, source) => {
-            if (!entity || entity.type !== 'player' || entity === bot.entity || !entity.username) return;
-            if (entity.position.distanceTo(bot.entity.position) > 24) return;
+            const self = entity === bot.entity;
+            if (!entity || entity.type !== 'player' || (!self && !entity.username)) return;
+            if (!self && entity.position.distanceTo(bot.entity.position) > 24) return;
             let mob = source && isHostile(source) ? source : null;
-            if (!mob) mob = getNearestEntityWhere(bot, e => isHostile(e) && e.position.distanceTo(entity.position) <= 4, 32);
+            if (!mob && !source) mob = getNearestEntityWhere(bot, e => isHostile(e) && e.position.distanceTo(entity.position) <= BLAME_RANGE, 32);
             if (!mob) return; // not a mob's hit (a fall, a player)
-            this._playerHits[entity.username] = { at: Date.now(), by: mobKind(mob.name), entity: mob };
+            this.attacks.hurt(self ? 'self' : entity.username, mob);
+            if (!self) this._playerHits[entity.username] = { at: Date.now(), by: mobKind(mob.name), entity: mob };
         });
+        bot.on('entityGone', e => { if (e?.id != null) this.attacks.gone(e.id); });
         bot.on('blockUpdate', (oldBlock, newBlock) => {
             if (!newBlock || oldBlock?.name === newBlock.name) return;
             const kind = newBlock.name === 'crafting_table' ? 'table' : ['chest', 'trapped_chest', 'barrel'].includes(newBlock.name) ? 'chest'
