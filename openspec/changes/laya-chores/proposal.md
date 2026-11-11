@@ -7,7 +7,7 @@ farm and collect resources around his base, until a player gives him a job or a 
 The choice of chore is a model's (aim: no decision logic outside the Laya models); the code only measures and acts.
 
 ## What changes
-- **Home and base centre** (code, a fact): the home when set; else a chest or crafting table already placed near him
+- **Home and base centre** (code, a fact): the home when set; else a chest or crafting table a player placed; else one already placed near him
   (it becomes the home); else the player's position when suitable; else his own position. The first chest or table
   he places becomes the home. The home is kept on disk until a player sets another.
 - **Base area**: 21×21 around the centre. **Work area**: 49×49 around the centre — any farm in it is tended and
@@ -29,7 +29,8 @@ The choice of chore is a model's (aim: no decision logic outside the Laya models
 - Setting `chores: true` (default on in the local settings) and chat "andy do your chores" / "andy take a break".
 
 ## Chore priority spec v1 (source of the training data)
-First day: logs ≥ 4 → crafting table placed in base → wooden pickaxe (+ axe) → cobblestone ≥ 14 → stone pickaxe,
+First day: logs ≥ 4 → crafting table placed in base → wooden pickaxe (+ axe) → **if water is in the work area: wooden
+hoe, seeds from grass, a 16-block farm by the water** (renewable food first) → cobblestone ≥ 14 → stone pickaxe,
 stone sword/axe, furnace placed → food: hunt to ~half a stack of meat, cook it → wool ×3 (sheep) → bed placed →
 chest placed (becomes the home chest if none) → **player kit in the home chest** (pickaxe, axe, shovel, sword of
 his best tier, 8 cooked food, 16 torches; upgraded with each tier, never taken for his own use) → stock to 64 logs and 64 cobblestone, mining whole coal/copper veins seen.
@@ -39,7 +40,7 @@ else mine from the home staircase; never wander the surface at night.
 What next: seeds from grass → hoe → wheat farm by water in the work area, lit → tend farms (harvest/replant/unload)
 whenever ready → iron: tools, armour, shield → fence and light the work area → animal pens and breeding → better home.
 Biome: no trees in the work area → search wider for wood, plant saplings near base; snowy → rabbits for food,
-torches beside farm water; desert → sand, cactus, rabbits; island/beach → fish. Always: unload to the home chest
+torches beside farm water; desert → sand, cactus, rabbits; island/beach → fish. Always: pick up saplings that fall in the base area and replant them there; replant where a cut tree stood; unload to the home chest
 when the pack is nearly full; never throw anything away.
 
 ## Out of scope (later changes)

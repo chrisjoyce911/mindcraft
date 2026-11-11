@@ -6,18 +6,24 @@
 The chores centre SHALL be the bot's home, chosen in this order and then kept, across restarts, until a player sets
 another (`!setHomeChest`, "andy this is your chest"):
 1. the saved home (`home_chest`, or `home_table` when the home is a crafting table);
-2. when it becomes idle with no home: the nearest chest, barrel or crafting table already placed within the 49×49
+2. a chest or crafting table a player placed (the bot sees the block appear within 5 blocks of a player and nearer
+   that player than anyone else), the most recent one — saved as the home and announced;
+3. when it becomes idle with no home: the nearest chest, barrel or crafting table already placed within the 49×49
    columns around it — saved as the home and announced ("I'll use the chest at x y z as home.");
-3. else the position of the player who last spoke to it, when that player is within 32 blocks, in the overworld, on
+4. else the position of the player who last spoke to it, when that player is within 32 blocks, in the overworld, on
    solid ground, not in water or lava and with open sky above;
-4. else its own position when chores start.
-For 3 and 4 the position is saved as `chores_centre`; the first crafting table or chest the bot then places SHALL
+5. else its own position when chores start.
+For 4 and 5 the position is saved as `chores_centre`; the first crafting table or chest the bot then places SHALL
 become the home. When the home is a crafting table, the first chest placed or found in the base area becomes
 `home_chest` (where it unloads) while the centre stays at the table.
 
 #### Scenario: first chest placed
 - **WHEN** the bot has no home, works from its own position and places a chest
 - **THEN** that chest is the home chest and the centre from then on, until a player sets another
+
+#### Scenario: player places a chest
+- **WHEN** the bot has no home and chrisjoyce911 places a chest 6 blocks from the bot
+- **THEN** that chest becomes the home and the bot says "I'll use your chest at x y z as home."
 
 #### Scenario: table already there
 - **WHEN** the bot becomes idle with no home and a crafting table stands 15 blocks away
@@ -75,3 +81,26 @@ own use or for crafting; when it takes from the home chest it leaves one kit in 
 #### Scenario: kit is reserved
 - **WHEN** the bot needs planks to craft and the home chest holds the kit and 20 planks
 - **THEN** it takes planks only and leaves the kit's tools and food in the chest
+
+### Requirement: Early farm by water
+When water is in the work area and the bot has no farm there, the chores priority spec SHALL put "start a farm" right
+after the crafting table and a wooden hoe: break grass in the work area for seeds, then till and plant 16 blocks
+(4×4, or the most that fit) within 4 blocks of the water, with whatever crop it has (wheat seeds, carrots, potatoes,
+beetroot seeds). The farm then counts as a farm to tend and to grow later.
+
+#### Scenario: river beside the base
+- **WHEN** the bot has a crafting table and a wooden hoe, no farm, and a river is 15 blocks from home
+- **THEN** its next chores collect seeds from grass and plant a 16-block farm by the river, before stone tools
+
+### Requirement: Replant saplings
+Any sapling item on the ground in the base area SHALL be picked up and, in the next chore, planted on dirt or grass in
+the base area, at least 3 blocks from other saplings and trees, never on farmland, paths or within 1 block of a placed
+block. When the bot cuts a tree anywhere in the work area it SHALL plant one of the tree's saplings where the tree stood.
+
+#### Scenario: leaves decay
+- **WHEN** an oak's leaves decay 8 blocks from home and drop 2 saplings
+- **THEN** the bot picks them up and plants them in the base area
+
+#### Scenario: tree cut
+- **WHEN** the bot fells a birch 30 blocks from home and picks up a birch sapling
+- **THEN** it plants that sapling where the birch stood
