@@ -43,10 +43,20 @@ const MINE_ORE = { coal: 'coal', raw_copper: 'copper', raw_iron: 'iron', lapis_l
 const GOOD_FOODS = ['golden_carrot', 'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_salmon', 'baked_potato', 'bread',
     'cooked_chicken', 'cooked_cod', 'pumpkin_pie', 'mushroom_stew', 'carrot', 'apple', 'beetroot', 'melon_slice', 'sweet_berries', 'cookie', 'dried_kelp', 'potato'];
 
-// Items "store everything" keeps: tools, weapons, armour, food.
-const keep = n => /_(pickaxe|axe|sword|shovel|hoe|helmet|chestplate|leggings|boots)$/.test(n) || n === 'shield' || FOODS.includes(n);
+// Items "store everything" keeps (never stored, never thrown away): tools,
+// weapons, armour, food, and the coal, charcoal, torches and sticks the mine
+// needs for torches and tools.
+const KEEP_NAMES = new Set(['shield', 'shears', 'flint_and_steel', 'fishing_rod', 'bow', 'crossbow', 'trident', 'mace',
+    'turtle_helmet', 'elytra', 'coal', 'charcoal', 'torch', 'stick']);
+export const keepWhenStoring = n => /_(pickaxe|axe|sword|shovel|hoe|helmet|chestplate|leggings|boots)$/.test(n)
+    || KEEP_NAMES.has(n) || FOODS.includes(n);
+const keep = keepWhenStoring;
 
 const q = s => JSON.stringify(String(s));
+
+// named: an item as andy says it with its count ("8 logs", "1 wooden sword").
+const PLURAL = { log: 'logs', stick: 'sticks', torch: 'torches', bone: 'bones', arrow: 'arrows', egg: 'eggs' };
+export const named = (item, n) => (n !== 1 && PLURAL[item] ? PLURAL[item] : String(item).replace(/_/g, ' '));
 
 // The command model's item vocabulary has no animals, mobs or animal drops
 // yet (command v2.1 data will add them): when it answers gather or attack
@@ -129,8 +139,8 @@ export function plan(r, ctx) {
                 if (has('!hunt')) return run([`!hunt(${q(mob)}, ${q(item)}, ${n})`], `Hunting ${mob}s for ${n} ${item}.`);
                 return run([`!attack(${q(mob)})`], `Hunting a ${mob} for ${item}.`);
             }
-            if (has('!layaGather')) return run([`!layaGather(${q(item)}, ${n})`], `Getting ${n} ${item}.`);
-            return run([`!collectBlocks(${q(ORE_BLOCK[item] || item)}, ${n})`], `Getting ${n} ${item}.`);
+            if (has('!layaGather')) return run([`!layaGather(${q(item)}, ${n})`], `Gathering ${n} ${named(item, n)}.`);
+            return run([`!collectBlocks(${q(ORE_BLOCK[item] || item)}, ${n})`], `Gathering ${n} ${named(item, n)}.`);
         }
         case 'mine': {
             if (item === NONE) return { kind: 'reply', text: 'What should I mine for? Iron, coal, diamonds…' };
@@ -139,9 +149,9 @@ export function plan(r, ctx) {
             if (mine && openEnded(count) && (ctx.arity?.('!layaMine')?.min ?? 2) <= 1)
                 return run([`!layaMine(${q(ore)})`], `Mining ${ore} until you say stop.`);
             const n = Math.min(64, countOf(count, o.mine_count));
-            if (mine) return run([`!layaMine(${q(ore)}, ${n})`], `Mining for ${n} ${item}.`);
-            if (has('!layaGather')) return run([`!layaGather(${q(item)}, ${n})`], `Mining for ${n} ${item}.`);
-            return run([`!collectBlocks(${q(ORE_BLOCK[item] || item)}, ${n})`], `Mining for ${n} ${item}.`);
+            if (mine) return run([`!layaMine(${q(ore)}, ${n})`], `Mining ${n} ${ore}.`);
+            if (has('!layaGather')) return run([`!layaGather(${q(item)}, ${n})`], `Mining ${n} ${named(item, n)}.`);
+            return run([`!collectBlocks(${q(ORE_BLOCK[item] || item)}, ${n})`], `Mining ${n} ${named(item, n)}.`);
         }
         case 'farm': {
             if (!has('!layaFarm')) return { kind: 'llm', reason: 'no-farm-command' };
@@ -157,7 +167,7 @@ export function plan(r, ctx) {
         case 'craft': {
             if (item === NONE) return { kind: 'reply', text: "I don't know how to make that." };
             const n = Math.min(64, countOf(count, o.craft_count));
-            if (has('!layaCraft')) return run([`!layaCraft(${q(item)}, ${n})`], `Making ${n} ${item}.`);
+            if (has('!layaCraft')) return run([`!layaCraft(${q(item)}, ${n})`], `Making ${n} ${named(item, n)}.`);
             return run([`!craftRecipe(${q(ORE_BLOCK[item] || item)}, ${n})`], `Making ${item}.`);
         }
         case 'give': {

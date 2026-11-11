@@ -473,6 +473,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     const unsafeBlocks = ['obsidian'];
 
     for (let i=0; i<num; i++) {
+        if (bot.interrupt_code) break;
         let blocks = world.getNearestBlocksWhere(bot, block => {
             if (!blocktypes.includes(block.name)) {
                 return false;
@@ -539,6 +540,9 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 break;
             }
             else {
+                // an interrupt makes the dig or the path fail: stop, don't
+                // go for the next block
+                if (bot.interrupt_code) break;
                 log(bot, `Failed to collect ${blockType}: ${err}.`);
                 continue;
             }
@@ -590,7 +594,7 @@ export async function pickupNearbyItems(bot) {
     const getNearestItem = bot => bot.nearestEntity(entity => entity.name === 'item' && bot.entity.position.distanceTo(entity.position) < distance);
     let nearestItem = getNearestItem(bot);
     let pickedUp = 0;
-    while (nearestItem) {
+    while (nearestItem && !bot.interrupt_code) {
         let movements = new pf.Movements(bot);
         movements.canDig = false;
         bot.pathfinder.setMovements(movements);

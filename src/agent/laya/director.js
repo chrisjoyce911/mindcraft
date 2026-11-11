@@ -263,7 +263,8 @@ export function logDecision(path, entry) {
 //     left}) or null, when no Laya job runs
 //   idle() → nothing runs; perform(activity, job) runs eat/heal/unload as
 //     the agent's action (the job, if any, is paused under it);
-//     resume(job) runs the paused job again
+//     resume(job) runs the paused job again; stop(activity) ends the
+//     running eat/heal/unload when the director answers something else
 //   client/task (the director model, optional), stepLog, now(), warn(err)
 export class Director {
     constructor(deps) {
@@ -299,7 +300,17 @@ export class Director {
 
     // act runs an answer (not awaited: it runs as the agent's action).
     act(activity) {
-        if (this.performing) return;
+        if (this.performing) {
+            // the director answered something else: the running eat, heal
+            // or unload ends (a resumed job runs on), and its -done tick
+            // acts on the new answer
+            if (activity !== this.performing && this.performing !== 'resume' && !this.stopping) {
+                this.stopping = true;
+                Promise.resolve(this.deps.stop?.(this.performing)).catch(err => this.deps.warn?.(err))
+                    .finally(() => { this.stopping = false; });
+            }
+            return;
+        }
         const run = p => {
             this.performing = activity;
             Promise.resolve(p()).catch(err => this.deps.warn?.(err)).finally(() => {

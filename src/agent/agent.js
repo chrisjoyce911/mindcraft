@@ -24,6 +24,9 @@ import { valuables } from './laya/mine_state.js';
 import { depositList } from './laya/mine.js';
 import { packDeps } from './laya/pack_actions.js';
 import { homeState } from './laya/home_chest.js';
+import { performActivity } from './laya/activities.js';
+import { interruptBot } from './interrupt.js';
+import { handChoice } from './laya/hand.js';
 import Vec3 from 'vec3';
 import { runJob } from './commands/actions.js';
 import { getNearestEntityWhere, getInventoryCounts } from './library/world.js';
@@ -53,7 +56,8 @@ export class Agent {
         this.history = new History(this);
         this.coder = new Coder(this);
         this.npc = new NPCContoller(this);
-        this.memory_bank = new MemoryBank();
+        // places (home_chest, ...) are saved with the memory at every change
+        this.memory_bank = new MemoryBank(() => this._savePlaces());
         this.self_prompter = new SelfPrompter(this);
         this.director = this._makeDirector();
         convoManager.initAgent(this);
@@ -67,6 +71,11 @@ export class Agent {
         let taskStart = null;
         if (save_data) {
             taskStart = save_data.taskStart;
+            // a restart (after a crash or "Killing process") keeps the home chest
+            if (save_data.places) {
+                this.memory_bank.loadJson(save_data.places);
+                console.log('Loaded places:', this.memory_bank.getKeys() || 'none');
+            }
         } else {
             taskStart = Date.now();
         }
@@ -243,11 +252,7 @@ export class Agent {
     }
 
     requestInterrupt() {
-        this.bot.interrupt_code = true;
-        this.bot.stopDigging();
-        this.bot.collectBlock.cancelTask();
-        this.bot.pathfinder.stop();
-        this.bot.pvp.stop();
+        interruptBot(this.bot);
     }
 
     clearBotLogs() {
@@ -563,10 +568,18 @@ export class Agent {
             this.bot.modes.unPauseAll();
             setTimeout(() => {
                 if (this.isIdle()) {
+                    this._equipHand();
                     this.actions.resumeAction();
                     this.director.tick('idle').catch(err => console.warn('[laya] director:', err.message));
                 }
             }, 1000);
+        });
+
+        // a pickup while idle can land in the hand (an arrow, a torch)
+        this.bot.on('playerCollect', collector => {
+            if (collector !== this.bot.entity) return;
+            clearTimeout(this._handTimer);
+            this._handTimer = setTimeout(() => { if (this.isIdle()) this._equipHand(); }, 500);
         });
 
         // Init NPC controller
@@ -603,6 +616,7 @@ export class Agent {
             idle: () => this.isIdle(),
             resume: job => runJob(this, job),
             perform: activity => this.actions.runAction(`director:${activity}`, () => this._perform(activity)),
+            stop: activity => this._stopActivity(activity),
             client: taskSettings('director') ? laya : null,
             task: taskSettings('director') || null,
             now: () => Date.now(),
@@ -683,45 +697,50 @@ export class Agent {
         try { await this.bot.equip(item, 'hand'); await this.bot.consume(); return true; } catch { return false; }
     }
 
-    // _perform runs the director's eat, heal and unload.
+    // _perform runs the director's eat, heal and unload (laya/activities.js):
+    // each one ends within ~100 ms of an interrupt.
     async _perform(activity) {
         const bot = this.bot;
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-        if (activity === 'eat') { await this._eatBest(); return; }
-        if (activity === 'heal') {
-            // stop, eat to full, wait to regenerate (until 9 health, a mob near, or 60 s)
-            while (!bot.interrupt_code && (bot.food ?? 20) < 18 && await this._eatBest()) await sleep(200);
-            if ((bot.food ?? 20) < 18) {
-                if (Date.now() - (this._askedFoodAt || 0) > 120000) {
-                    this._askedFoodAt = Date.now();
-                    this.openChat("I'm hurt and I have no food. Can someone give me some?");
-                }
-                await sleep(10000);
-                return;
-            }
-            const end = Date.now() + 60000;
-            while (!bot.interrupt_code && Date.now() < end && (bot.health ?? 20) <= 8) {
-                const s = this._directorSituation();
-                if (s.nearest && s.nearest.dist <= 8) break;
-                await sleep(1000);
-            }
-            return;
+        const why = await performActivity(activity, {
+            stopped: () => !!bot.interrupt_code,
+            health: () => bot.health ?? 20,
+            food: () => bot.food ?? 20,
+            eat: () => (bot.interrupt_code ? Promise.resolve(false) : this._eatBest()),
+            nearestDist: () => this._directorSituation().nearest?.dist ?? null,
+            say: msg => this.openChat(msg),
+            askedFoodAt: () => this._askedFoodAt || 0,
+            setAskedFoodAt: t => { this._askedFoodAt = t; },
+            unload: () => this._unload(),
+        });
+        if (why === 'stopped') console.log(`[laya] director: ${activity} stopped`);
+    }
+
+    async _unload() {
+        const bot = this.bot;
+        const home = this._usableHome();
+        if (!home) return;
+        const pack = packDeps(bot, () => this.homeChest());
+        let ok = await pack.goHome(home);
+        if (bot.interrupt_code) return;
+        if (ok) {
+            const items = depositList(getInventoryCounts(bot), pack.isFood, 32);
+            const before = bot.inventory.emptySlotCount();
+            ok = await pack.deposit(items).catch(() => false) || bot.inventory.emptySlotCount() > before;
         }
-        if (activity === 'unload') {
-            const home = this._usableHome();
-            if (!home) return;
-            const pack = packDeps(bot, () => this.homeChest());
-            let ok = await pack.goHome(home);
-            if (ok) {
-                const items = depositList(getInventoryCounts(bot), pack.isFood, 32);
-                const before = bot.inventory.emptySlotCount();
-                ok = await pack.deposit(items).catch(() => false) || bot.inventory.emptySlotCount() > before;
-            }
-            if (!ok) {
-                this._noUnloadUntil = Date.now() + 60000; // carry on; try again in a minute
-                console.log('[laya] director: unload failed; Home none for 60 s');
-            }
+        if (!ok && !bot.interrupt_code) {
+            this._noUnloadUntil = Date.now() + 60000; // carry on; try again in a minute
+            console.log('[laya] director: unload failed; Home none for 60 s');
         }
+    }
+
+    // _stopActivity ends the director's running activity (the director
+    // answered something else): the action stops, then the bot is idle again.
+    async _stopActivity(activity) {
+        if (!(this.actions.currentActionLabel || '').startsWith('director:')) return;
+        console.log(`[laya] director: stopping ${activity}`);
+        await this.actions.stop();
+        this.clearBotLogs();
+        this.bot.emit('idle');
     }
 
     async update(delta) {
@@ -732,6 +751,26 @@ export class Agent {
         }
         this.self_prompter.update(delta);
         await this.checkTaskDone();
+    }
+
+    // _equipHand holds the best weapon (else a tool, else a pickaxe, else
+    // nothing) when no action runs (laya/hand.js).
+    async _equipHand() {
+        const bot = this.bot;
+        try {
+            const c = handChoice(bot.inventory.items().map(i => i.name), bot.heldItem?.name ?? null);
+            if (!c || !this.isIdle()) return;
+            if (c.equip) {
+                const item = bot.inventory.items().find(i => i.name === c.equip);
+                if (item) await bot.equip(item, 'hand');
+            } else if (c.empty && bot.inventory.emptySlotCount() > 0) await bot.unequip('hand');
+        } catch (err) { console.warn('[laya] hand:', err?.message || err); }
+    }
+
+    // _savePlaces writes memory.json now (history.save includes the places);
+    // never throws.
+    _savePlaces() {
+        try { this.history?.save(); } catch (err) { console.warn('[memory] saving places failed:', err?.message || err); }
     }
 
     isIdle() {
