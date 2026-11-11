@@ -7,7 +7,7 @@ farm and collect resources around his base, until a player gives him a job or a 
 The choice of chore is a model's (aim: no decision logic outside the Laya models); the code only measures and acts.
 
 ## What changes
-- **Home and base centre** (code, a fact): the home when set; else a chest or crafting table a player placed; else one already placed near him
+- **Home and base centre** (code, a fact): his bed when one is placed (a moved bed becomes the new home bed); else the home when set; else a chest or crafting table a player placed; else one already placed near him
   (it becomes the home); else the player's position when suitable; else his own position. The first chest or table
   he places becomes the home. The home is kept on disk until a player sets another.
 - **Base area**: 21×21 around the centre. **Work area**: 49×49 around the centre — any farm in it is tended and

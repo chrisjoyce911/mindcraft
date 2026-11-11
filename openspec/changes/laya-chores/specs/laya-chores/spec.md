@@ -128,3 +128,14 @@ exists, and the chores model SHALL replace it when it is gone.
 #### Scenario: first beds
 - **WHEN** the bot has 6 white wool, planks and a crafting table, and no beds are placed
 - **THEN** it crafts two beds and places them side by side in the base area
+
+### Requirement: The home bed is the base
+When the bot has a home bed (`home_bed`), the chores centre SHALL be that bed, ahead of every other choice. The home
+bed is the bed the bot placed for itself, or the bed it last slept in. When the home bed is gone (broken or moved), the
+next bed placed by the bot or a player, or else the next bed it sleeps in, SHALL become the home bed, and the bot says
+where its new home is. The home chest stays where it unloads until a chest is placed or found in the new base area,
+which then becomes the home chest; nothing is moved out of the old chest.
+
+#### Scenario: bed moved
+- **WHEN** chrisjoyce911 breaks andy's bed and places it 60 blocks away
+- **THEN** andy takes the new bed as his home bed, says "My home is now at x y z.", and his areas centre on it
