@@ -11,7 +11,7 @@ import path from 'path';
 import { TestWorld, RULES, offlineUuid, mergeOps } from '../tools/test-world/lib/world.js';
 import { makeWorldConfig, loadSites, validateSites, SITES_FILE, REPO_ROOT } from '../tools/test-world/lib/config.js';
 import { checkSite } from '../tools/test-world/lib/probe.js';
-import { Bot, botCommand, botSettings } from '../tools/test-world/lib/bot.js';
+import { Bot, botCommand, botSettings, botEntry, NEW_BOT_ENTRY } from '../tools/test-world/lib/bot.js';
 import { parseBotArgs } from '../tools/test-world/bot.js';
 
 const SITES = { seed: '1', spawn: { x: 1, y: 70, z: 2 }, sites: { base: { x: 1, y: 70, z: 2 }, farm: { x: 50, y: 63, z: 40 } }, build: ['setblock 1 70 2 chest'] };
@@ -230,7 +230,7 @@ test('site checks: grass, water, no water, stone, cave, block', () => {
 test('bot settings: the test world over settings.js, local overrides, node first on PATH', () => {
     const config = makeWorldConfig({ TEST_WORLD_DATA: '/d', TEST_WORLD_NODE: '/opt/node20/bin/node' });
     assert.deepEqual(botSettings(config), { host: '127.0.0.1', port: 25566, minecraft_version: '1.21.6', mindserver_port: 8091, auto_open_ui: false });
-    const c = botCommand(config, { profiles: ['./profiles/andy-micro.json'], local: { only_chat_with: ['tester'] }, PATH: '/usr/bin' });
+    const c = botCommand(config, { profiles: ['./profiles/andy-micro.json'], local: { only_chat_with: ['tester'] }, PATH: '/usr/bin', bot: 'old' });
     assert.equal(c.cmd, '/opt/node20/bin/node');
     assert.deepEqual(c.args, ['main.js', '--profiles', './profiles/andy-micro.json']);
     assert.equal(c.cwd, REPO_ROOT);
@@ -241,6 +241,17 @@ test('bot settings: the test world over settings.js, local overrides, node first
     assert.deepEqual(parseBotArgs(['--background', '-p', 'a.json', 'b.json']), { profiles: ['a.json', 'b.json'], background: true, stop: false, print: false });
     assert.deepEqual(parseBotArgs([]).profiles, ['./andy.json']);
     assert.throws(() => parseBotArgs(['--nope']), /unknown option/);
+});
+
+test('ANDY_BOT picks the bot: old (default) runs main.js, new runs the rebuilt bot', () => {
+    assert.equal(botEntry(undefined), 'main.js');
+    assert.equal(botEntry('old'), 'main.js');
+    assert.equal(botEntry('NEW'), NEW_BOT_ENTRY);
+    assert.throws(() => botEntry('both'), /ANDY_BOT must be new or old/);
+    const config = makeWorldConfig({ TEST_WORLD_DATA: '/tmp/x', TEST_WORLD_NODE: '/opt/node20/bin/node' }, { exists: () => false });
+    const c = botCommand(config, { profiles: ['./andy.json'], bot: 'new' });
+    assert.deepEqual(c.args, [NEW_BOT_ENTRY, '--profiles', './andy.json']);
+    assert.equal(c.env.MINDSERVER_PORT, '8091');
 });
 
 test('bot start and stop: pid file, log, process group signals', async () => {

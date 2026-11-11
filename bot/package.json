@@ -1,0 +1,36 @@
+{
+  "name": "andy-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "andy's new bot (bot-rebuild): typed, one owner of the body, decisions only from the Laya models.",
+  "type": "module",
+  "main": "dist/main.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "check:deps": "node scripts/check-deps.mjs",
+    "test": "npm run build && npm run check:deps && node --test --test-reporter=spec dist/test/",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "mineflayer": "4.33.0",
+    "mineflayer-pathfinder": "2.4.5",
+    "minecraft-data": "3.97.0",
+    "mineflayer-pvp": "1.3.2",
+    "socket.io": "4.8.1",
+    "vec3": "0.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.6",
+    "patch-package": "8.0.0",
+    "socket.io-client": "4.8.1",
+    "typescript": "5.6.3"
+  },
+  "overrides": {
+    "minecraft-data": "3.97.0",
+    "protodef": "1.19.0"
+  }
+}

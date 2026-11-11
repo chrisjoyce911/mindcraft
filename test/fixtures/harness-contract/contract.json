@@ -1,0 +1,33 @@
+{
+  "about": "The mindserver contract tools/andy-tests (game-test, the andy MCP) and tools/test-world rely on. Frozen 2026-11-11 (bot-rebuild task 0.2) from laya-follow 04fc5d7: src/mindcraft/mindserver.js, src/agent/mindserver_proxy.js, src/agent/library/full_state.js, tools/andy-tests/lib/mind.js, session.js, runner.js, real.js. The new bot's harness (bot/src/harness) must serve exactly this; bot/test checks it against these files.",
+  "transport": { "protocol": "socket.io v4", "url": "http://localhost:<mindserver_port>", "ports": { "user": 8090, "testWorld": 8091 } },
+  "clientToServer": [
+    { "event": "listen-to-agents", "args": [], "effect": "server emits state-update to this socket every 1000 ms until it disconnects" },
+    { "event": "send-message", "args": ["agentName", { "from": "string", "message": "string" }], "effect": "the agent handles message as if `from` said it (a !command or chat for the command model); no ack" },
+    { "event": "get-settings", "args": ["agentName", "callback"], "ack": [{ "settings": "object" }, { "error": "Agent '<name>' not found." }], "usedKeys": ["decision_models.tasks.<task>.enabled"] },
+    { "event": "start-agent", "args": ["agentName"], "effect": "(re)start the agent's game connection; agents-status goes in_game true when it is back. Sent every 30 s by restartAgent after a world reset until in_game." }
+  ],
+  "serverToClient": [
+    { "event": "agents-status", "args": [[{ "name": "string", "in_game": "boolean", "viewerPort": "number|null", "socket_connected": "boolean" }]], "when": "on connect and whenever an agent's status changes" },
+    { "event": "state-update", "args": [{ "<agentName>": "FullState | {error: string}" }], "when": "every 1000 ms while a listener is connected; only agents in game are keys" },
+    { "event": "bot-output", "args": ["agentName", "text"], "when": "every line the agent chats (openChat)" }
+  ],
+  "fullStateUsedFields": [
+    "gameplay.position.{x,y,z}", "gameplay.health", "gameplay.hunger", "gameplay.dimension", "gameplay.gamemode",
+    "gameplay.timeLabel", "gameplay.timeOfDay", "action.current", "action.isIdle", "inventory.counts",
+    "inventory.equipment", "surroundings", "nearby", "nearby.entityTypes", "modes.summary", "places.<name> = [x,y,z]"
+  ],
+  "idle": "action.isIdle true exactly when no job, activity or chore holds the body (andy_wait_idle, wait idle steps); action.current is the action label while busy (e.g. action:layaMine) and Idle/Stopped/... when idle",
+  "files": {
+    "bots/<agent>/memory.json": "deleted by forgetAgent before a reset restart",
+    "bots/<agent>/laya-job.json": "deleted by forgetAgent",
+    "bots/<agent>/laya-chores.json": "written {\"on\":false} by forgetAgent",
+    "bots/<agent>/logs/laya-<task>.jsonl": "read by andy_logs and the scenario checks"
+  },
+  "launch": {
+    "command": "node main.js --profiles <profile...> from the repo root (tools/test-world/lib/bot.js botCommand)",
+    "env": ["SETTINGS_JSON (host, port, minecraft_version, mindserver_port, auto_open_ui merged over settings.js)", "MINECRAFT_PORT", "MINDSERVER_PORT", "PATH (node's dir first)"],
+    "stop": "SIGINT to the process group; SIGKILL after 10 s",
+    "pidFile": "<test-world-data>/bot.pid"
+  }
+}

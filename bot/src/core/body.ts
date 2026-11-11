@@ -1,0 +1,85 @@
+// Body: the one mineflayer bot and its connection (design §3). Only actuators move it (through
+// the lease); sensors and the harness only read `bot`.
+import { EventEmitter } from 'events';
+import mineflayer from 'mineflayer';
+import pathfinderPkg from 'mineflayer-pathfinder';
+import pvpPkg from 'mineflayer-pvp';
+import { Motion } from './motion.js';
+
+const { pathfinder } = pathfinderPkg;
+const { plugin: pvp } = pvpPkg as unknown as { plugin: mineflayer.Plugin };
+
+export interface BodyOptions { host: string; port: number; username: string; version: string; auth: 'offline' | 'microsoft' }
+
+export type BodyState = 'offline' | 'connecting' | 'in-game';
+
+/** Body events: 'state' (BodyState), 'spawn', 'death', 'chat' (username, message), 'end' (reason). */
+export class Body extends EventEmitter {
+    bot: mineflayer.Bot | null = null;
+    motion: Motion | null = null;
+    state: BodyState = 'offline';
+    /** process start → first spawn, ms */
+    readonly startedAt = Date.now();
+    firstSpawnMs: number | null = null;
+    logins = 0;
+
+    constructor(readonly opts: BodyOptions, private readonly log: (m: string) => void = console.log) { super(); }
+
+    get inGame(): boolean { return this.state === 'in-game'; }
+
+    private setState(s: BodyState) { if (s !== this.state) { this.state = s; this.emit('state', s); } }
+
+    connect(): void {
+        if (this.state !== 'offline') return;
+        this.setState('connecting');
+        this.logins++;
+        this.log(`${this.opts.username} logging into minecraft...`);
+        const bot = mineflayer.createBot({
+            host: this.opts.host, port: this.opts.port, username: this.opts.username,
+            version: this.opts.version === 'auto' ? false as unknown as string : this.opts.version,
+            auth: this.opts.auth, checkTimeoutInterval: 60000,
+        });
+        this.bot = bot;
+        bot.loadPlugin(pathfinder);
+        bot.loadPlugin(pvp);
+        bot.once('login', () => this.log(`${this.opts.username} logged in!`));
+        bot.once('spawn', () => {
+            if (this.firstSpawnMs === null) this.firstSpawnMs = Date.now() - this.startedAt;
+            const pf = bot.pathfinder as unknown as { thinkTimeout: number };
+            pf.thinkTimeout = 5000;
+            this.motion = new Motion(bot as unknown as ConstructorParameters<typeof Motion>[0]);
+            this.setState('in-game');
+            this.log(`${this.opts.username} spawned.`);
+            this.emit('spawn');
+        });
+        bot.on('death', () => { this.emit('death'); });
+        bot.on('chat', (username: string, message: string) => { if (username !== bot.username) this.emit('chat', username, message); });
+        bot.on('kicked', (reason: unknown) => this.log(`${this.opts.username} kicked: ${typeof reason === 'string' ? reason : JSON.stringify(reason)}`));
+        bot.on('error', (e: Error) => this.log(`${this.opts.username} connection error: ${e.message}`));
+        bot.once('end', (reason: string) => {
+            this.log(`${this.opts.username} disconnected (${reason})`);
+            if (this.bot === bot) { this.bot = null; this.motion = null; }
+            this.setState('offline');
+            this.emit('end', reason);
+        });
+    }
+
+    disconnect(): void {
+        try { this.bot?.quit(); } catch { /* gone */ }
+    }
+
+    /** reset: stop every motion now (the lease overrun rule and stop). */
+    reset(): void {
+        const bot = this.bot;
+        if (!bot) return;
+        this.motion?.stop();
+        try { (bot as unknown as { pvp?: { stop(): void } }).pvp?.stop(); } catch { /* not fighting */ }
+    }
+
+    /** say: chat in game (the harness also relays it as bot-output). */
+    say(text: string): void {
+        if (!this.bot || !this.inGame) return;
+        for (const line of text.split('\n').filter(Boolean)) this.bot.chat(line);
+        this.emit('said', text);
+    }
+}

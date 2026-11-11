@@ -34,11 +34,20 @@ export function readLocalSettings(config, fs) {
 // botCommand: what to run, from the repo root. The node binary's directory
 // goes first on PATH, as start-bot.sh does, because Mindcraft spawns each
 // agent with a bare `node` (and a newer node can't load it).
-export function botCommand(config, { profiles = DEFAULT_PROFILES, local = {}, PATH = process.env.PATH || '' } = {}) {
+// ANDY_BOT=new runs the rebuilt bot (bot/dist/src/main.js; build it with
+// `npm --prefix bot run build`) with the same settings and profiles; old
+// (the default until cut-over) runs main.js.
+export const NEW_BOT_ENTRY = 'bot/dist/src/main.js';
+export function botEntry(which = process.env.ANDY_BOT) {
+    const w = (which || 'old').toLowerCase();
+    if (w !== 'old' && w !== 'new') throw new Error(`ANDY_BOT must be new or old, not ${which}`);
+    return w === 'new' ? NEW_BOT_ENTRY : 'main.js';
+}
+export function botCommand(config, { profiles = DEFAULT_PROFILES, local = {}, PATH = process.env.PATH || '', bot = process.env.ANDY_BOT } = {}) {
     const settings = botSettings(config, local);
     return {
         cmd: config.node,
-        args: ['main.js', '--profiles', ...profiles],
+        args: [botEntry(bot), '--profiles', ...profiles],
         cwd: config.repoRoot,
         env: {
             SETTINGS_JSON: JSON.stringify(settings), MINECRAFT_PORT: String(settings.port), MINDSERVER_PORT: String(settings.mindserver_port),
