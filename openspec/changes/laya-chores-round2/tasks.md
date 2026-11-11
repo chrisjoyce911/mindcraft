@@ -13,9 +13,11 @@
 
 ## 3. Verify
 - [x] 3.1 Unit tests (`test/laya_chores_round2.test.js`), `npm test` green.
-- [ ] 3.2 Game check at night: mine over a cave.
-- [ ] 3.3 Full suite with the LLM off ≥ 16/16.
-- [ ] 3.4 First day from scratch through the first night; report compared with the first run.
+- [x] 3.2 Game check: mine over a cave (cave site, ore under feet over a shaft: dug from the side).
+- [x] 3.3 Full suite with the LLM off: 16/16 (chores2-full-llm-off-final).
+- [x] 3.4 First day from scratch through the first night: alive, no fall (bots/andy/logs/game-tests/laya-chores-round2-2026-11-11.md).
 
 ## 4. laya-go (not this repo)
 - [ ] 4.1 Director data: `Last done` with nothing near → idle (the served model answers defend).
+- [ ] 4.2 Director data: heal with no food and a mob out of reach (night of round 2: heal ×231 with a spider at 9).
+- [ ] 4.3 Director data: eat at food 20 (now refused, `not-hungry`).
