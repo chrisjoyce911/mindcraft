@@ -40,6 +40,8 @@ export interface Facts {
     /** The raw time of day (0–23999). */
     time: number;
     under: boolean; danger: Danger;
+    /** Lava within 2 blocks of the feet (findBlock maxDistance 2): the eat model's danger. */
+    lavaWithin2: boolean;
     /** Free inventory slots. */
     free: number; valuables: number; foodItems: number;
     /** Inventory items in slot order. */

@@ -84,3 +84,27 @@ test('defend: only attackers, night ≥ 13000, shield in the off-hand: the defen
     bot.addPlayer('chris', 4, 0);
     assert.match(defendState(defendSituation(s.read())), /Player yes/);
 });
+
+test('eat: lava within 2 (findBlock maxDistance 2) is danger, lava 3 off is not; a hostile at exactly 8 is not', () => {
+    const now = 0;
+    const bot = fakeBot({ items: [{ name: 'bread', count: 2 }] });
+    const s = new Sensors(bot, { places: () => ({}), now: () => now, tickMs: 0 });
+    assert.match(eatState(eatSituation(s.read())), /Danger no/);
+    bot.blocks.set('3,64,0', { name: 'lava' });
+    assert.equal(s.read().lavaWithin2, false);
+    assert.match(eatState(eatSituation(s.read())), /Danger no/, 'lava 3 off');
+    bot.blocks.set('1,64,1', { name: 'lava' }); // √2 off: inside 2 but not in the director's 12 offsets
+    assert.equal(s.read().lavaWithin2, true);
+    assert.match(eatState(eatSituation(s.read())), /Danger yes/, 'lava √2 off');
+    bot.blocks.clear();
+    bot.blocks.set('2,64,0', { name: 'lava' });
+    assert.match(eatState(eatSituation(s.read())), /Danger yes/, 'lava 2 off, no mobs');
+    bot.blocks.clear();
+    bot.blocks.set('2,64,1', { name: 'lava' }); // √5 off
+    assert.match(eatState(eatSituation(s.read())), /Danger no/, 'lava √5 off');
+    bot.blocks.clear();
+    bot.add(mob(1, 'zombie', 8.5, 0.5)); // exactly 8.0 from (0.5, 64, 0.5)
+    assert.match(eatState(eatSituation(s.read())), /Danger no/, 'strict < 8');
+    bot.add(mob(2, 'zombie', 8.4, 0.5));
+    assert.match(eatState(eatSituation(s.read())), /Danger yes/, '7.9 off');
+});

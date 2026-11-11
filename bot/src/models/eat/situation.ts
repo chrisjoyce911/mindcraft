@@ -1,8 +1,9 @@
-// Facts → the eat situation (eat_state.js situation; modes.js fed danger as "a hostile within 8").
+// Facts → the eat situation (eat_state.js situation; modes.js fed danger as "a hostile nearer than 8, or lava
+// within 2").
 import type { Facts } from '../../types/index.js';
 import { carried, type EatSituation } from './render.js';
 
-/** A hostile this near is the eat model's Danger (the old mode's getNearestEntityWhere(isHostile, 8)). */
+/** A hostile nearer than this (strict, as getNearestEntityWhere(isHostile, 8)'s `distanceTo < 8`) is Danger. */
 export const EAT_DANGER_REACH = 8;
 
 export function eatSituation(f: Facts): EatSituation {
@@ -10,7 +11,7 @@ export function eatSituation(f: Facts): EatSituation {
         health: Math.max(1, Math.floor(f.health)),
         food: f.food,
         saturation: f.saturation,
-        danger: f.mobs.some(m => m.dist <= EAT_DANGER_REACH),
+        danger: f.mobs.some(m => m.dist < EAT_DANGER_REACH) || f.lavaWithin2,
         carry: carried(f.items),
     };
 }

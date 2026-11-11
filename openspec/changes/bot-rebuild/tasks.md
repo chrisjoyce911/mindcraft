@@ -65,7 +65,8 @@ lease overrun test passes.
   `Facts` per tick (`Sensors.read()`, cached 250 ms); `core/stuck.ts` counts only while `Motion.moving` (a goTo in
   flight), 20 s / obsidian 40 s, never acts. Attacks is an exact port (15 s attacker, 5 s Me/Player, blame 4, fusing
   creeper within 5). `mobKind` moved to sensors (render re-exports it; goldens unchanged). Facts → situation adapters
-  in `models/{director,eat,defend}/situation.ts`, ported as the old callers fed them: eat danger = a hostile within 8;
+  in `models/{director,eat,defend}/situation.ts`, ported as the old callers fed them: eat danger = a hostile nearer than 8 (strict) or lava within 2
+  (`Facts.lavaWithin2`, findBlock maxDistance 2);
   defend sees only attackers within 18, night = timeOfDay ≥ 13000 (mineflayer isDay), player within 8. Old tests
   ported (fix_round4 attacks, director helpers, homeState, pack homeDistance/countHostiles) plus new; adapters render
   the eat/defend/director v1.3 goldens from a fake world. Live smoke (test world): hostiles/nearest, night, Player

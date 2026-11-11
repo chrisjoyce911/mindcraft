@@ -18,6 +18,20 @@ export function dangerOf(f: Feel): Danger {
 export const LAVA_OFFSETS: readonly (readonly [number, number, number])[] = [
     [0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0], [0, 1, 0], [1, 1, 0], [-1, 1, 0], [0, 1, 1], [0, 1, -1], [0, 2, 0],
 ];
+/** The eat mode's lava reach: findBlock(lava, maxDistance 2) from the floored feet. */
+export const LAVA_REACH = 2;
+/** lavaWithin: any lava block whose corner is within `reach` of the floored feet, as mineflayer's findBlock
+ *  (`cursor.distanceTo(point) <= maxDistance`, point = position.floored()). */
+export function lavaWithin(bot: SensorBot, reach = LAVA_REACH): boolean {
+    const p = bot.entity.position;
+    const fx = Math.floor(p.x), fy = Math.floor(p.y), fz = Math.floor(p.z);
+    const r = Math.floor(reach);
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) {
+        if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
+        if (bot.blockAt(fx + dx, fy + dy, fz + dz)?.name === 'lava') return true;
+    }
+    return false;
+}
 /** Falling: off the ground and dropping faster than this (blocks per tick). */
 export const FALL_SPEED = -0.6;
 

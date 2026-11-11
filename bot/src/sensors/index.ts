@@ -4,7 +4,7 @@ import { StuckWatch } from '../core/stuck.js';
 import type { Facts, Places } from '../types/index.js';
 import { Attacks } from './attacks.js';
 import type { SensorBot } from './bot.js';
-import { dangerOf, feel } from './danger.js';
+import { dangerOf, feel, lavaWithin } from './danger.js';
 import { homeFacts } from './home.js';
 import { wireHurt } from './hurt.js';
 import { lightFacts } from './light.js';
@@ -63,6 +63,7 @@ export class Sensors {
             nearestPlayer: nearestPlayerDist(bot),
             ...lt,
             danger: dangerOf(feel(bot)),
+            lavaWithin2: lavaWithin(bot),
             ...pack,
             ...homeFacts(this.deps.places(), pos, (x, y, z) => bot.blockAt(x, y, z)),
             stuck: this.stuck.feed(pos, this.deps.moving?.() ?? false, bot.digTarget(), now),
@@ -92,5 +93,5 @@ export { Attacks, ATTACK_MS, BLAME_RANGE, FUSE_RANGE, ME_MS, fusing, isAttacker 
 export { sensorBot, type SensorBot, type SensorEntity, type SensorBlock } from './bot.js';
 export { mobKind, isHostile, NEAREST_KINDS, HOSTILE_RANGE, MOB_SCAN } from './mobs.js';
 export { armedOf, armorPoints } from './vitals.js';
-export { dangerOf } from './danger.js';
+export { dangerOf, lavaWithin, LAVA_REACH } from './danger.js';
 export { homeState } from './home.js';
