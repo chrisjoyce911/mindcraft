@@ -47,6 +47,7 @@ import { ORES, TIER_PICKAXE, THROWAWAY, QUESTIONS, QUESTIONS_V2, OFFSET, FEET, H
     unload, homeDistance, valuables, HOSTILES_CAP, pickTier, countOf, headingOf, SEEN_RANGE } from './mine_state.js';
 import { createPlan, PLAN_DEFAULTS } from './mine_plan.js';
 import { backOf, rightOf, leftOf } from './mine_state.js';
+import { stopped } from '../run_token.js';
 
 const DEFAULTS = { prompt: 'v2', max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50,
     keep_blocks: 32, unload_retry_steps: 50, unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4,
@@ -415,7 +416,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         const entry = { rule: 'heal', action: 'heal', source: 'rules', why: 'heal', pos: feet,
             health: Math.round(bot.health ?? 20), food: bot.food ?? 20, hostiles };
         let ate = 0;
-        while (!bot.interrupt_code && (bot.food ?? 20) < opts.eat_to && ate < 8 && deps.eat && await deps.eat().catch(() => false)) ate++;
+        while (!stopped(bot) && (bot.food ?? 20) < opts.eat_to && ate < 8 && deps.eat && await deps.eat().catch(() => false)) ate++;
         let retreated = false;
         if (hostiles > 0 && plan) retreated = await walkTo(plan.entrance);
         if ((bot.food ?? 20) < opts.eat_to) {
@@ -424,7 +425,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
             deps.chat?.(msg);
             return finish(false, 'hurt with no food');
         }
-        for (let i = 0; i < opts.heal_wait_s && !bot.interrupt_code && (bot.health ?? 20) <= upTo; i++) {
+        for (let i = 0; i < opts.heal_wait_s && !stopped(bot) && (bot.health ?? 20) <= upTo; i++) {
             if (!retreated && plan && (deps.hostiles?.() ?? 0) > 0) retreated = await walkTo(plan.entrance);
             await deps.sleep(1000);
         }
@@ -483,7 +484,7 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         deps.chat?.(msg);
     }
 
-    for (let step = 0; step < maxSteps && !bot.interrupt_code; step++) {
+    for (let step = 0; step < maxSteps && !stopped(bot); step++) {
         if (got() >= count) return finish(true, 'done');
         record();
         if (step && step % 50 === 0) saveMine();
@@ -734,5 +735,5 @@ export async function mineWithLaya(bot, oreName, count, deps) {
         await deps.sleep?.(0);
     }
     if (got() >= count) return finish(true, 'done');
-    return finish(false, bot.interrupt_code ? 'interrupted' : `no ${ore.drop} after ${maxSteps} steps`);
+    return finish(false, stopped(bot) ? 'interrupted' : `no ${ore.drop} after ${maxSteps} steps`);
 }

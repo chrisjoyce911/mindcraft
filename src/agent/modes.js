@@ -5,6 +5,7 @@ import settings from './settings.js'
 import convoManager from './conversation.js';
 import { laya, taskSettings } from '../models/laya.js';
 import { llmOn } from './llm_gate.js';
+import { runStoppable } from './run_token.js';
 import { SAFETY_MODES } from './laya/director.js';
 import { LayaEater, summary as eatSummary } from './laya/eat.js';
 import { LayaDefender, summary as defendSummary } from './laya/defend.js';
@@ -167,8 +168,10 @@ const modes_list = [
             const bot = agent.bot;
             if (!layaDefender) {
                 const read = () => {
+                    // only mobs attacking andy or a player: one that attacks
+                    // nobody is left alone (user decision 2026-11-11)
                     const hostile = Object.values(bot.entities).filter(e => e !== bot.entity && mc.isHostile(e) && e.position
-                        && bot.entity.position.distanceTo(e.position) <= MOB_RANGE + 2);
+                        && bot.entity.position.distanceTo(e.position) <= MOB_RANGE + 2 && agent.isAttacker(e));
                     const mobs = hostile.map(e => ({ kind: e.name, x: Math.floor(e.position.x), z: Math.floor(e.position.z), health: e.health, entity: e }));
                     const playerNear = Object.values(bot.entities).some(e => e.type === 'player' && e !== bot.entity
                         && bot.entity.position.distanceTo(e.position) <= PLAYER_NEAR);
@@ -207,7 +210,8 @@ const modes_list = [
         active: false,
         update: async function (agent) {
             if (layaDefendInControl()) return; // the Laya defend model decides
-            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 16);
+            // only from a mob attacking andy or a player (user decision 2026-11-11)
+            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity) && agent.isAttacker(entity), 16);
             if (enemy && await world.isClearPath(agent.bot, enemy)) {
                 say(agent, `Aaa! A ${enemy.name.replace("_", " ")}!`);
                 execute(this, agent, async () => {
@@ -224,11 +228,13 @@ const modes_list = [
         active: false,
         update: async function (agent) {
             if (layaDefendInControl()) return; // the Laya defend model decides
-            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 8);
+            // only a mob attacking andy or a player; one that attacks nobody
+            // is left alone, however near (user decision 2026-11-11)
+            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity) && agent.isAttacker(entity), 8);
             if (enemy && await world.isClearPath(agent.bot, enemy)) {
                 say(agent, `Fighting ${enemy.name}!`);
                 execute(this, agent, async () => {
-                    await skills.defendSelf(agent.bot, 8);
+                    await skills.defendSelf(agent.bot, 8, e => agent.isAttacker(e));
                 });
             }
         }
@@ -426,8 +432,10 @@ async function execute(mode, agent, func, timeout=-1) {
     // comes off when done: the director then resumes the job
     const entry = SAFETY_MODES.has(mode.name) ? agent.director?.stack.pause(mode.name) : null;
     mode.active = true;
+    // a mode's work ends within 100 ms of an interrupt too (a fight whose
+    // pathfinder never settles must not get the process killed)
     let code_return = await agent.actions.runAction(`mode:${mode.name}`, async () => {
-        await func();
+        await runStoppable(agent.bot, func);
     }, { timeout });
     mode.active = false;
     if (entry) agent.director.stack.done(entry);

@@ -28,6 +28,7 @@ import { dirname } from 'path';
 import { questions, questionsV2, state as farmState, stateV2, parseCellName, decide as rulesDecide, hasWater, growing,
     farmValuables, pondCell, besideHole, CROPS, NONE, PRODUCE, CROP_OF, FARM_CROPS, POND, FIND_WATER } from './farm_state.js';
 import { pack, homeDistance, unloadRule, wantUnload, depositList, isTool } from './pack.js';
+import { stopped } from '../run_token.js';
 
 const DEFAULTS = { prompt: 'v1', step_ms: 500, max_steps: 400, max_misses: 5, log_steps: true, min_confidence: 0.5,
     wait_limit: 20, water_radius: 64, keep_seeds: 16, unload_retry_steps: 50, ban_steps: 20, max_bad: 6 };
@@ -184,7 +185,7 @@ export async function farmWithLaya(bot, goal, deps) {
             say(`I couldn't get a ${need.item} to farm with.`);
             // without a hoe there's nothing to till or plant: stop rather
             // than wait out the whole time
-            if (need.item === 'hoe' && !bot.interrupt_code) return finish('no hoe');
+            if (need.item === 'hoe' && !stopped(bot)) return finish('no hoe');
         }
     }
 
@@ -231,7 +232,7 @@ export async function farmWithLaya(bot, goal, deps) {
 
     // The step limit is for timed farming; a count or "until stopped" goes on.
     const maxSteps = g.ms != null ? opts.max_steps : (opts.max_steps_open ?? Infinity);
-    while (!bot.interrupt_code && deps.now() < end && steps < maxSteps) {
+    while (!stopped(bot) && deps.now() < end && steps < maxSteps) {
         steps++;
         s = deps.read();
         let st, qs;
@@ -382,5 +383,5 @@ export async function farmWithLaya(bot, goal, deps) {
             return finish('count reached');
         }
     }
-    return finish(bot.interrupt_code ? 'stopped' : deps.now() >= end ? 'time' : steps >= maxSteps ? 'max steps' : '');
+    return finish(stopped(bot) ? 'stopped' : deps.now() >= end ? 'time' : steps >= maxSteps ? 'max steps' : '');
 }

@@ -1,0 +1,41 @@
+{
+  "questions": {
+    "Chore": {
+      "criteria": [
+        "gather_logs",
+        "place_table",
+        "craft_wood_tools",
+        "get_seeds",
+        "start_farm",
+        "gather_cobble",
+        "craft_stone_tools",
+        "place_furnace",
+        "hunt_food",
+        "cook_food",
+        "make_torches",
+        "light_base",
+        "place_chest",
+        "gather_wool",
+        "make_beds",
+        "stock_kit",
+        "stock_logs",
+        "stock_cobble",
+        "craft_sword",
+        "tend_farm",
+        "replant_saplings",
+        "unload",
+        "sleep",
+        "night_mine",
+        "rest",
+        "need_wood",
+        "need_cobble",
+        "need_coal",
+        "need_wool",
+        "need_food"
+      ],
+      "instructions": "Which chore should I do next?",
+      "type": "choice"
+    }
+  },
+  "state": "Chores.\nHome chest Time day Biome forest\nBase table no furnace no chest yes lit no\nBeds mine no player no\nTools axe stone pickaxe wooden sword none hoe none shovel none\nHave wood 3 sticks 2 cobble 12 coal 0 torches 0\nFood 4 raw 2 wool 0 seeds 0 saplings 1\nPack 20\nFarm yes ready no\nKit pickaxe none axe none shovel none sword none food 0 torches 0\nNear trees 49 stone 49 coal 97 sand none water 49 grass 49\nAnimals cow 49 pig none sheep 97 chicken none rabbit none\nGround saplings 2\nCan place no smelt no\nFailed none"
+}

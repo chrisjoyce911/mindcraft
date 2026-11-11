@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { JobStack, Director, decide, directorState, nextActivity, ACTIVITIES, QUESTIONS, armedOf, armorPoints, dangerOf, jobView } from '../src/agent/laya/director.js';
+import { JobStack, Director, decide, decideV12, directorState, nextActivity, ACTIVITIES, QUESTIONS, armedOf, armorPoints, dangerOf, jobView } from '../src/agent/laya/director.js';
 
 const calm = { job: null, paused: null, health: 20, food: 20, armed: 'sword', armor: 0, hostiles: 0, nearest: null,
     light: 15, night: false, under: false, free: 20, home: 40, valuables: 0, foodItems: 3, danger: 'none', last: 'none' };
@@ -23,6 +23,7 @@ test('directorState: the spec lines in order', () => {
         'Paused farm',
         'Health 14 Food 17 Armed sword Armor 7',
         'Hostiles 2 Nearest zombie 5',
+        'Me attacked no by none none',
         'Player none attacked no by none none',
         'Light 7 Night yes Under yes',
         'Pack 10 Home 99 Valuables 7',
@@ -36,14 +37,22 @@ test('directorState: the spec lines in order', () => {
     assert.equal(directorState(s({ hostiles: 1, nearest: { kind: 'witch', dist: 30 } })).split('\n')[4], 'Hostiles 1 Nearest other 16');
     assert.equal(directorState(s({ job: { kind: 'farm', item: 'any', left: 'any' } })).split('\n')[1], 'Job farm any left any');
     // v1.2: the Player line; strays and bogged are skeletons
-    const pl = x => directorState(s(x)).split('\n')[5];
+    const pl = x => directorState(s(x)).split('\n')[6];
     assert.equal(pl({ player: { name: 'ChrisJoyce911', attacked: true, by: 'husk', dist: 12.4 } }), 'Player chrisjoyce911 attacked yes by other 12');
     assert.equal(pl({ player: { name: 'tester', attacked: false, by: 'zombie', dist: 3 } }), 'Player tester attacked no by none 3');
     assert.equal(pl({ player: { name: 'tester', attacked: false, dist: 30 } }), 'Player none attacked no by none none', 'beyond 24: none');
     assert.equal(pl({ player: { name: 'tester', attacked: true, by: 'stray', dist: 0 } }), 'Player tester attacked yes by skeleton 0');
     assert.equal(directorState(s({ hostiles: 1, nearest: { kind: 'bogged', dist: 9 } })).split('\n')[4], 'Hostiles 1 Nearest skeleton 9');
-    // prompt v1 (a model trained on v1.1 data): no Player line
+    // prompt v1 (a model trained on v1.1 data): no Player line; v1.2: no Me line
     assert.equal(directorState(calm, 'v1').split('\n').length, 10);
+    assert.equal(directorState(calm, 'v1.2').split('\n').length, 11);
+    assert.equal(directorState(calm, 'v1.2').split('\n')[5], 'Player none attacked no by none none');
+    // v1.3: the Me line
+    const me = x => directorState(s(x)).split('\n')[5];
+    assert.equal(me({ me: { attacked: true, by: 'zombie', dist: 2.2 } }), 'Me attacked yes by zombie 2');
+    assert.equal(me({ me: { attacked: true, by: 'stray', dist: 30 } }), 'Me attacked yes by skeleton 16');
+    assert.equal(me({ me: { attacked: false, by: 'zombie', dist: 3 } }), 'Me attacked no by none none');
+    assert.equal(me({ me: null }), 'Me attacked no by none none');
 });
 
 test('decide: v1.2 flee-ranged and defend-player', () => {
@@ -75,7 +84,8 @@ test('nextActivity: a prompt v1 model never overrides a v1.2 rule it cannot see'
     assert.match(asked[1], /\nPlayer tester attacked yes by zombie 12\n/);
 });
 
-test('decide: the spec v1.1 rules in priority order, with laya-go rule names', () => {
+test('decideV12: the spec v1.1/v1.2 rules in priority order, with laya-go rule names', () => {
+    const decide = decideV12;
     const z = d => ({ hostiles: 1, nearest: { kind: 'zombie', dist: d } });
     for (const d of ['fluid', 'fire', 'drowning']) assert.deepEqual(decide(s({ danger: d, ...z(3) })), { activity: 'flee', rule: 'flee-danger' });
     assert.notEqual(decide(s({ danger: 'fall' })).activity, 'flee');
@@ -128,7 +138,7 @@ test('golden: the director request matches laya-go v1.2_sample_request.json byte
     st.start('layaMine', ['iron', 9], { remaining: () => 6 });
     const text = directorState({ job: st.running(), paused: st.pausedKind(), health: 14, food: 12, armed: 'sword', armor: 8,
         hostiles: 2, nearest: { kind: 'zombie', dist: 6 }, light: 4, night: false, under: true, free: 5, home: 18, valuables: 3,
-        foodItems: 4, danger: 'none', last: 'none', player: { name: 'chrisjoyce911', attacked: true, by: 'zombie', dist: 12 } });
+        foodItems: 4, danger: 'none', last: 'none', player: { name: 'chrisjoyce911', attacked: true, by: 'zombie', dist: 12 } }, 'v1.2');
     assert.equal(text, golden.state);
     assert.equal(JSON.stringify({ questions: QUESTIONS, state: text }), JSON.stringify(golden));
 });
@@ -206,7 +216,7 @@ test('Director: a mode pauses the job, resume after, heal pauses it, logs each d
     const job = d.stack.start('layaMine', ['iron', 9]);
     assert.equal((await d.tick()).activity, 'continue');
     const m = d.stack.pause('laya_defending');
-    sit = { ...calm, hostiles: 1, nearest: { kind: 'zombie', dist: 3 } };
+    sit = { ...calm, hostiles: 1, nearest: { kind: 'zombie', dist: 3 }, me: { attacked: true, by: 'zombie', dist: 3 } };
     assert.equal((await d.tick()).activity, 'defend');
     d.stack.done(m);
     sit = { ...calm }; idle = true;
@@ -242,6 +252,12 @@ test('itemWord: laya-go director item words', async () => {
 // directorState takes them); v1.2 has the Player line at index 5.
 function parseDirector(text) {
     let L = text.split('\n').map(l => l.split(' '));
+    let me = null;
+    if (L[5][0] === 'Me') { // v1.3
+        const M = L[5];
+        me = M[2] === 'yes' ? { attacked: true, by: M[4], dist: Number(M[5]) } : { attacked: false, by: 'none', dist: 0 };
+        L = [...L.slice(0, 5), ...L.slice(6)];
+    }
     let player = null;
     if (L[5][0] === 'Player') {
         const P = L[5];
@@ -257,7 +273,7 @@ function parseDirector(text) {
         hostiles: n(L[4][1]), nearest: L[4][3] === 'none' ? null : { kind: L[4][3], dist: n(L[4][4]) },
         light: n(L[5][1]), night: L[5][3] === 'yes', under: L[5][5] === 'yes',
         free: n(L[6][1]), home: L[6][3] === 'none' ? null : n(L[6][3]), valuables: n(L[6][5]),
-        foodItems: n(L[7][2]), danger: L[8][1], last: L[9][1], player,
+        foodItems: n(L[7][2]), danger: L[8][1], last: L[9][1], player, me,
     };
 }
 
@@ -267,7 +283,7 @@ test('prompt v1 state round trip on laya-go v1.1 situations (db494eb); v1.2 rule
     for (const r of rows) {
         const s = parseDirector(r.state);
         assert.equal(directorState(s, 'v1'), r.state, 'state round trip');
-        const d = decide(s);
+        const d = decideV12(s);
         if (d.rule !== 'flee-ranged') assert.deepEqual(d, { activity: r.answer, rule: r.rule }, r.state);
     }
 });
@@ -278,9 +294,34 @@ test('rules and state agree with laya-go v1.2 on 1000 generated situations (94b2
     const rules = new Set();
     for (const r of rows) {
         const s = parseDirector(r.state);
+        assert.equal(directorState(s, 'v1.2'), r.state, 'state round trip');
+        assert.deepEqual(decideV12(s), { activity: r.answer, rule: r.rule }, r.state);
+        rules.add(r.rule);
+    }
+    assert.equal(rules.size, 18, 'every rule is exercised');
+});
+
+test('golden: the director request matches laya-go v1.3_sample_request.json byte for byte', () => {
+    const golden = JSON.parse(readFileSync(new URL('./fixtures/laya-director-v13/request.json', import.meta.url), 'utf8'));
+    const st = new JobStack();
+    st.start('layaMine', ['iron', 9], { remaining: () => 6 });
+    const text = directorState({ job: st.running(), paused: st.pausedKind(), health: 14, food: 12, armed: 'sword', armor: 8,
+        hostiles: 2, nearest: { kind: 'zombie', dist: 6 }, light: 4, night: false, under: true, free: 5, home: 18, valuables: 3,
+        foodItems: 4, danger: 'none', last: 'none', player: { name: 'chrisjoyce911', attacked: true, by: 'zombie', dist: 12 },
+        me: { attacked: true, by: 'zombie', dist: 6 } });
+    assert.equal(text, golden.state);
+    assert.equal(JSON.stringify({ questions: QUESTIONS, state: text }), JSON.stringify(golden));
+});
+
+test('rules and state agree with laya-go v1.3 on 1000 generated situations (0cbe811)', () => {
+    const rows = readFileSync(new URL('./fixtures/laya-director-v13/decisions.jsonl', import.meta.url), 'utf8').trim().split('\n').map(l => JSON.parse(l));
+    assert.equal(rows.length, 1000);
+    const rules = new Set();
+    for (const r of rows) {
+        const s = parseDirector(r.state);
         assert.equal(directorState(s), r.state, 'state round trip');
         assert.deepEqual(decide(s), { activity: r.answer, rule: r.rule }, r.state);
         rules.add(r.rule);
     }
-    assert.equal(rules.size, 18, 'every rule is exercised');
+    assert.ok(rules.has('defend') && rules.has('flee-low'), 'the v1.3 rules are exercised');
 });

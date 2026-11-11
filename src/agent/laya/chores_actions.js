@@ -8,7 +8,7 @@
 // safety mode stops a chore at once.
 
 import Vec3 from 'vec3';
-import { AsyncLocalStorage } from 'async_hooks';
+import { stopped as runStopped, runStoppable, STOP_MS as RUN_STOP_MS } from '../run_token.js';
 import pf from 'mineflayer-pathfinder';
 import * as skills from '../library/skills.js';
 import * as world from '../library/world.js';
@@ -36,8 +36,8 @@ const isOpenBlock = b => !!b && b.boundingBox === 'empty' && !/water|lava|fire|p
 // up on (an interrupt) is cancelled: its actuator, still running in the
 // background under a skill that didn't stop, stops at its next check
 // instead of going on with the chore after the interrupt has cleared.
-const RUN = new AsyncLocalStorage();
-const stopped = bot => !!bot.interrupt_code || !!RUN.getStore()?.cancelled;
+// (src/agent/run_token.js, shared with every Laya job)
+const stopped = runStopped;
 export const stoppedForTest = stopped;
 const v = p => new Vec3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
 const blockAt = (bot, x, y, z) => { try { return bot.blockAt(new Vec3(x, y, z)); } catch { return null; } };
@@ -148,9 +148,14 @@ export function centreOf(agent, cs) {
     return { ...c, facts: h };
 }
 
+// darkSpot: a block a torch can go in that is dark (block light below 8):
+// the one test of "unlit" for the sensor (litBase) and the actuator
+// (lightBase), so they agree (live play 3: "lit no" but "no dark spot open").
+export const darkSpot = b => isOpenBlock(b) && (b.light ?? 15) < 8;
+
 // litBase: no surface block within 2 of the centre's height in the base area
-// (sampled every 3 columns) has block light below 8. Returns {lit, dark:
-// [positions to light]}.
+// (sampled every 3 columns) is a dark spot. Returns {lit, dark: [positions
+// to light]}.
 export function litBase(bot, centre) {
     const dark = [];
     const cy = Math.floor(centre.y);
@@ -160,7 +165,7 @@ export function litBase(bot, centre) {
             const b = blockAt(bot, x, y, z), below = blockAt(bot, x, y - 1, z);
             if (!b || !below) continue;
             if (b.boundingBox !== 'block' && below.boundingBox === 'block') {
-                if ((b.light ?? 15) < 8 && !/water|lava/.test(b.name)) dark.push({ x, y, z });
+                if (darkSpot(b)) dark.push({ x, y, z });
                 break;
             }
         }
@@ -184,18 +189,22 @@ export function farmFacts(bot, centre) {
 const isFoodOf = bot => name => !!(bot.registry.foodsByName || {})[name];
 const adult = e => !(e.metadata?.[16] === true);
 
-// animalsNear: adult animals within 97×97 columns of the centre by kind (capped 9).
+// animalsNear: for each kind, the smallest search (49, 97, 193 columns
+// around the centre) an adult of it is in, or null (chores v1.1's Animals
+// line), and the adults in the widest search, for the hunting chores.
 export function animalsNear(bot, centre) {
-    const out = Object.fromEntries(ANIMALS.map(k => [k, 0]));
+    const searches = Object.fromEntries(ANIMALS.map(k => [k, null]));
     const list = [];
     for (const e of Object.values(bot.entities)) {
         if (!e.position || e === bot.entity) continue;
         const kind = e.name === 'mooshroom' ? 'cow' : e.name;
-        if (!(kind in out) || !adult(e) || !inColumns(centre, e.position, 97)) continue;
-        out[kind] = Math.min(9, out[kind] + 1);
+        if (!(kind in searches) || !adult(e)) continue;
+        const size = SEARCHES.find(n => inColumns(centre, e.position, n));
+        if (size == null) continue;
+        if (searches[kind] == null || size < searches[kind]) searches[kind] = size;
         list.push(e);
     }
-    return { counts: out, list };
+    return { searches, list };
 }
 
 // groundSaplings: sapling items lying in the base area.
@@ -242,7 +251,7 @@ export function sense(agent, cs, can = CAN) {
         pack: bot.inventory.emptySlotCount(), farm: farm.farm, ready: farm.ready,
         kitPickaxe: kit.pickaxe, kitAxe: kit.axe, kitShovel: kit.shovel, kitSword: kit.sword, kitFood: kit.food, kitTorches: kit.torches,
         near: { trees: trees.size, stone: stone.size, coal: coal.size, sand: sand.size, water: water.size, grass: grass.size },
-        animals: animals.counts, ground: Math.min(9, ground.length), canPlace: !!can.place, canSmelt: !!can.smelt, failed: [],
+        animals: animals.searches, ground: Math.min(9, ground.length), canPlace: !!can.place, canSmelt: !!can.smelt, failed: [],
     };
     agent._choreCtx = { centre, home: c.home, facts: c.facts, trees, stone, coal, water, grass, lit, farm, animals, ground, kit, situation: s };
     return s;
@@ -565,13 +574,18 @@ async function makeTorches(agent) {
 async function lightBase(agent) {
     const bot = agent.bot, cx = agent._choreCtx;
     let placed = 0;
-    for (const p of cx.lit.dark.slice(0, 10)) {
+    // the dark spots now (the sensor's may be stale: a torch just placed
+    // lights them once the server's light update comes), by the same test
+    const dark = litBase(bot, cx.centre).dark;
+    if (!dark.length) return ok('the base is lit');
+    for (const p of dark.slice(0, 10)) {
         if (stopped(bot) || count(bot, 'torch') < 1) break;
-        const b = blockAt(bot, p.x, p.y, p.z);
-        if (!isOpenBlock(b) || (b.light ?? 15) >= 8) continue;
+        if (!darkSpot(blockAt(bot, p.x, p.y, p.z))) continue; // lit by a torch placed this time
         if (await placeAt(agent, 'torch', p)) placed++;
     }
-    return placed ? ok(`${placed} torches placed`) : fail(stopped(bot) ? 'stopped' : `couldn't place a torch (${agent._placeWhy || 'no dark spot open'})`);
+    if (placed) await new Promise(r => setTimeout(r, 500)); // the light update, before the next sense
+    return placed ? ok(`${placed} torches placed`) : fail(stopped(bot) ? 'stopped' : count(bot, 'torch') < 1 ? 'no torches'
+        : `couldn't place a torch (${agent._placeWhy || 'no dark spot open'})`);
 }
 
 async function getSeeds(agent) {
@@ -836,8 +850,26 @@ async function rest(agent, seconds = 20) {
     const bot = agent.bot, cx = agent._choreCtx;
     if (bot.entity.position.distanceTo(new Vec3(cx.centre.x, cx.centre.y, cx.centre.z)) > 8) await goNear(bot, cx.centre, 4);
     const end = Date.now() + seconds * 1000;
-    while (Date.now() < end && !stopped(bot)) await new Promise(r => setTimeout(r, 200));
+    // standing still on purpose: unstuck would see a stuck bot (live play 3:
+    // it interrupted rest ~25 times)
+    bot.modes?.pause('unstuck');
+    try {
+        while (Date.now() < end && !stopped(bot)) await new Promise(r => setTimeout(r, 200));
+    } finally { bot.modes?.unpause('unstuck'); }
     return ok('rested');
+}
+
+export const NEED_SAY_MS = 5 * 60_000;
+// needItem: say "I need <item>" (once per item per NEED_SAY_MS), then rest.
+async function needItem(agent, item) {
+    agent._needSaid ??= {};
+    const now = Date.now();
+    if (!(now - (agent._needSaid[item] || 0) < NEED_SAY_MS)) {
+        agent._needSaid[item] = now;
+        agent.openChat(`I need ${item}: there's none near enough for me to get.`);
+    }
+    await rest(agent);
+    return ok(`needs ${item}`);
 }
 
 // ACTUATORS: chore → (agent) → Promise<{ok, reason}>.
@@ -870,6 +902,13 @@ export const ACTUATORS = {
     night_mine: a => skills.mineOre(a.bot, 'coal', 8, () => a.homeChest(), { done: 0 })
         .then(r => (r === false || r?.ok === false ? fail(r?.reason || 'mining stopped') : ok('mined'))),
     rest: a => rest(a),
+    // v1.1: something wanted is missing with nothing near to provide it:
+    // tell the player (once per item per 5 minutes), then stay like rest
+    need_wood: a => needItem(a, 'wood'),
+    need_cobble: a => needItem(a, 'cobblestone'),
+    need_coal: a => needItem(a, 'coal'),
+    need_wool: a => needItem(a, 'wool'),
+    need_food: a => needItem(a, 'food'),
 };
 
 // runChore runs a chore's actuator; never throws. It returns within
@@ -877,24 +916,14 @@ export const ACTUATORS = {
 // stops the pathfinder and digging; what is left settles by itself), so a
 // mode or a player's command never waits for a chore (ActionManager kills
 // the process after 10 s).
-export const STOP_MS = 100;
+export const STOP_MS = RUN_STOP_MS;
 export async function runChore(agent, chore) {
     const f = ACTUATORS[chore];
     if (!f) return fail(`no actuator for ${chore}`);
-    const bot = agent.bot;
-    const token = { cancelled: false };
-    let timer = null;
-    const stop = new Promise(resolve => {
-        timer = setInterval(() => { if (bot.interrupt_code) { token.cancelled = true; resolve(fail('stopped')); } }, STOP_MS);
-    });
     try {
-        const r = await Promise.race([RUN.run(token, () => Promise.resolve().then(() => f(agent))), stop]);
-        return r;
+        return await runStoppable(agent.bot, () => f(agent), () => fail('stopped'));
     } catch (err) {
         return fail(err?.message || String(err));
-    } finally {
-        token.cancelled = true; // nothing of this chore goes on after it ends
-        clearInterval(timer);
     }
 }
 
