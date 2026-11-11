@@ -11,7 +11,8 @@ function what(spec: JobSpec): [string | null, number | null] {
         case 'craft': case 'gather': case 'give': case 'store': return [spec.item, spec.count];
         case 'hunt': return [spec.item, spec.count];
         case 'mine': return [spec.ore, spec.count === 'forever' ? null : spec.count];
-        case 'farm': return [spec.crop, spec.goal === 'forever' ? null : spec.goal.count];
+        case 'farm': return [spec.crop, spec.goal === 'forever' || !('count' in spec.goal) ? null : spec.goal.count];
+        case 'cobble': return ['cobblestone', spec.count];
         case 'eat': return [spec.item, null];
         case 'huntFood': return ['food', spec.goal];
         case 'gatherSkill': return [spec.target, spec.goal];

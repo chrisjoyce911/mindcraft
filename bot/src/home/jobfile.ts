@@ -28,7 +28,7 @@ export function isJobSpec(v: unknown): v is JobSpec {
         case 'stay': return num(v.seconds);
         case 'mine': return (ORES as readonly unknown[]).includes(v.ore) && (num(v.count) || v.count === 'forever');
         case 'farm': return ((CROPS as readonly unknown[]).includes(v.crop) || v.crop === 'any')
-            && (v.goal === 'forever' || (isObj(v.goal) && num(v.goal.count)));
+            && (v.goal === 'forever' || (isObj(v.goal) && (num(v.goal.count) || num(v.goal.minutes))));
         case 'craft': case 'gather': return str(v.item) && num(v.count);
         case 'hunt': return str(v.mob) && (v.item === null || str(v.item)) && num(v.count);
         case 'give': return str(v.player) && str(v.item) && num(v.count);
@@ -130,12 +130,18 @@ export function jobWords(s: JobSpec): string {
         case 'mine': return `mine ${counted(s.count, s.ore)}`;
         case 'gather': return `get ${counted(s.count, s.item)}`;
         case 'craft': return `make ${counted(s.count, s.item)}`;
-        case 'farm': return `farm ${counted(s.goal === 'forever' ? 'forever' : s.goal.count, s.crop)}`;
+        case 'farm': return s.goal !== 'forever' && 'minutes' in s.goal ? `farm for ${s.goal.minutes} minutes` : `farm ${counted(s.goal === 'forever' ? 'forever' : s.goal.count, s.crop)}`;
         case 'hunt': return `hunt for ${counted(s.count, s.item ?? s.mob)}`;
         case 'eat': return `eat ${words(s.item)}`;
         case 'huntFood': return `hunt for ${s.goal} food`;
         case 'gatherSkill': return `get ${counted(s.goal, s.target)}`;
         case 'place': return `place the ${words(s.item)}`;
+        case 'cook': return 'cook the raw meat';
+        case 'unload': return 'empty my pack into the home chest';
+        case 'kit': return 'stock the kit';
+        case 'sleep': return 'sleep';
+        case 'rest': return 'rest';
+        case 'cobble': return `get ${counted(s.count, 'cobblestone')}`;
     }
 }
 

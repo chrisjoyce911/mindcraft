@@ -20,7 +20,12 @@ import type { Command } from './types/index.js';
 import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 import { PlaceStore } from './home/places.js';
 import { JobSaver, RESTORE_MAX_MS, RESTORE_MIN_MS, loadJobs, planRestore, readJobs, waitsFor } from './home/jobfile.js';
-import { loadChoresState } from './home/chores.js';
+import { Chores, choresOf } from './chores/chores.js';
+import { ChoreDriver } from './chores/driver.js';
+import { placedBy } from './chores/sense.js';
+import { HOME_PLACE } from './home/chest.js';
+import type { StationKind } from './home/centre.js';
+import type { Vec3Like } from './types/index.js';
 import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, MINE_DEFAULTS, MINE_NUMBER_KEYS, MINE_PROMPTS, farmOf, skillOf, type CraftSettings, type FollowSettings, type JobDeps, type MineSettings, type MinePrompt } from './jobs/index.js';
 import { mineStore } from './home/mines.js';
 import { isFollowPrompt } from './models/follow/index.js';
@@ -160,7 +165,11 @@ async function main() {
     // 4.2: the remembered places (memory.json `places`, saved at once) and the jobs
     const placeStore = new PlaceStore(path.join(botDir, 'memory.json'));
     placeStore.onError = e => log(`[memory] saving places failed: ${String(e)}`);
-    const act = () => (body.bot && body.motion ? { bot: actBot(body.bot), motion: body.motion, goals: realGoals(body.bot) } : null);
+    // 5.6: every chest open tells the chores what the home chest holds
+    const act = () => (body.bot && body.motion ? {
+        bot: actBot(body.bot), motion: body.motion, goals: realGoals(body.bot),
+        chestSeen: (at: Vec3Like, items: readonly { name: string; count: number }[]) => chores.chestSeen(at, items, placeStore.recall(HOME_PLACE)),
+    } : null);
     const jobDeps: JobDeps = {
         act,
         places: placeStore,
@@ -178,6 +187,9 @@ async function main() {
         chat: text => { if (settings.chat_ingame !== false) say(text); },
         note: text => log(`[laya] ${text}`),
         checkpoint: () => saver.save(),
+        needSaid: new Map(),
+        stump: p => chores.stump(p),
+        placed: (item, p) => chores.placed(item, p, 'me'),
     };
 
     const say = (text: string) => { body.say(text); harness.output(text); };
@@ -186,13 +198,33 @@ async function main() {
     // format (nothing turns chores on yet: 5.6)
     const jobFile = path.join(botDir, 'laya-job.json');
     const saver = new JobSaver(jobFile, { onError: e => log(`[laya] saving the job failed: ${String(e)}`) });
-    const chores = loadChoresState(path.join(botDir, 'laya-chores.json'), !!settings.chores);
-    log(`[laya] chores state: ${chores.on ? 'on' : 'off'}`);
+    // 5.6: chores v2 (bots/<name>/laya-chores.json, logs/laya-chores.jsonl)
+    let lastSpeaker: string | null = null;
+    let playerPlaced: { kind: StationKind; pos: Vec3Like }[] = [];
+    const chores = new Chores({
+        stateFile: path.join(botDir, 'laya-chores.json'),
+        runsFile: jsonl.file('chores'),
+        settingOn: !!settings.chores,
+        settings: () => choresOf(settings),
+        client: () => (enabled('chores') ? laya : null),
+        served: () => laya.promptFor('chores'),
+        act,
+        sense: {
+            places: placeStore, say: text => say(text), speaker: () => lastSpeaker,
+            placed: () => playerPlaced, clearPlaced: () => { playerPlaced = []; }, mines: jobDeps.mines!,
+        },
+        canRun: spec => makeRunner({ id: 'probe', spec, origin: 'chore', progress: {}, status: 'running', startedAt: 0 }, jobDeps) !== null,
+        log: line => { if (line.event === 'run' || choresOf(settings).log_steps) jsonl.write('chores', line); },
+        note: text => log(`[laya] ${text}`),
+    });
+    log(`[laya] chores state: ${chores.on ? 'on' : 'off'}; Last ${JSON.stringify(chores.last())}`);
+    const driver = new ChoreDriver({ chores, free: () => lease.isFree, note: text => log(`[laya] ${text}`) });
 
     const handle = (from: string, message: string) => {
         if (!message || from === name) return;
         if (onlyChatWith.length && !onlyChatWith.includes(from)) return;
         log(`${name} received message from ${from} : ${message}`);
+        lastSpeaker = from;
         // the legacy !commands at the boundary; plain chat goes to the command model (4.1)
         if (containsLegacyCommand(message)) {
             const cmd = parseLegacy(message, from);
@@ -220,8 +252,12 @@ async function main() {
      * (failed, replaced by a new command, stopped).
      */
     const run = async (cmd: Command, from?: string, doneSay?: string): Promise<boolean> => {
+        // a player's command: no chore starts for a moment; a stop holds chores (until !layaChores("on") or 5 min)
+        if (from && cmd.kind !== 'chores') driver.playerCommand(cmd.kind === 'stop');
         switch (cmd.kind) {
-            case 'stop': if (director) await director.stop(); else await lease.release(); return true;
+            case 'stop':
+                if (director) await director.stop(); else await lease.release();
+                return true;
             case 'reply': say(cmd.text); return true;
             case 'ignore': return true;
             case 'inventory': {
@@ -230,7 +266,15 @@ async function main() {
                 say(items.length ? `INVENTORY: ${items.join(', ')}` : 'INVENTORY: Nothing');
                 return true;
             }
-            case 'chores': say(`Chores aren't in the new bot yet.`); return false;
+            case 'chores': {
+                chores.setOn(cmd.on);
+                driver.turned();
+                // off mid-chore: the chore stops (a player's job on the stack runs on)
+                if (!cmd.on) await driver.off(director);
+                say(cmd.on ? "Okay, I'll do my chores when nobody needs me." : "Okay, I'm taking a break from chores.");
+                if (cmd.on) setTimeout(() => director?.event('tick'), 200).unref();
+                return true;
+            }
             case 'job': {
                 const d = director;
                 if (!d) { say("I'm not in the game yet."); return false; }
@@ -252,14 +296,16 @@ async function main() {
      */
     const restoreWhenReady = (d: Director) => {
         const t0 = Date.now();
+        driver.restored = false;
         const who = waitsFor(readJobs(jobFile));
         const check = () => {
             if (director !== d) return;
             const waited = Date.now() - t0;
-            if (!body.bot || !body.inGame) { if (waited < RESTORE_MAX_MS) setTimeout(check, 250).unref(); return; }
+            if (!body.bot || !body.inGame) { if (waited < RESTORE_MAX_MS) setTimeout(check, 250).unref(); else driver.restored = true; return; }
             const bot = body.bot;
             const seen = who.every(n => !!bot.players[n]?.entity);
             if (waited < RESTORE_MIN_MS || (!seen && waited < RESTORE_MAX_MS)) { setTimeout(check, 250).unref(); return; }
+            driver.restored = true;
             if (d.stack.depth > 0) return;
             const plan = planRestore(loadJobs(jobFile), j => makeRunner({ id: 'probe', ...j }, jobDeps) !== null);
             for (const n of plan.notes) log(`[laya] ${n}`);
@@ -308,10 +354,23 @@ async function main() {
                 act,
                 models, say, sink, timing: timingOf(settings),
                 runners: entry => makeRunner(entry, jobDeps),
+                onIdle: () => { const d = director; if (d) void driver.idle(d, () => director); },
             });
             // a hit on andy or a player is decided at once (the sensors' own listener ran first)
             bot.on('entityHurt', (e: { type?: string }) => { if (e === bot.entity || e.type === 'player') director?.event('hurt'); });
             bot.on('spawn', () => director?.event('spawn'));
+            // a chest or table a player placed may become the chores centre (the old _choreSensors); a bed when the home bed is gone
+            bot.on('blockUpdate', (old: { name?: string } | null, nw: { name: string; position: Vec3Like; getProperties?: () => Record<string, unknown> } | null) => {
+                if (!nw || old?.name === nw.name) return;
+                const kind = nw.name === 'crafting_table' ? 'table' : ['chest', 'trapped_chest', 'barrel'].includes(nw.name) ? 'chest'
+                    : nw.name.endsWith('_bed') && nw.getProperties?.().part !== 'head' ? 'bed' : null;
+                if (!kind) return;
+                const players = Object.values(bot.players).filter(p => p.entity && p.username !== bot.username).map(p => ({ name: p.username, pos: p.entity.position }));
+                if (!placedBy(nw.position, players, bot.entity.position)) return;
+                const at = { x: nw.position.x, y: nw.position.y, z: nw.position.z };
+                if (kind === 'bed') { chores.placed('bed', at, 'player'); return; }
+                playerPlaced = [...playerPlaced, { kind: kind as StationKind, pos: at }].slice(-4);
+            });
             saver.attach(director.stack);
             restoreWhenReady(director);
             director.start();

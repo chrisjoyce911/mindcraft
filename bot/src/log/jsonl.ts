@@ -55,7 +55,7 @@ export interface CraftLogInput {
 }
 export type CraftOutcome = 'did' | 'failed' | 'fallback' | 'done' | 'stop';
 
-export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm', 'hunt', 'gather', 'place'] as const;
+export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm', 'hunt', 'gather', 'place', 'chores'] as const;
 /** The skill models with a log of their own (5.5). */
 export const SKILL_LOG_TASKS = ['hunt', 'gather', 'place'] as const;
 export type SkillLogTask = (typeof SKILL_LOG_TASKS)[number];
@@ -87,6 +87,28 @@ export interface SkillLine {
     outcome: SkillOutcome; reason?: string;
 }
 export type LogTask = (typeof LOG_TASKS)[number];
+
+/**
+ * The chores ask line (5.6; laya-chores.jsonl, skills-spec §7): the state, the answer acted on ('<skill> <target>'), who
+ * decided (source), the rules' rule and answer, why the rules took over, and the model's words and p when it answered.
+ * event 'impossible': the model's answer couldn't start (it is written as a failed run too).
+ */
+export interface ChoresAskLine {
+    event: 'ask' | 'impossible';
+    state: string; answer: string; skill: string; target: string;
+    rule: string; ruleAnswer: string; source: 'model' | 'rules'; why?: string;
+    model?: string; p?: number; ms?: number;
+    goal?: unknown; reason?: string;
+}
+/**
+ * The chores run line (skills-spec §7): one per run as a chore, written when it ends; the Last line is rebuilt from
+ * these (their time is the run's end), so a failure's 5-minute cooldown runs on across a restart.
+ */
+export interface ChoresRunLine {
+    event: 'run'; skill: string; target: string; result: 'done' | 'failed'; reason?: string; minutes: number;
+    /** What the job's end said, when its reason was mapped (the free text behind reason). */
+    detail?: string;
+}
 
 /** The director's line: the old Director.tick logDecision entry (no `acted`: that's the console's). */
 export interface DirectorLine {
@@ -338,7 +360,7 @@ export class JsonlLog {
 
     file(task: LogTask): string { return path.join(this.dir, `laya-${task}.jsonl`); }
 
-    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | MineLine | FarmLine | SkillLine | StopOverrunLine | null): void {
+    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | MineLine | FarmLine | SkillLine | StopOverrunLine | ChoresAskLine | ChoresRunLine | null): void {
         if (!line) return;
         try {
             if (!this.made) { fs.mkdirSync(this.dir, { recursive: true }); this.made = true; }

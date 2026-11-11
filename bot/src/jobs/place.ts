@@ -23,7 +23,7 @@ export interface PlaceWorld {
      * there is no home chest or it holds none.
      */
     fetch(item: PlaceItem, signal: AbortSignal): Promise<string | null>;
-    /** The base centre (home/centre baseCentre until 5.6 ports chooseCentre). */
+    /** The base centre (home/centre baseCentre: the chores centre from the saved places). */
     centre(): Vec3Like;
     blockAt: GridBlockAt;
     /**
@@ -78,6 +78,7 @@ export async function placeStep(job: JobOf<'place'>, w: PlaceWorld, deps: JobDep
         return failed(o.reason === 'missing-item' ? `missing_${item}` : 'stuck');
     }
     log(line, 'did');
+    deps.placed?.(item, at);
     return skillDone(`Placed the ${item.replace(/_/g, ' ')} at ${x} ${at.y} ${z}.`);
 }
 

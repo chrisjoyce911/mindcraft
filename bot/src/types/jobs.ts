@@ -24,9 +24,12 @@ export type JobSpec =
     | { kind: 'follow'; player: string; distance: number }
     | { kind: 'come'; player: string; distance: number }
     | { kind: 'stay'; seconds: number }                       // -1 = until told otherwise
-    | { kind: 'mine'; ore: Ore; count: number | 'forever' }
-    | { kind: 'farm'; crop: Crop | 'any'; goal: { count: number } | 'forever' }
-    | { kind: 'craft'; item: ItemName; count: number; legacy?: 'craftRecipe' }
+    /** until 'day': a chore at night (mine iron from the home staircase until day) ends done when day comes. */
+    | { kind: 'mine'; ore: Ore; count: number | 'forever'; until?: 'day' }
+    /** goal minutes: timed farming (the old !layaFarm(minutes); the chores' tend and start). */
+    | { kind: 'farm'; crop: Crop | 'any'; goal: { count: number } | { minutes: number } | 'forever' }
+    /** into 'kit': a chore's kit tool goes into the home chest once made (5.6). */
+    | { kind: 'craft'; item: ItemName; count: number; legacy?: 'craftRecipe'; into?: 'kit' }
     | { kind: 'gather'; item: ItemName; count: number; legacy?: 'collectBlocks' }
     | { kind: 'hunt'; mob: MobName; item: ItemName | null; count: number }
     /** The hunt skill (5.5): food to have, carried plus chest (what the home chest holds less the kit, as the caller knows it). */
@@ -38,7 +41,23 @@ export type JobSpec =
     | { kind: 'give'; player: string; item: ItemName; count: number }
     | { kind: 'store'; item: ItemName; count: number }
     | { kind: 'eat'; item: ItemName }
-    | { kind: 'home' };
+    | { kind: 'home' }
+    // the chores jobs (5.6, skills-spec v1 §1 Answers): actuators run as one job each
+    /** Smelt all carried raw meat in the base furnace. */
+    | { kind: 'cook' }
+    /** Put the pack into the home chest (tools, food, torches and some throwaway blocks stay). */
+    | { kind: 'unload' }
+    /** Put cooked food (up to 8) and torches (up to 16) into the kit in the home chest. */
+    | { kind: 'kit' }
+    /** Sleep in his bed until morning. */
+    | { kind: 'sleep' }
+    /** Stay near the centre for seconds; ask: say "I need <item>" first (once per item per 5 minutes). */
+    | { kind: 'rest'; seconds: number; ask?: AskItem }
+    /** Mine count more cobblestone from stone near the surface around the centre. */
+    | { kind: 'cobble'; count: number };
+/** What a rest asks the player for (the chores ask targets). */
+export const ASK_ITEMS = ['logs', 'cobble', 'coal', 'wool', 'food'] as const;
+export type AskItem = (typeof ASK_ITEMS)[number];
 export type JobKind = JobSpec['kind'];
 export type JobOrigin = 'player' | 'chore';
 export interface JobState<P = unknown> {

@@ -63,7 +63,7 @@ export interface DirectorDeps {
     timing?: Partial<Timing>;
     /** Builds a job's runner (jobs/); without it no job can run. */
     runners?: RunnerFactory;
-    /** Nothing to do (chores arrive in 5.6). */
+    /** Nothing to do: the director answered idle with the stack empty (5.6: chores start a run). */
     onIdle?: () => void;
     now?: () => number;
     tickMs?: number;
@@ -181,10 +181,11 @@ export class Director {
     }
 
     /** startJob: a player's (or a chore's) job replaces the top job and runs (player > job: no decision needed). */
-    async startJob<P>(spec: JobSpec, origin: JobOrigin, progress: P, by?: string, opts: { doneSay?: string } = {}): Promise<JobEntry<P> | null> {
+    async startJob<P>(spec: JobSpec, origin: JobOrigin, progress: P, by?: string, opts: { doneSay?: string; label?: string } = {}): Promise<JobEntry<P> | null> {
         const replaced = this.stack.job();
         const entry = this.stack.start(spec, origin, progress, by);
         if (opts.doneSay) entry.doneSay = opts.doneSay;
+        if (opts.label) entry.label = opts.label;
         if (replaced) this.settle(replaced, { how: 'cancelled' });
         this.generation++;
         if (!(await this.runJob(entry as JobEntry))) {
@@ -354,7 +355,9 @@ export class Director {
                 try { runner.close?.(); } catch { /* a runner's summary never stops the bot */ }
             }
         };
-        const held = await this.deps.lease.take(`action:${legacyName(job.spec)}`, run);
+        // a chore's lease says chore (the harness's action shows it; the scenarios wait for it)
+        const name = job.origin === 'chore' ? `action:chore:${job.label ?? legacyName(job.spec)}` : `action:${legacyName(job.spec)}`;
+        const held = await this.deps.lease.take(name, run);
         this.current = { id, name: 'job', held, job };
         void held.result.then(r => {
             if (this.current?.id === id) this.current = null;

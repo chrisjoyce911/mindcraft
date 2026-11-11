@@ -107,6 +107,20 @@ export interface ActBot {
     planksFor(log: string): string | null;
     /** The item an item entity on the ground is (getDroppedItem), or null (optional in fakes). */
     droppedItem?(e: ActEntity): string | null;
+    /** Lie in the bed at p (rejects when it can't: not night, monsters near, too far). Optional in fakes (5.6). */
+    sleep?(p: Vec3Like): Promise<void>;
+    /** Get out of bed. */
+    wake?(): Promise<void>;
+    /** In bed now. */
+    readonly isSleeping?: boolean;
+    /** The time of day (0–23999). */
+    timeOfDay?(): number;
+    /** The biome's name at p, or null. */
+    biomeAt?(p: Vec3Like): string | null;
+    /** The block's sky light at p (0–15), or null when not loaded. */
+    skyLight?(p: Vec3Like): number | null;
+    /** The dimension's name ('overworld', …). */
+    dimension?(): string;
 }
 
 /** The pathfinder goals the actuators use (opaque to them). */
@@ -137,7 +151,14 @@ export interface Mover {
 }
 
 /** One actuator context: the bot, its Motion, the goals. */
-export interface Act { bot: ActBot; motion: Mover; goals: Goals }
+export interface Act {
+    bot: ActBot; motion: Mover; goals: Goals;
+    /**
+     * Told what a chest held each time one was opened (after a deposit or withdrawal, before it closes): the chores
+     * keep the home chest's items fresh from it (5.6). Never throws into the actuator.
+     */
+    chestSeen?: (at: Vec3Like, items: ActItem[]) => void;
+}
 
 const v = (p: Vec3Like): Vec3 => new Vec3(p.x, p.y, p.z);
 
@@ -316,6 +337,22 @@ export function actBot(bot: Bot): ActBot {
                 return ent?.getDroppedItem?.()?.name ?? null;
             } catch { return null; }
         },
+        sleep: async p => {
+            const b = bot.blockAt(v(p));
+            if (!b) throw new Error('no block there');
+            await bot.sleep(b);
+        },
+        wake: () => bot.wake(),
+        get isSleeping() { return bot.isSleeping; },
+        timeOfDay: () => bot.time?.timeOfDay ?? 6000,
+        biomeAt: p => {
+            try {
+                const b = bot.blockAt(v(p)) as unknown as { biome?: { name?: string } } | null;
+                return b?.biome?.name ?? null;
+            } catch { return null; }
+        },
+        skyLight: p => { try { return bot.blockAt(v(p))?.skyLight ?? null; } catch { return null; } },
+        dimension: () => String((bot.game as unknown as { dimension?: string })?.dimension ?? '').replace(/^minecraft:/, ''),
     };
 }
 

@@ -347,6 +347,6 @@ test('the task off, an unknown item, a chore that would gather', async () => {
         world: () => ({ items: w2.deps.items, near: () => ({ table: false, furnace: false, chest: false }), readChest: async () => null, act: w2.deps.act }),
         log: () => {}, checkpoint: () => {},
     }, new AbortController().signal);
-    assert.deepEqual(r, { how: 'end', end: { how: 'failed', reason: 'need_log' } });
+    assert.deepEqual(r, { how: 'end', end: { how: 'failed', reason: 'missing_logs' } }); // 5.6: the Last line's missing_<kind>
     assert.deepEqual(w2.calls, [], 'a chore never gathers itself');
 });

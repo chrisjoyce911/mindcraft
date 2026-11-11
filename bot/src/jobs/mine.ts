@@ -37,6 +37,7 @@ import type { MineBook, MineRecord } from '../home/mines.js';
 import { MINE_DEFAULTS, type JobDeps, type JobOf, type MineSettings } from './deps.js';
 import { jobFailedMessage } from './message.js';
 import { homeFinder, mineWorld } from './mineWorld.js';
+import { timeWord } from '../sensors/chores.js';
 
 export const MAX_STEPS = { v1: 300, v2: 2000 } as const;
 export const MINE_CELLS = 400;
@@ -641,7 +642,11 @@ export function mineRunner(job: JobOf<'mine'>, deps: JobDeps): JobStepper {
     });
     const drop = ORES[spec.ore].drop;
     return {
-        async step(_f, signal): Promise<StepResult> {
+        async step(f, signal): Promise<StepResult> {
+            // a chore at night mines until day (5.6): day ends it done, whatever was mined
+            if (spec.until === 'day' && timeWord(f.time) === 'day') {
+                return { how: 'end', end: { how: 'done' }, say: `It's day: mined ${(p.done ?? 0)} ${drop}.` };
+            }
             const r = await run.step(signal);
             if (r.how === 'more') return { how: 'more' };
             const e = r.end;

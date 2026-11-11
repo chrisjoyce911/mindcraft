@@ -99,9 +99,15 @@ export interface FarmRunContext {
     chat(text: string): void;
     /** Writes the job's progress to disk now (before a deposit). */
     checkpoint(): void;
+    /**
+     * Timed farming (the old !layaFarm(minutes); the chores' tend and start, 5.6): the run ends done at this time
+     * (ms), and max_steps bounds it.
+     */
+    until?: number;
+    now?: () => number;
 }
 
-export type FarmEndReason = 'count reached' | 'no hoe' | 'no answer' | 'no water' | 'nothing to do' | 'stuck' | 'max steps' | 'not in game';
+export type FarmEndReason = 'count reached' | 'time up' | 'no hoe' | 'no answer' | 'no water' | 'nothing to do' | 'stuck' | 'max steps' | 'not in game';
 /** How a run ended: ok (the count is harvested) or not, why, and what andy says. */
 export interface FarmEnd { ok: boolean; reason: FarmEndReason; say?: string; counters: FarmCounters }
 export type FarmStep = { how: 'more' } | { how: 'end'; end: FarmEnd };
@@ -139,8 +145,8 @@ export class FarmRun {
     constructor(private readonly c: FarmRunContext) {
         this.opts = { ...FARM_DEFAULTS, ...c.settings() };
         this.v2 = this.opts.prompt === 'v2' || this.opts.prompt === 'v2.1'; // v2.1: v2's prompt, v2.1's rules
-        // the minutes goal (max_steps) arrives with 5.6; a count or "until stopped" goes on
-        this.maxSteps = this.opts.max_steps_open;
+        // timed farming is bounded by max_steps; a count or "until stopped" goes on
+        this.maxSteps = c.until !== undefined ? this.opts.max_steps : this.opts.max_steps_open;
         this.counters.harvested = c.progress.harvested ?? 0;
     }
 
@@ -260,6 +266,9 @@ export class FarmRun {
             this.started = true;
             const r = await this.setup(w, signal);
             if (r) return r;
+        }
+        if (this.c.until !== undefined && (this.c.now ?? Date.now)() >= this.c.until) {
+            return this.finish(true, 'time up', `Farmed until the time was up; harvested ${this.counters.harvested}.`);
         }
         if (this.steps >= this.maxSteps) return this.finish(false, 'max steps');
         this.steps++;
@@ -401,13 +410,15 @@ export function farmRunner(job: JobOf<'farm'>, deps: JobDeps): JobStepper {
     const spec = job.spec;
     const p = job.progress as FarmProgress;
     const settings = settingsOf(deps);
-    const count = spec.goal === 'forever' ? 'forever' : spec.goal.count;
+    const count = spec.goal === 'forever' || !('count' in spec.goal) ? 'forever' : spec.goal.count;
+    // timed: from the job's start (a pause or a restart doesn't add time)
+    const until = spec.goal !== 'forever' && 'minutes' in spec.goal ? job.startedAt + spec.goal.minutes * 60_000 : undefined;
     if (!settings().enabled) {
         return { step: async (): Promise<StepResult> => ({ how: 'end', end: { how: 'failed', reason: 'the farm task is off' }, say: FARM_OFF }) };
     }
     const home = homeFinder(deps);
     const run = new FarmRun({
-        crop: spec.crop, count, progress: p, settings,
+        crop: spec.crop, count, progress: p, settings, ...(until !== undefined ? { until, now: deps.now ?? Date.now } : {}),
         world: () => { const a = deps.act(); return a ? farmWorld(a, deps, settings().water_radius, home) : null; },
         log: line => deps.farmLog?.(line),
         note: text => deps.note(text),

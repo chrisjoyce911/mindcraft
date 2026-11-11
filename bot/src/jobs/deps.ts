@@ -1,5 +1,5 @@
 // What the jobs need from the bot: the actuator context, the places, the follow settings and the logs.
-import type { JobSpec, JobState, JobStepper, ModelDecider } from '../types/index.js';
+import type { JobSpec, JobState, JobStepper, ModelDecider, PlaceItem, Vec3Like } from '../types/index.js';
 import type { Act } from '../actuators/bot.js';
 import type { PlaceBook } from '../home/places.js';
 import type { CraftLine, FarmLine, FollowLine, MineLine, SkillLine, SkillLogTask } from '../log/jsonl.js';
@@ -193,6 +193,12 @@ export interface JobDeps {
      * can't be undone (a toss, a deposit), so a kill -9 during the act never restores the job as if it hadn't run.
      */
     checkpoint?: () => void;
+    /** The place skill put an item at p (5.6: a bed, table or chest may become home). */
+    placed?: (item: PlaceItem, p: Vec3Like) => void;
+    /** A tree was felled at p (its lowest log): kept in the chores state's stumps (5.6). */
+    stump?: (p: Vec3Like) => void;
+    /** When andy last said he needs each item (the chores' ask: once per item per 5 minutes). */
+    needSaid?: Map<'logs' | 'cobble' | 'coal' | 'wool' | 'food', number>;
     now?: () => number;
 }
 

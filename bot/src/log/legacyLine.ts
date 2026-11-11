@@ -26,6 +26,12 @@ export function legacyName(j: JobSpec): string {
         case 'huntFood': return 'layaHunt';
         case 'gatherSkill': return 'layaGatherSkill';
         case 'place': return 'layaPlace';
+        case 'cook': return 'layaCook';
+        case 'unload': return 'layaUnload';
+        case 'kit': return 'layaKit';
+        case 'sleep': return 'layaSleep';
+        case 'rest': return 'stay';
+        case 'cobble': return 'layaCobble';
     }
 }
 
@@ -48,7 +54,7 @@ export function legacyLine(c: Command): string | null {
         case 'hunt': return j.item === null ? `${n}(${q(j.mob)})` : `${n}(${q(j.mob)}, ${q(j.item)}, ${j.count})`;
         case 'gather': case 'craft': return `${n}(${q(j.item)}, ${j.count})`;
         case 'mine': return j.count === 'forever' ? `${n}(${q(j.ore)})` : `${n}(${q(j.ore)}, ${j.count})`;
-        case 'farm': return j.goal === 'forever' ? `${n}(${q(j.crop)})` : `${n}(${q(j.crop)}, ${j.goal.count})`;
+        case 'farm': return j.goal === 'forever' ? `${n}(${q(j.crop)})` : 'minutes' in j.goal ? `${n}(${j.goal.minutes})` : `${n}(${q(j.crop)}, ${j.goal.count})`;
         case 'home': return n;
         case 'give': return `${n}(${q(j.player)}, ${q(j.item)}, ${j.count})`;
         case 'store': return `${n}(${q(j.item)}, ${j.count})`;
@@ -56,5 +62,8 @@ export function legacyLine(c: Command): string | null {
         case 'huntFood': return `${n}(${j.goal})`;
         case 'gatherSkill': return `${n}(${q(j.target)}, ${j.goal})`;
         case 'place': return `${n}(${q(j.item)})`;
+        case 'cook': case 'unload': case 'kit': case 'sleep': return n;
+        case 'rest': return `${n}(${j.seconds})`;
+        case 'cobble': return `${n}(${j.count})`;
     }
 }

@@ -137,7 +137,12 @@ export async function gatherSkillStep(job: JobOf<'gatherSkill'>, w: GatherSkillW
             o = near ? await w.approach(near.at, signal) : none;
             break;
         case 'cut':
-            if (goal === 'logs') { on = near?.tree ? { at: near.tree.base } : null; o = near?.tree ? await w.fell(near.tree, signal) : none; }
+            if (goal === 'logs') {
+                on = near?.tree ? { at: near.tree.base } : null;
+                o = near?.tree ? await w.fell(near.tree, signal) : none;
+                // where a felled tree stood: its sapling may go back there (the chores state's stumps; the place model picks the cell)
+                if (o.ok && near?.tree) deps.stump?.(near.tree.base);
+            }
             else if (goal === 'seeds') { on = near ? { at: near.at } : null; o = near ? await w.dig(near.at, signal) : none; }
             else o = { ok: false, reason: 'error', detail: `cut for ${goal}` };
             break;

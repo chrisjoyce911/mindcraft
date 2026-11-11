@@ -43,8 +43,14 @@ export async function deposit(a: Act, p: Vec3Like, item: string, count: number, 
         return fail('error', String(e));
     } finally {
         d.dispose();
+        seen(a, p, box);
         try { box.close(); } catch { /* closed already */ }
     }
+}
+
+/** seen: tell the chest's items to the Act's chestSeen (the chores' home chest record). */
+function seen(a: Act, p: Vec3Like, box: ActContainer): void {
+    try { a.chestSeen?.({ x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) }, box.items()); } catch { /* never stops the actuator */ }
 }
 
 export type ChestRead = { ok: true; items: ActItem[] } | { ok: false; outcome: Outcome };
@@ -68,7 +74,7 @@ async function open(a: Act, p: Vec3Like, signal: AbortSignal): Promise<{ ok: tru
 export async function readChest(a: Act, p: Vec3Like, signal: AbortSignal): Promise<ChestRead> {
     const o = await open(a, p, signal);
     if (!o.ok) return o;
-    try { return { ok: true, items: o.box.items() }; } finally { try { o.box.close(); } catch { /* closed already */ } }
+    try { return { ok: true, items: o.box.items() }; } finally { seen(a, p, o.box); try { o.box.close(); } catch { /* closed already */ } }
 }
 
 export type WithdrawResult = { ok: true; name: string; took: number } | { ok: false; outcome: Outcome; why?: string };
@@ -110,5 +116,5 @@ export async function withdraw(a: Act, p: Vec3Like, pick: (items: ActItem[]) => 
             }
         } finally { d.dispose(); }
         return took ? { ok: true, name: want.name, took } : { ok: false, outcome: fail('missing-item', want.name), why: `Could not find any ${want.name} in the chest.` };
-    } finally { try { box.close(); } catch { /* closed already */ } }
+    } finally { seen(a, p, box); try { box.close(); } catch { /* closed already */ } }
 }

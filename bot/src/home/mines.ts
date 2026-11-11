@@ -54,6 +54,8 @@ export interface MineBook {
     save(rec: MineRecord): void;
     /** forget drops a mine that isn't there any more (a new world, filled in). */
     forget(entrance: Vec3Like): void;
+    /** Every saved mine (the chores' Near iron: a mine where iron was mined). */
+    all?(): MineRecord[];
 }
 
 export function mineBook(io: { load(): unknown; save(list: MineRecord[]): void }, range = REUSE_RANGE): MineBook {
@@ -62,6 +64,7 @@ export function mineBook(io: { load(): unknown; save(list: MineRecord[]): void }
         find: feet => nearestMine(read(), feet, range),
         save: rec => { try { io.save(upsertMine(read(), rec)); } catch { /* nicety */ } },
         forget: entrance => { try { io.save(read().filter(m => m?.entrance && key(m.entrance) !== key(entrance))); } catch { /* nicety */ } },
+        all: () => read().filter(m => !!m?.entrance),
     };
 }
 

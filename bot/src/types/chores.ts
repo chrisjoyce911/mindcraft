@@ -85,3 +85,24 @@ export const LAST_WINDOW = 10;
 
 /** One Last entry: the latest result of one (skill, target) run as a chore. */
 export interface LastRun { skill: ChoreSkill; target: ChoreTarget; done: boolean; reason?: ChoreReason; age: number }
+
+/** The kind a missing item counts as (the Carry line's kinds), for missing_<kind>. */
+export function itemKind(item: string): 'logs' | 'sticks' | 'cobble' | 'coal' | 'iron' | 'wool' | 'food' | 'seeds' | 'saplings' | null {
+    if (/^(log|planks)$|_(log|stem|wood|hyphae|planks)$/.test(item) || item === 'wood' || item === 'logs') return 'logs';
+    if (item === 'stick' || item === 'sticks') return 'sticks';
+    if (item === 'cobblestone' || item === 'cobbled_deepslate' || item === 'cobble' || item === 'stone') return 'cobble';
+    if (item === 'coal' || item === 'charcoal') return 'coal';
+    if (item === 'raw_iron' || item === 'iron_ingot' || item === 'iron') return 'iron';
+    if (item === 'string' || item === 'wool' || item.endsWith('_wool')) return 'wool';
+    if (item === 'food') return 'food';
+    if (item === 'wheat_seeds' || item === 'seeds') return 'seeds';
+    if (item === 'saplings' || item.endsWith('_sapling') || item === 'mangrove_propagule') return 'saplings';
+    return null;
+}
+
+/** missing: missing_<kind> for an item, or stuck when the item has no kind. */
+export function missing(item: string): ChoreReason {
+    const k = itemKind(item);
+    const r = k ? `missing_${k}` : '';
+    return isChoreReason(r) ? r : 'stuck';
+}

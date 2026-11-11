@@ -10,16 +10,28 @@ export interface JobEntry<P = unknown> extends JobState<P> {
     left?: () => number | null;
     /** What andy says when the job ends done, instead of the runner's line (a plan's doneSay: home's "That's my chest now."). */
     doneSay?: string;
+    /** A chore's run name (<skill>_<target>): its lease is action:chore:<label> (5.6). */
+    label?: string;
 }
 
 let nextId = 1;
+
+/**
+ * The Job line's word for the kinds the director's prompt has no word of its own for (its words are fixed): hunt and
+ * the hunt skill show as attack, the gather skill and cobble as gather, a place, cook as craft, unload and kit as
+ * store, sleep and rest as stay.
+ */
+const CHORE_JOB_WORD: Partial<Record<JobSpec['kind'], DirectorJobKind>> = {
+    hunt: 'attack', huntFood: 'attack', gatherSkill: 'gather', cobble: 'gather', place: 'craft', cook: 'craft',
+    unload: 'store', kit: 'store', sleep: 'stay', rest: 'stay',
+};
 
 /**
  * jobKind: the Job line's kind for a spec (hunt and the hunt skill show as attack, the gather skill as gather, a
  * place as craft: the director's words are fixed by its prompt; eat isn't a job kind there).
  */
 export function jobKind(spec: JobSpec): DirectorJobKind | null {
-    const k = spec.kind === 'hunt' || spec.kind === 'huntFood' ? 'attack' : spec.kind === 'gatherSkill' ? 'gather' : spec.kind === 'place' ? 'craft' : spec.kind;
+    const k = CHORE_JOB_WORD[spec.kind] ?? spec.kind;
     return (JOB_KINDS as readonly string[]).includes(k) ? (k as DirectorJobKind) : null;
 }
 
@@ -34,6 +46,8 @@ function jobItem(spec: JobSpec): string | null {
         case 'huntFood': return 'food';
         case 'gatherSkill': return spec.target;
         case 'place': return spec.item;
+        case 'cobble': return 'cobblestone';
+        case 'cook': return 'food';
         default: return null;
     }
 }
@@ -41,7 +55,8 @@ function jobItem(spec: JobSpec): string | null {
 function jobCount(spec: JobSpec): number | 'any' {
     switch (spec.kind) {
         case 'mine': return spec.count === 'forever' ? 'any' : spec.count;
-        case 'farm': return spec.goal === 'forever' ? 'any' : spec.goal.count;
+        case 'farm': return spec.goal === 'forever' || !('count' in spec.goal) ? 'any' : spec.goal.count;
+        case 'cobble': return spec.count;
         case 'craft': case 'gather': case 'hunt': case 'give': case 'store': return spec.count;
         case 'huntFood': case 'gatherSkill': return spec.goal;
         case 'place': return 1;

@@ -18,6 +18,7 @@ import { craftRecipe } from '../actuators/craft.js';
 import { collectBlocks } from '../actuators/collect.js';
 import { CRAFT_DEFAULTS, type CraftSettings, type JobDeps, type JobOf } from './deps.js';
 import { jobFailedMessage } from './message.js';
+import { missing } from '../types/chores.js';
 import { craftWorld } from './craftWorld.js';
 
 /** What the runner needs of the world (craftWorld builds it from the actuators; tests pass fakes). */
@@ -121,8 +122,9 @@ export async function craftStep(c: CraftRunContext, signal: AbortSignal): Promis
     }
     const step = d.step;
     if (step.action === 'done') return done(); // never: a rule is never done
-    // a chore gathers nothing itself: it reports what it lacks (skills-spec §5; wired in 5.6)
-    if (c.purpose === 'chore' && step.action === 'gather') return { how: 'end', end: { how: 'failed', reason: `need_${step.item}` } };
+    // a chore gathers nothing itself: it reports what it lacks as the Last line's missing_<kind> (skills-spec §1: gather
+    // log → failed:missing_logs; an item with no kind: stuck), and the chores model picks the gather run
+    if (c.purpose === 'chore' && step.action === 'gather') return { how: 'end', end: { how: 'failed', reason: missing(step.item) } };
     p.steps++;
     let n = step.count;
     if (step.action === 'store') n = (sit.have[step.item] ?? 0) <= 64 || n >= 64 ? -1 : n; // 64 means all
