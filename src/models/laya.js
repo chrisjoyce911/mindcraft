@@ -83,12 +83,13 @@ export function createLayaClient(getConfig = () => agentSettings.decision_models
         return { ...t, url: server.url.replace(/\/+$/, ''), timeout_ms: t.timeout_ms ?? 300, min_confidence: t.min_confidence ?? 0 };
     };
 
-    const fetchJSON = async (url, options, timeoutMs) => {
+    const fetchJSON = async (url, options, timeoutMs, onResponse) => {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
             const resp = await fetch(url, { ...options, signal: controller.signal });
             const text = await resp.text();
+            if (resp.ok && onResponse) onResponse(resp);
             if (!resp.ok) {
                 const err = new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
                 err.reason = 'http';
@@ -146,9 +147,15 @@ export function createLayaClient(getConfig = () => agentSettings.decision_models
         try {
             const model = await modelFor(t);
             const body = JSON.stringify({ model, questions, state });
+            // golaya serve names the prompt version the model expects: a swapped model's
+            // version is used from the next decision on.
+            const seen = resp => {
+                const p = resp.headers?.get?.('x-laya-prompt-version');
+                if (p) noteServedPrompt(t.url, model, p);
+            };
             const post = () => fetchJSON(t.url + '/v1/decisions', {
                 method: 'POST', headers: { 'content-type': 'application/json' }, body,
-            }, t.timeout_ms);
+            }, t.timeout_ms, seen);
             let reply;
             try {
                 reply = await post();
@@ -202,6 +209,8 @@ export function createLayaClient(getConfig = () => agentSettings.decision_models
             out.models = await models(t.url, Math.max(t.timeout_ms, 2000));
             out.reachable = true;
             out.model = await modelFor(t, true);
+            await refreshServed(t.url).catch(() => {});
+            out.prompt = servedPrompt(t.url, out.model) ?? null;
         } catch (err) {
             out.error = err.message;
             return out;
@@ -229,11 +238,83 @@ export function createLayaClient(getConfig = () => agentSettings.decision_models
     return { decide, models, check, stats };
 }
 
+// Served prompt versions. golaya serve lists, per model, the prompt version
+// it expects (prompt_version in GET /v1/models, from the model folder's
+// model-info.json) and names it in every decision (X-Laya-Prompt-Version), so
+// laya-go can replace a model with one that expects a newer prompt and
+// Mindcraft follows without a settings change. A task's prompt setting is the
+// fallback when the server says nothing.
+export const SERVED_TTL_MS = 10_000;
+const served = new Map(); // server url -> {at, prompts: Map(model -> version), pending}
+const norm = url => String(url || '').replace(/\/+$/, '');
+
+// refreshServed reads a server's prompt versions now.
+export async function refreshServed(url, timeoutMs = 2000) {
+    url = norm(url);
+    const e = served.get(url) || { at: 0, prompts: new Map(), pending: null };
+    served.set(url, e);
+    if (e.pending) return e.pending;
+    e.pending = (async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        timer.unref?.();
+        try {
+            const resp = await fetch(url + '/v1/models', { signal: controller.signal });
+            const list = await resp.json();
+            const prompts = new Map();
+            for (const m of list.data || []) if (m?.id && m.prompt_version) prompts.set(m.id, m.prompt_version);
+            e.prompts = prompts;
+        } finally {
+            clearTimeout(timer);
+            e.at = Date.now(); // a failed read also waits SERVED_TTL_MS before the next try
+            e.pending = null;
+        }
+    })();
+    return e.pending;
+}
+
+// servedPrompt returns the prompt version the server last said model expects
+// (undefined when it hasn't said), refreshing in the background when stale.
+export function servedPrompt(url, model) {
+    url = norm(url);
+    const e = served.get(url);
+    if (!e || (!e.pending && Date.now() - e.at > SERVED_TTL_MS)) refreshServed(url).catch(() => {});
+    return e?.prompts.get(model);
+}
+
+// noteServedPrompt records a version the server named in a decision.
+export function noteServedPrompt(url, model, version) {
+    url = norm(url);
+    const e = served.get(url) || { at: 0, prompts: new Map(), pending: null };
+    served.set(url, e);
+    if (e.prompts.get(model) !== version) e.prompts.set(model, version);
+}
+
+// primeServedPrompts reads every configured server's prompt versions, at most timeoutMs.
+export async function primeServedPrompts(config = agentSettings.decision_models, timeoutMs = 2000) {
+    const urls = new Set(Object.values(config?.servers || {}).map(s => norm(s?.url)).filter(Boolean));
+    await Promise.allSettled([...urls].map(u => refreshServed(u, timeoutMs)));
+}
+
 // laya is the client Mindcraft uses, reading the agent's settings.
 export const laya = createLayaClient();
 
-// taskSettings returns a task's settings when it is enabled, or null.
-export function taskSettings(task) {
-    const t = agentSettings.decision_models?.tasks?.[task];
-    return t?.enabled ? t : null;
+// taskSettings returns a task's settings when it is enabled, or null. Its
+// prompt is the served model's prompt version, read each time prompt is read
+// (so a kept task object follows a swap), else the task's prompt setting.
+export function taskSettings(task, getConfig = () => agentSettings.decision_models) {
+    const cfg = getConfig();
+    const t = cfg?.tasks?.[task];
+    if (!t?.enabled) return null;
+    const url = cfg.servers?.[t.server]?.url;
+    const out = { ...t };
+    Object.defineProperty(out, 'prompt', {
+        enumerable: true, configurable: true,
+        get: () => (url && t.model ? servedPrompt(url, t.model) : undefined) ?? t.prompt,
+    });
+    return out;
 }
+
+// The served versions are read as soon as the client is loaded, so the first
+// decisions already use them.
+primeServedPrompts().catch(() => {});

@@ -9,7 +9,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import settings from '../../settings.js';
-import { createLayaClient } from './laya.js';
+import { createLayaClient, refreshServed, servedPrompt } from './laya.js';
 
 // SAMPLES are known requests per task, used to ask a real question.
 export const SAMPLES = {
@@ -40,7 +40,7 @@ export function formatReport(r) {
     const lines = [`${r.task} (${r.enabled ? 'enabled' : 'off'})`];
     lines.push(`  server   ${r.url ?? '—'}  ${r.reachable ? 'reachable' : 'NOT reachable'}`);
     if (r.reachable) lines.push(`  models   ${r.models.length ? r.models.join(', ') : 'no decision models'}`);
-    if (r.model) lines.push(`  uses     ${r.model}`);
+    if (r.model) lines.push(`  uses     ${r.model}${r.samplePrompt ? `, prompt ${r.samplePrompt}${r.prompt ? ' (served)' : ' (settings: the server names none)'}` : ''}`);
     if (r.answer) {
         const parts = Object.entries(r.answer.answers).map(([name, a]) =>
             a.type === 'noul' ? `${name} ${a.probability.toFixed(2)}` : `${name} ${a.top} ${a.topProbability.toFixed(2)}${a.confident ? '' : ' (not confident)'}`);
@@ -61,7 +61,12 @@ export async function run(args, config = settings.decision_models, out = console
     }
     let status = 0;
     for (const task of tasks) {
-        const r = await client.check(task, loadSample(task, config?.tasks?.[task]?.prompt));
+        const t = config?.tasks?.[task];
+        const url = config?.servers?.[t?.server]?.url;
+        if (url) await refreshServed(url).catch(() => {});
+        const prompt = (url && t?.model ? servedPrompt(url, t.model) : undefined) ?? t?.prompt;
+        const r = await client.check(task, loadSample(task, prompt));
+        r.samplePrompt = prompt || 'v1';
         if (r.reachable && r.model && !r.models.includes(r.model)) r.error = `model "${r.model}" is not served here`;
         out(formatReport(r));
         if (r.enabled && (r.error || !r.reachable)) status = 1;

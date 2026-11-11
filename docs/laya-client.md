@@ -79,3 +79,14 @@ laya.stats('follow');  // { asked, answered, failed: { disabled, timeout, ... },
 ```sh
 npm test      # node:test, no extra packages; fake servers answer like golaya serve and MLX-Serve
 ```
+
+## The served prompt version
+
+laya-go keeps one model per skill under the name golaya serves and replaces it when a better one is trained. Each
+model folder records the prompt version it expects (`model-info.json`); golaya serve lists it as `prompt_version` in
+`GET /v1/models` and names it in each decision (`X-Laya-Prompt-Version`). `taskSettings(task).prompt` is that version
+(read every 10 s at most, and at once from a decision's header), and the task's `prompt` setting only when the server
+names none. So when laya-go replaces director (v1) with a v1.2 model, the director writes the v1.2 text from the next
+decision on, with no settings change. A job already running (a follow, a mine run) keeps the prompt it started with
+until it ends; laya-go's "hold swaps" tick box keeps models from changing during a live test.
+`npm run laya:check` prints the prompt each task's sample used and whether the server named it.
