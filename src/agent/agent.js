@@ -687,6 +687,8 @@ export class Agent {
             foodItems: items.filter(i => foods[i.name] && !HARMFUL.has(i.name)).reduce((n, i) => n + i.count, 0),
             player: playerFact(bot, this._playerHits || {}),
             me: this._meFact(),
+            // not in the state text: the laya_defending mode's own reach
+            attackerNear: hostiles.some(e => e.position.distanceTo(pos) <= 8 && this.isAttacker(e)),
             danger: dangerOf({
                 onFire: !!((bot.entity.metadata?.[0] ?? 0) & 1), inFire: /fire$/.test(here?.name || ''),
                 oxygen: bot.oxygenLevel, headInWater: head?.name === 'water',

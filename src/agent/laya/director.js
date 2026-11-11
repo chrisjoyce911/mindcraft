@@ -419,10 +419,12 @@ export class Director {
             });
         };
         const near = !!s.nearest && s.hostiles > 0 && Math.min(s.nearest.dist, 16) <= 8;
-        // defend: the laya_defending mode fights a mob attacking the bot;
-        // a player's attacker is gone for (v1.3)
+        // defend: the laya_defending mode fights an attacker within its
+        // reach (s.attackerNear: one attacking the bot or a player within 8);
+        // a player's attacker further off is gone for. Never both: they'd
+        // interrupt each other every second.
         const performed = activity === 'eat' || activity === 'heal' || activity === 'unload'
-            || (activity === 'defend' && !s.me?.attacked && !!s.player?.attacked)
+            || (activity === 'defend' && !s.me?.attacked && !s.attackerNear && !!s.player?.attacked)
             || (activity === 'flee' && !near && !!s.nearest && mobKind(s.nearest.kind) === 'skeleton');
         if (activity === 'resume') {
             const job = this.stack.job();

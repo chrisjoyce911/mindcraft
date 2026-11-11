@@ -203,3 +203,33 @@ test('light_base: the sensor and the actuator share one dark-spot test', async (
     assert.equal(darkSpot(b('stone', 0, 'block')), false);
     assert.equal(darkSpot(null), false);
 });
+
+test('director: defend-player is performed only when no attacker is within the mode\'s reach (never both)', async () => {
+    const { Director } = await import('../src/agent/laya/director.js');
+    const performed = [];
+    const hit = { name: 'tester', attacked: true, by: 'zombie', dist: 12 };
+    let sit = { ...calm, player: hit, hostiles: 1, nearest: { kind: 'zombie', dist: 11 } };
+    // the fight ends the attack (as killing the zombie would)
+    const d = new Director({ read: () => sit, idle: () => true, now: () => 0,
+        perform: async a => { performed.push(a); sit = { ...sit, player: { ...hit, attacked: false, by: 'none' } }; } });
+    await d.tick();
+    await sleep(5);
+    assert.deepEqual(performed, ['defend'], 'the attacker is out of the mode\'s reach: the director goes');
+    sit = { ...sit, player: hit, nearest: { kind: 'zombie', dist: 5 }, attackerNear: true };
+    await d.tick();
+    await sleep(5);
+    assert.deepEqual(performed, ['defend'], 'the mode fights it: the director does not');
+});
+
+test('ActionManager.stop waits only for the action it set out to stop', async () => {
+    const { ActionManager } = await import('../src/agent/action_manager.js');
+    let killed = false;
+    const agent = { bot: { interrupt_code: false, output: '', emit() {} }, requestInterrupt() {}, clearBotLogs() {}, cleanKill() { killed = true; },
+        self_prompter: { isActive: () => false }, isIdle: () => false, history: { add() {} } };
+    const am = new ActionManager(agent);
+    am.executing = true; am.runId = 1;
+    const p = am.stop();
+    setTimeout(() => { am.runId = 2; }, 50); // the old one ended, a newer one started at once
+    await p;
+    assert.equal(killed, false);
+});
