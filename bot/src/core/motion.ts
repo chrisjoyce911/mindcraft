@@ -6,12 +6,24 @@ import { withTimeout, timedOut } from './abort.js';
 
 /** The part of a mineflayer bot Motion uses (a fake in tests). */
 export interface MotionBot {
-    pathfinder: { goto(goal: unknown): Promise<unknown>; setGoal(goal: unknown | null, dynamic?: boolean): void };
+    pathfinder: {
+        goto(goal: unknown): Promise<unknown>; setGoal(goal: unknown | null, dynamic?: boolean): void;
+        /** The movements in use (a live pathfinder has them; the safe goTo swaps them and puts them back). */
+        movements?: unknown; setMovements?(m: unknown): void;
+    };
     stopDigging(): void;
     clearControlStates(): void;
 }
 
-export interface GoToOptions { timeoutMs?: number }
+export interface GoToOptions {
+    timeoutMs?: number;
+    /**
+     * safe: the safe movements for this goTo (the old skills.safeMovements: never off a drop of more than 3 blocks,
+     * no parkour, liquids cost 100 and no digging that lets them flow); the previous movements come back after,
+     * also on an abort or a timeout.
+     */
+    safe?: boolean;
+}
 
 /** sleepFor resolves true after ms, false as soon as the signal aborts (never rejects). */
 function sleepFor(ms: number, signal: AbortSignal): Promise<boolean> {
@@ -29,7 +41,8 @@ export class Motion {
     private inFlight = 0;
     /** moving: a goTo is in flight (the stuck watch counts only then). */
     get moving(): boolean { return this.inFlight > 0; }
-    constructor(private readonly bot: MotionBot, private readonly defaultTimeoutMs = 60000) {}
+    /** safeMovements builds the safe movements (body.ts: pathfinder Movements; null: a safe goTo uses the current ones). */
+    constructor(private readonly bot: MotionBot, private readonly defaultTimeoutMs = 60000, private readonly safeMovements: (() => unknown) | null = null) {}
 
     /** stop: clear the goal and controls now (the lease's body reset uses this too). */
     stop(): void {
@@ -78,9 +91,14 @@ export class Motion {
         if (signal.aborted) return Promise.resolve(fail('cancelled'));
         const t = withTimeout(opts.timeoutMs ?? this.defaultTimeoutMs, signal);
         this.inFlight++;
+        const pf = this.bot.pathfinder;
+        const swap = !!opts.safe && !!this.safeMovements && typeof pf.setMovements === 'function';
+        const prev = swap ? pf.movements : undefined;
+        if (swap) { try { pf.setMovements!(this.safeMovements!()); } catch { /* the current ones then */ } }
+        const restore = () => { if (swap && prev) { try { pf.setMovements!(prev); } catch { /* best effort */ } } };
         return new Promise<Outcome>(resolve => {
             let done = false;
-            const finish = (o: Outcome) => { if (done) return; done = true; this.inFlight--; t.dispose(); t.signal.removeEventListener('abort', onAbort); resolve(o); };
+            const finish = (o: Outcome) => { if (done) return; done = true; this.inFlight--; restore(); t.dispose(); t.signal.removeEventListener('abort', onAbort); resolve(o); };
             const onAbort = () => { if (done) return; this.stop(); finish(timedOut(t.signal) ? fail('timeout') : fail('cancelled')); };
             t.signal.addEventListener('abort', onAbort, { once: true });
             this.bot.pathfinder.goto(goal).then(

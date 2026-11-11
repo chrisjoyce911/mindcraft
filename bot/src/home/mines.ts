@@ -1,7 +1,7 @@
 // Mine memory (bots/<name>/laya-mines.json; a typed port of the old bot's src/agent/laya/mine_memory.js and the
 // file I/O in skills.js): each mine a mine job lays out is saved, so a new mine job near a saved mine goes on with
 // it. The file is the list, newest first, as JSON.stringify(list, null, 1) (today's format), now written
-// atomically. Nothing uses it until 5.2.
+// atomically. The mine job (5.2) uses it.
 import fs from 'fs';
 import path from 'path';
 import type { Vec3Like } from '../types/index.js';
@@ -21,8 +21,11 @@ export interface MineRecord {
     deepest?: number;
     /** Where andy last was in it. */
     last?: Vec3Like | null;
-    started?: number;
-    updated?: number;
+    /** The first blocks andy dug for it (at most 3): air again on a reuse, else the mine is gone (a reset world). */
+    dug?: Vec3Like[];
+    /** ISO times, as the old file wrote them (new Date().toISOString()). */
+    started?: string;
+    updated?: string;
 }
 
 const flat = (a: Vec3Like, b: Vec3Like): number => Math.hypot(a.x - b.x, a.z - b.z);

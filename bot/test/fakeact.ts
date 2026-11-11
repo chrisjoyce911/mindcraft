@@ -242,6 +242,8 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
         near: (p: { x: number }, range: number): Goal => ({ near: p.x, range }),
         invert: (g: Goal): Goal => ({ invert: g }),
         lookAt: (p: { x: number; y: number; z: number }): Goal => ({ lookAt: key(p) }),
+        block: (p: { x: number; y: number; z: number }): Goal => ({ block: key(p) }),
+        lookAtNotOn: (p: { x: number; y: number; z: number }): Goal => ({ lookAtNotOn: key(p) }),
     };
     w.act = { bot, motion, goals };
     w.addMob = m => {

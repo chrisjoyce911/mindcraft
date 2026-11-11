@@ -6,7 +6,7 @@ import { Vec3 } from 'vec3';
 import type { Outcome, Vec3Like } from '../types/index.js';
 import type { GoToOptions } from '../core/motion.js';
 
-export interface ActEntity { id: number; name?: string | undefined; username?: string | undefined; position: Vec3Like; height?: number; isValid?: boolean }
+export interface ActEntity { id: number; name?: string | undefined; type?: string | undefined; username?: string | undefined; position: Vec3Like; height?: number; isValid?: boolean }
 export interface ActItem { name: string; count: number }
 /** A block as the actuators and the follow state read it (a mineflayer Block fits). metadata 0: a liquid's source. */
 export interface ActBlock { name: string; boundingBox?: string; metadata?: number; getProperties?: () => Record<string, unknown> }
@@ -44,11 +44,15 @@ export type Hand = 'hand' | 'off-hand';
 export type Control = 'jump' | 'forward' | 'back' | 'sprint';
 
 export interface ActBot {
-    readonly entity: { position: Vec3Like };
+    readonly entity: { position: Vec3Like; yaw?: number };
     readonly entities: Readonly<Record<string, ActEntity>>;
     readonly health: number;
+    /** The food level (optional in fakes). */
+    readonly food?: number;
     readonly heldItem: ActItem | null;
     items(): ActItem[];
+    /** Empty inventory slots (optional in fakes). */
+    emptySlots?(): number;
     equip(item: ActItem, hand: Hand): Promise<void>;
     /** Eat or drink the held item (mineflayer consume(); it can't be cancelled). */
     consume(): Promise<void>;
@@ -107,6 +111,13 @@ export interface Goals {
     invert(g: Goal): Goal;
     /** Somewhere the block at p is in reach and in sight (to dig it). */
     lookAt(p: Vec3Like): Goal;
+    /** Standing in the cell p (the old moveTo's GoalBlock). */
+    block(p: Vec3Like): Goal;
+    /**
+     * lookAt within reach 4 that never ends standing on top of p (in its column above it): for ore over a hollow
+     * (the old collectOreAt's isEnd override).
+     */
+    lookAtNotOn(p: Vec3Like): Goal;
 }
 
 /** What actuators need of Motion (core/motion.ts satisfies it). */
@@ -128,8 +139,10 @@ export function actBot(bot: Bot): ActBot {
         get entity() { return bot.entity; },
         get entities() { return bot.entities as unknown as Record<string, ActEntity>; },
         get health() { return bot.health; },
+        get food() { return bot.food; },
         get heldItem() { return bot.heldItem; },
         items: () => bot.inventory.items(),
+        emptySlots: () => bot.inventory.emptySlotCount(),
         equip: async (item, hand) => {
             const it = bot.inventory.items().find(i => i.name === item.name);
             if (!it) throw new Error(`no ${item.name}`);
@@ -292,5 +305,12 @@ export function realGoals(bot: Bot): Goals {
         near: (p, range) => new G.GoalNear(p.x, p.y, p.z, range),
         invert: g => new G.GoalInvert(g as never),
         lookAt: p => new G.GoalLookAtBlock(v(p), bot.world, { reach: 4.5 }),
+        block: p => new G.GoalBlock(p.x, p.y, p.z),
+        lookAtNotOn: p => {
+            const goal = new G.GoalLookAtBlock(v(p), bot.world, { reach: 4 });
+            const isEnd = goal.isEnd.bind(goal);
+            goal.isEnd = (node: { x: number; y: number; z: number }) => !(node.x === p.x && node.z === p.z && node.y > p.y) && isEnd(node as never);
+            return goal;
+        },
     };
 }

@@ -21,7 +21,8 @@ import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 import { PlaceStore } from './home/places.js';
 import { JobSaver, RESTORE_MAX_MS, RESTORE_MIN_MS, loadJobs, planRestore, readJobs, waitsFor } from './home/jobfile.js';
 import { loadChoresState } from './home/chores.js';
-import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, type CraftSettings, type FollowSettings, type JobDeps } from './jobs/index.js';
+import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, MINE_DEFAULTS, MINE_NUMBER_KEYS, MINE_PROMPTS, type CraftSettings, type FollowSettings, type JobDeps, type MineSettings, type MinePrompt } from './jobs/index.js';
+import { mineStore } from './home/mines.js';
 import { isFollowPrompt } from './models/follow/index.js';
 import { handleChat } from './command/handle.js';
 import { COMMAND_DEFAULTS, promptOf as commandPromptOf, type CommandOptions } from './models/command/index.js';
@@ -99,6 +100,25 @@ function craftOf(settings: Record<string, unknown>, model: CraftSettings['model'
     return { enabled: t.enabled === true, min_confidence: num('min_confidence'), max_steps: num('max_steps'), log_steps: t.log_steps !== false, model };
 }
 
+/**
+ * The mine task's settings (decision_models.tasks.mine; the old mine.js DEFAULTS and the plan's keys). enabled
+ * false: the task is off (a mine job collects the nearest ore blocks). The served prompt version wins over the
+ * setting.
+ */
+function mineOf(settings: Record<string, unknown>, model: MineSettings['model'], served: string | undefined): MineSettings {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.mine ?? {};
+    const out: MineSettings = { ...MINE_DEFAULTS, enabled: t.enabled === true, log_steps: t.log_steps !== false, model };
+    for (const k of MINE_NUMBER_KEYS) {
+        const v = t[k];
+        if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = v;
+    }
+    if (typeof t.max_steps === 'number' && Number.isFinite(t.max_steps) && t.max_steps > 0) out.max_steps = t.max_steps;
+    const prompt = served ?? (typeof t.prompt === 'string' ? t.prompt : undefined);
+    if (prompt && (MINE_PROMPTS as readonly string[]).includes(prompt)) out.prompt = prompt as MinePrompt;
+    return out;
+}
+
 async function main() {
     const t0 = Date.now();
     const settings = await loadSettings(REPO_ROOT, process.argv.slice(2), process.env);
@@ -148,6 +168,10 @@ async function main() {
         followLog: line => jsonl.write('follow', line),
         craft: () => craftOf(settings, enabled('craft') ? laya : null),
         craftLog: line => jsonl.write('craft', line),
+        mine: () => mineOf(settings, enabled('mine') ? laya : null, laya.promptFor('mine')),
+        mineLog: line => jsonl.write('mine', line),
+        mines: mineStore(path.join(botDir, 'laya-mines.json')),
+        chat: text => { if (settings.chat_ingame !== false) say(text); },
         note: text => log(`[laya] ${text}`),
         checkpoint: () => saver.save(),
     };

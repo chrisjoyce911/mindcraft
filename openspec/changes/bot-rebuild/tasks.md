@@ -179,7 +179,20 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
   craft-stone-pickaxe, craft-furnace and the new `gather-logs` pass twice; smelt and home-chest-kit by hand; follow,
   come, give, store, eat, defend-fight, flee-creeper pass. Report `bots/andy/logs/game-tests/bot-rebuild-5.1-2026-11-12.md`.
   `makeItem` (jobs/craft.ts) is the craft loop for 5.2/5.3 to call; a chore `purpose` ends on a gather answer (5.6 wires it).
-- [ ] 5.2 mine (mine model v2, mine plan, floor/drop checks, veins, torches, unload at home, mine memory).
+- [x] 5.2 mine (mine model v2, mine plan, floor/drop checks, veins, torches, unload at home, mine memory).
+  (2026-11-12) `bot/src/models/mine/` is the mine model (laya-go prompt v1/v2, rules v2.1; no drift from laya-go
+  cb1c791): typed ORES/tiers, view, `MineAction` questions, state, answer, rules (decide/followPlan/unload), the plan
+  generator (`createPlan`), geometry (floorDrop/dropBelow moved here from actuators, veins, torches, deposit list) and
+  `decideMineStep` in the old veto order. `bot/src/jobs/mine.ts` `MineRun`: one old loop iteration per step, setup on
+  the first (pickaxe, mine memory reuse/gone, new plan); heal, unsafe-ground restarts, walk back, shift-stair, detour
+  abandon, torches, fluid blocks, the pickaxe re-made; progress `{done, deposited}`, done checkpointed before each
+  deposit; the mine record saved at the 3rd dug mark so a kill -9 resumes the same mine. Task off → one collectBlocks.
+  New actuators: Motion `{safe}` movements (maxDropDown 3, no parkour, no flow), collectOreAt/digBlock/walkTo, placeAt,
+  goHome/depositAtHome. `laya-mine.jsonl` in the old shape (live line + `branches/mine.jsonl`, 164 lines from
+  `tools/laya-logs/record-mine.mjs`, byte for byte). All old mine tests ported (44 loop, 13 plan, state/v2/goldens,
+  geometry). npm test 331/331. Live: mine-coal, mine-iron-staircase, unload-home-chest pass twice (unload-home-chest
+  now mines 20 coal: with 2 the collect-first rule ends before any Unload); regression 6/6; kill -9 resume, defend
+  interrupt, pickaxe wear-out and !stop by hand. Report `bots/andy/logs/game-tests/bot-rebuild-5.2-2026-11-12.md`.
 - [ ] 5.3 farm (farm model v2, water, pond, seeds, unload).
 - [ ] 5.4 hunt.
 - [ ] 5.5 hunt, gather and place skill jobs (design §11, skills-spec v1 §2–4): renderer, questions, typed answer, rules v1, golden test, a

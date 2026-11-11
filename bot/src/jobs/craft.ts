@@ -169,7 +169,7 @@ function book(p: CraftProgress, m: CraftMoving, now: number, asked: number | nul
 }
 
 /** settingsOf: the craft settings from the deps (missing: the task is off). */
-const settingsOf = (deps: JobDeps) => (): CraftSettings =>
+export const settingsOf = (deps: JobDeps) => (): CraftSettings =>
     deps.craft?.() ?? { ...CRAFT_DEFAULTS, enabled: false, model: null };
 
 /** craftRunner runs a craft or gather job (or its legacy single action). */
@@ -200,11 +200,12 @@ export function craftRunner(job: JobOf<'craft'> | JobOf<'gather'>, deps: JobDeps
  * (cancelled) when the signal aborts; the progress object may be kept by the caller to resume.
  */
 export async function makeItem(deps: JobDeps, item: string, count: number, signal: AbortSignal,
-    o: { purpose?: 'player' | 'chore'; progress?: CraftProgress } = {}): Promise<{ ok: boolean; reason: string; steps: number }> {
+    o: { purpose?: 'player' | 'chore'; progress?: CraftProgress; settings?: CraftSettings } = {}): Promise<{ ok: boolean; reason: string; steps: number }> {
     const progress = o.progress ?? {};
+    const fixed = o.settings;
     const c: CraftRunContext = {
         kind: 'craft', item, count, purpose: o.purpose ?? 'player', progress,
-        settings: settingsOf(deps),
+        settings: fixed ? () => fixed : settingsOf(deps),
         world: () => { const a = deps.act(); return a ? craftWorld(a, deps) : null; },
         log: line => deps.craftLog?.(line),
         checkpoint: () => deps.checkpoint?.(),

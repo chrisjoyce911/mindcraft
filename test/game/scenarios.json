@@ -1140,7 +1140,7 @@
       "requires": [
         "mine"
       ],
-      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone into the chest until it is full (27 stacks; he keeps 32 and the rest stays in his pack). Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
+      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 20) (more than the coal in sight: the mine's collect-first rule takes ore in sight while the pack has room, so with 2 the job could end before any Unload; 5.2): he walks home and empties the cobblestone into the chest until it is full (27 stacks; he keeps 32 and the rest stays in his pack). Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
       "setup": [
         {
           "reset": true,
@@ -1184,7 +1184,7 @@
       ],
       "action": [
         {
-          "andy": "!layaMine(\"coal\", 2)"
+          "andy": "!layaMine(\"coal\", 20)"
         },
         {
           "waitFor": {

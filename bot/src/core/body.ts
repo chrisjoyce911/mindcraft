@@ -6,7 +6,24 @@ import pathfinderPkg from 'mineflayer-pathfinder';
 import pvpPkg from 'mineflayer-pvp';
 import { Motion } from './motion.js';
 
-const { pathfinder } = pathfinderPkg;
+const { pathfinder, Movements } = pathfinderPkg;
+
+/** MAX_SAFE_DROP: the safe movements never drop further than this (the old skills.MAX_SAFE_DROP). */
+export const SAFE_MAX_DROP = 3;
+
+/**
+ * safeMovements: pathfinder moves that never drop more than SAFE_MAX_DROP blocks, jump gaps or wade through fluid
+ * (mining, collecting ore; the old skills.safeMovements).
+ */
+export function safeMovements(bot: mineflayer.Bot): unknown {
+    const m = new Movements(bot) as unknown as Record<string, unknown>;
+    m.liquidCost = 100;
+    m.dontCreateFlow = true;
+    m.allowParkour = false;
+    m.maxDropDown = SAFE_MAX_DROP;
+    m.infiniteLiquidDropdownDistance = false;
+    return m;
+}
 const { plugin: pvp } = pvpPkg as unknown as { plugin: mineflayer.Plugin };
 
 export interface BodyOptions { host: string; port: number; username: string; version: string; auth: 'offline' | 'microsoft' }
@@ -47,7 +64,7 @@ export class Body extends EventEmitter {
             if (this.firstSpawnMs === null) this.firstSpawnMs = Date.now() - this.startedAt;
             const pf = bot.pathfinder as unknown as { thinkTimeout: number };
             pf.thinkTimeout = 5000;
-            this.motion = new Motion(bot as unknown as ConstructorParameters<typeof Motion>[0]);
+            this.motion = new Motion(bot as unknown as ConstructorParameters<typeof Motion>[0], undefined, () => safeMovements(bot));
             this.setState('in-game');
             this.log(`${this.opts.username} spawned.`);
             this.emit('spawn');

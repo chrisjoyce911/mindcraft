@@ -73,3 +73,47 @@ export async function takeBack(a: Act, at: Vec3Like, name: string, signal: Abort
     await pickupNearby(a, signal);
     return settle(() => a.bot.items().filter(i => i.name === name).reduce((n, i) => n + i.count, 0) > before, { ms: 1000, quiet: 0, signal });
 }
+
+/** The side of the target cell a block is placed against ('bottom': on the floor; a direction: on that wall). */
+export type PlaceOn = 'bottom' | 'top' | 'north' | 'south' | 'east' | 'west';
+const SIDE: Readonly<Record<PlaceOn, Vec3Like>> = {
+    top: { x: 0, y: 1, z: 0 }, bottom: { x: 0, y: -1, z: 0 },
+    north: { x: 0, y: 0, z: -1 }, south: { x: 0, y: 0, z: 1 }, east: { x: 1, y: 0, z: 0 }, west: { x: -1, y: 0, z: 0 },
+};
+/** Blocks a place may replace and can't be placed against (the old skills.placeBlock's empty blocks). */
+const REPLACEABLE = new Set(['air', 'cave_air', 'water', 'lava', 'grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern']);
+
+/** placed: the block at the target is what placing item makes (a torch on a wall is a wall_torch). */
+const placedAs = (item: string, name: string | undefined) => !!name && (name === item || name === item.replace('torch', 'wall_torch'));
+
+/**
+ * placeAt places one carried item (a torch, a throwaway block) into the cell p (air, water or lava), against the
+ * neighbour on side `on` first, else any solid neighbour (the old skills.placeBlock with dontCheat): a torch on the
+ * floor ('bottom') or on a wall (its side: a wall torch), a block into a fluid cell. Uses the patched 500 ms place
+ * and checks the block. Within 4.5 blocks it doesn't move (a mine step's cells always are).
+ */
+export async function placeAt(a: Act, item: string, p: Vec3Like, on: PlaceOn, signal: AbortSignal): Promise<boolean> {
+    if (!a.bot.items().some(i => i.name === item)) return false;
+    const target = a.bot.blockAt(p.x, p.y, p.z);
+    if (!target || !REPLACEABLE.has(target.name)) return false;
+    const sides = [SIDE[on], ...Object.values(SIDE).filter(d => d !== SIDE[on])];
+    let against: Vec3Like | null = null, face: Vec3Like | null = null;
+    for (const d of sides) {
+        const q = { x: p.x + d.x, y: p.y + d.y, z: p.z + d.z };
+        const b = a.bot.blockAt(q.x, q.y, q.z);
+        if (b && !REPLACEABLE.has(b.name)) { against = q; face = { x: -d.x, y: -d.y, z: -d.z }; break; }
+    }
+    if (!against || !face) return false;
+    if (dist(a.bot.entity.position, centre(p)) > REACH) {
+        const o = await goNear(a, p, 4, signal);
+        if (!o.ok) return false;
+    }
+    if (signal.aborted || !(await hold(a.bot, item))) return false;
+    const t = withTimeout(PLACE_TIMEOUT_MS, signal);
+    try {
+        try { await a.bot.lookAt(centre(against)); } catch { /* best effort */ }
+        await race(a.bot.placeBlock(against, face), t.signal).catch(() => {});
+    } finally { t.dispose(); }
+    if (signal.aborted) return false;
+    return settle(() => placedAs(item, a.bot.blockAt(p.x, p.y, p.z)?.name), { ms: 1000, quiet: 0, signal });
+}

@@ -270,7 +270,7 @@ test('mine memory file: laya-mines.json as JSON.stringify(list, null, 1), atomic
     const file = tmp('laya-mines.json');
     const st = mineStore(file);
     assert.equal(st.find({ x: 0, y: 0, z: 0 }), null, 'no file is no mine');
-    const a: MineRecord = { entrance: { x: 0, y: 60, z: 0 }, heading: 'E', surface: false, ores: ['coal'], deepest: 12, last: null, started: 1, updated: 2 };
+    const a: MineRecord = { entrance: { x: 0, y: 60, z: 0 }, heading: 'E', surface: false, ores: ['coal'], deepest: 12, last: null, started: '2026-11-11T09:00:00.000Z', updated: '2026-11-11T09:05:00.000Z' };
     st.save(a);
     assert.equal(fs.readFileSync(file, 'utf8'), JSON.stringify([a], null, 1));
     assert.deepEqual(st.find({ x: 3, y: 60, z: 3 }), a);

@@ -1,4 +1,4 @@
-// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl, laya-follow.jsonl and laya-craft.jsonl,
+// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl, laya-follow.jsonl, laya-craft.jsonl and laya-mine.jsonl,
 // one JSON line per decision, in the old bot's format: the same fields in the same order with the same value
 // formats (src/agent/laya/{director,eat,defend,command}.js; test/fixtures/laya-logs pins them, bot/test/logs.test.ts checks
 // them byte for byte). The line builders are pure; JsonlLog appends `{time, ...line}` and never throws.
@@ -54,7 +54,7 @@ export interface CraftLogInput {
 }
 export type CraftOutcome = 'did' | 'failed' | 'fallback' | 'done' | 'stop';
 
-export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft'] as const;
+export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine'] as const;
 export type LogTask = (typeof LOG_TASKS)[number];
 
 /** The director's line: the old Director.tick logDecision entry (no `acted`: that's the console's). */
@@ -105,6 +105,69 @@ export interface CraftLine {
     goal: string; state: string; action?: string; item?: string; count?: number; p?: number; ms?: number; source?: 'rules';
     outcome: CraftOutcome; reason?: string; rule?: { action: string; item: string; count: number };
 }
+
+/** A cell in a mine line. */
+export interface Pos { x: number; y: number; z: number }
+
+/**
+ * A mine step as the mine job logs it (the old mine.js `entry`): the rules' answer, where andy stood, the state;
+ * the model's words when it answered; the veto; the Unload probability (when Unload could be chosen); then what was
+ * done, by whom and why the rules took over (why null: the model's), the moves dropped for a drop under them, the
+ * ore collected, the plan segment a detour abandoned.
+ */
+export interface MineStepEntry {
+    rule: string; pos: Pos; state: string;
+    model?: string; p?: number; hazard?: number | undefined; ms?: number;
+    veto?: string;
+    /** Present (maybe undefined) when Unload could be chosen. */
+    unload?: number | undefined;
+    unload_later?: 'collect-first';
+    action?: string; source?: 'model' | 'rules';
+    /** Present (null: the model's step) after the step is chosen; absent on an unload line. */
+    why?: string | null;
+    drops?: string[];
+    ore?: Pos | null;
+    abandoned?: string | undefined;
+}
+export type MineStepOutcome = 'done' | 'failed' | 'stopped' | 'heal' | 'unsafe-ground' | 'partial';
+
+/** The mine job's lines (the old mine.js logStep entries), each in the old field order. */
+export type MineLine =
+    | (MineStepEntry & { outcome: MineStepOutcome })
+    | { pos: Pos; plan: 'blocked'; outcome: 'unsafe-ground' }
+    | { rule: 'heal'; action: 'heal'; source: 'rules'; why: 'heal'; pos: Pos; health: number; food: number; hostiles: number;
+        ate: number; retreated: boolean; health_after?: number; outcome: 'done' | 'stopped' }
+    | { start: Pos; heading: string; toward: Pos | null; outcome: 'planned' }
+    | { reuse: Pos; outcome: 'gone' }
+    | { reuse: Pos; skipped: number; outcome: 'reused' }
+    | { walk: Pos; segment: string; pos: Pos; state: string; outcome: 'done' | 'failed' }
+    | { restart: Pos; outcome: 'restarted' }
+    | { restart: Pos; from: Pos; heading: string; reason: 'unsafe'; outcome: 'restarted' };
+
+const pos = (p: Pos): Pos => ({ x: p.x, y: p.y, z: p.z });
+
+/** mineStepLine: a step entry with its outcome, in the old field order (keys the old entry had set, even when undefined). */
+export function mineStepLine(e: MineStepEntry, outcome: MineStepOutcome): MineLine {
+    const out: Record<string, unknown> = { rule: e.rule, pos: pos(e.pos), state: e.state };
+    const keys = ['model', 'p', 'hazard', 'ms', 'veto', 'unload', 'unload_later', 'action', 'source', 'why', 'drops', 'ore', 'abandoned'] as const;
+    for (const k of keys) if (k in e) out[k] = k === 'ore' && e.ore ? pos(e.ore) : e[k];
+    out.outcome = outcome;
+    return out as MineLine;
+}
+
+export const mineLines = {
+    blocked: (p: Pos): MineLine => ({ pos: pos(p), plan: 'blocked', outcome: 'unsafe-ground' }),
+    heal: (h: { pos: Pos; health: number; food: number; hostiles: number; ate: number; retreated: boolean; healthAfter?: number }, outcome: 'done' | 'stopped'): MineLine => ({
+        rule: 'heal', action: 'heal', source: 'rules', why: 'heal', pos: pos(h.pos), health: h.health, food: h.food, hostiles: h.hostiles,
+        ate: h.ate, retreated: h.retreated, ...(h.healthAfter !== undefined ? { health_after: h.healthAfter } : {}), outcome,
+    }),
+    start: (start: Pos, heading: string, toward: Pos | null): MineLine => ({ start: pos(start), heading, toward: toward ? pos(toward) : null, outcome: 'planned' }),
+    gone: (reuse: Pos): MineLine => ({ reuse: pos(reuse), outcome: 'gone' }),
+    reused: (reuse: Pos, skipped: number): MineLine => ({ reuse: pos(reuse), skipped, outcome: 'reused' }),
+    walk: (walk: Pos, segment: string, at: Pos, state: string, ok: boolean): MineLine => ({ walk: pos(walk), segment, pos: pos(at), state, outcome: ok ? 'done' : 'failed' }),
+    restart: (at: Pos): MineLine => ({ restart: pos(at), outcome: 'restarted' }),
+    unsafeRestart: (entrance: Pos, from: Pos, heading: string): MineLine => ({ restart: pos(entrance), from: pos(from), heading, reason: 'unsafe', outcome: 'restarted' }),
+};
 
 /** The lease's stop-overrun line (design §4) shares the director's file. */
 export type StopOverrunLine = LeaseEvent;
@@ -199,7 +262,7 @@ export class JsonlLog {
 
     file(task: LogTask): string { return path.join(this.dir, `laya-${task}.jsonl`); }
 
-    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | StopOverrunLine | null): void {
+    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | MineLine | StopOverrunLine | null): void {
         if (!line) return;
         try {
             if (!this.made) { fs.mkdirSync(this.dir, { recursive: true }); this.made = true; }
