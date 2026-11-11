@@ -107,7 +107,15 @@ step as expected (4.2); no mode (grep, check:deps, live modes "none", `!setMode`
 `bots/andy/logs/game-tests/bot-rebuild-phase3-2026-11-12.md`.
 
 ## 4. Command and simple jobs
-- [ ] 4.1 Command model (prompt v2.1/v2.2) → typed `Command`; canned reply; `laya-command.jsonl`.
+- [x] 4.1 Command model (prompt v2.1/v2.2) → typed `Command`; canned reply; `laya-command.jsonl`.
+  (2026-11-12) `bot/src/models/command/` (vocab, render, questions, resolve, answer, plan → typed `CommandPlan` of
+  `Command[]`), `bot/src/command/handle.ts` (legacy `!` lines first in main, else the model on `promptFor('command')`;
+  canned for chat/unsure/no answer/task off). `laya-command.jsonl` in the old format: `kind` keeps the old words (a
+  canned reply is `"llm"` + `reason`); `lines` are the old `!` lines from a log-only `log/legacyLine.ts` (round-trip
+  tested against `parseLegacy`). Golden requests v1/v2/v2.1/v2.2, resolve cases, the 1.2 log line and
+  `test/fixtures/laya-logs/branches/command.jsonl` (recorded by `tools/laya-logs/record-command.mjs`) byte for byte.
+  Home's "That's my chest now." rides on the plan (`doneSay`) for 4.2. Live: report
+  `bots/andy/logs/game-tests/bot-rebuild-4.1-2026-11-12.md`.
 - [ ] 4.2 Jobs follow (follow model), come, stay, give, store, setHome; `home/` places in today's format.
 - [ ] 4.3 Persistence: `laya-job.json` (typed), `memory.json` places, `laya-chores.json`, `laya-mines.json` in today's formats; restore paused within 10 min.
 

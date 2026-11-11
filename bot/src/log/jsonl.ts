@@ -1,11 +1,13 @@
-// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl and laya-defend.jsonl, one JSON line
-// per decision, in the old bot's format: the same fields in the same order with the same value formats
-// (src/agent/laya/{director,eat,defend}.js; test/fixtures/laya-logs pins them, bot/test/logs.test.ts checks
+// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl and laya-command.jsonl,
+// one JSON line per decision, in the old bot's format: the same fields in the same order with the same value
+// formats (src/agent/laya/{director,eat,defend,command}.js; test/fixtures/laya-logs pins them, bot/test/logs.test.ts checks
 // them byte for byte). The line builders are pure; JsonlLog appends `{time, ...line}` and never throws.
 import fs from 'fs';
 import path from 'path';
 import type { LeaseEvent } from '../core/lease.js';
+import type { Command } from '../types/commands.js';
 import type { DefendAction, FallbackWhy } from '../types/decisions.js';
+import { legacyLine } from './legacyLine.js';
 
 // What the builders read (log imports only types and core: a director entry, an EatDecision and a
 // DefendDecision fit these as they are).
@@ -25,7 +27,14 @@ export interface DefendLogInput {
     asked?: { action: string; target: string; weapon: string; p: number; danger: number; ms: number };
 }
 
-export const LOG_TASKS = ['director', 'eat', 'defend'] as const;
+/** A command decision (CommandDecision): the plan, and what the model said when it answered. */
+export interface CommandLogInput {
+    state: string;
+    plan: { kind: 'run'; commands: readonly Command[] } | { kind: 'reply' } | { kind: 'canned'; why: string } | { kind: 'ignore' };
+    said?: { addressed: number; command: string; p: number; item: string; tier: string; count: string; ms: number };
+}
+
+export const LOG_TASKS = ['director', 'eat', 'defend', 'command'] as const;
 export type LogTask = (typeof LOG_TASKS)[number];
 
 /** The director's line: the old Director.tick logDecision entry (no `acted`: that's the console's). */
@@ -50,6 +59,16 @@ export type DefendLine =
     | { state: string; outcome: 'fallback'; reason: FallbackWhy }
     | ({ state: string } & DefendAskedFields & { veto?: string; outcome: 'fallback'; reason: FallbackWhy })
     | ({ state: string } & DefendAskedFields & { override?: string; outcome: DefendAction });
+
+/**
+ * The command line: the old handleCommand entry. kind keeps the old words: a canned reply is `llm` with the
+ * reason (the old bot handed those to the LLM, or with no_llm said the canned line); lines are the old command
+ * lines (legacyLine) of a run.
+ */
+export interface CommandLine {
+    state: string; kind: 'run' | 'reply' | 'llm' | 'ignore'; reason?: string; lines?: string[]; ms?: number;
+    addressed?: number; command?: string; p?: number; item?: string; tier?: string; count?: string;
+}
 
 /** The lease's stop-overrun line (design §4) shares the director's file. */
 export type StopOverrunLine = LeaseEvent;
@@ -94,6 +113,20 @@ export function defendLine(d: DefendLogInput): DefendLine | null {
     return { state: d.state, ...asked, ...(d.override ? { override: d.override } : {}), outcome: d.answer };
 }
 
+/** commandLine: the line for a command decision (every decision the model was asked about is written). */
+export function commandLine(d: CommandLogInput): CommandLine {
+    const p = d.plan;
+    const line: CommandLine = { state: d.state, kind: p.kind === 'canned' ? 'llm' : p.kind };
+    if (p.kind === 'canned') line.reason = p.why;
+    if (p.kind === 'run') line.lines = p.commands.map(legacyLine).filter((l): l is string => l !== null);
+    const a = d.said;
+    if (a) {
+        Object.assign(line, { ms: a.ms, addressed: +a.addressed.toFixed(3), command: a.command, p: +a.p.toFixed(3),
+            item: a.item, tier: a.tier, count: a.count });
+    }
+    return line;
+}
+
 /** stamp: the line as written, `time` first (the old `{ time, ...entry }`). */
 export function stamp(line: object, time: Date = new Date()): string {
     return JSON.stringify({ time: time.toISOString(), ...line });
@@ -106,7 +139,7 @@ export class JsonlLog {
 
     file(task: LogTask): string { return path.join(this.dir, `laya-${task}.jsonl`); }
 
-    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | StopOverrunLine | null): void {
+    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | StopOverrunLine | null): void {
         if (!line) return;
         try {
             if (!this.made) { fs.mkdirSync(this.dir, { recursive: true }); this.made = true; }

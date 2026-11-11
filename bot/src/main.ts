@@ -18,12 +18,12 @@ import { Director, type DecisionSink, type Models } from './director/loop.js';
 import type { Timing } from './director/activities.js';
 import type { Command, Places } from './types/index.js';
 import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
+import { handleChat } from './command/handle.js';
+import { COMMAND_DEFAULTS, promptOf as commandPromptOf, type CommandOptions } from './models/command/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // dist/src/main.js → repo root is three up (bot/dist/src)
 const REPO_ROOT = process.env.ANDY_REPO_ROOT || path.resolve(here, '../../..');
-const CANNED = "Sorry, I only understand simple commands, like: follow me, come here, stop, mine 8 iron, " +
-    "get 16 logs, craft a stone pickaxe, farm wheat, give me your coal, store everything, this is your chest.";
 
 function log(m: string) { console.log(m); }
 
@@ -38,6 +38,24 @@ function taskNumber(settings: Record<string, unknown>, task: string, key: string
     const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
     const v = dm?.tasks?.[task]?.[key];
     return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+}
+
+/** The command task's log_decisions setting (the old key; default true). */
+function logDecisions(settings: Record<string, unknown>): boolean {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    return dm?.tasks?.command?.log_decisions !== false;
+}
+
+/** The command task's thresholds and defaults set in settings (the old DEFAULTS' keys). */
+function commandOpts(settings: Record<string, unknown>): Partial<CommandOptions> {
+    const o: Partial<CommandOptions> = {};
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.command ?? {};
+    for (const k of Object.keys(COMMAND_DEFAULTS) as (keyof CommandOptions)[]) {
+        const v = t[k];
+        if (typeof v === 'number' && Number.isFinite(v)) o[k] = v;
+    }
+    return o;
 }
 
 function timingOf(settings: Record<string, unknown>): Partial<Timing> {
@@ -105,11 +123,25 @@ async function main() {
         if (!message || from === name) return;
         if (onlyChatWith.length && !onlyChatWith.includes(from)) return;
         log(`${name} received message from ${from} : ${message}`);
-        // phase 4 adds the command model; until then only the legacy !commands are understood
-        const cmd: Command | string = containsLegacyCommand(message) ? parseLegacy(message, from) : { kind: 'reply', text: CANNED };
-        if (typeof cmd === 'string') { say(cmd); return; }
-        log(`parsed command: ${JSON.stringify(cmd)}`);
-        void run(cmd);
+        // the legacy !commands at the boundary; plain chat goes to the command model (4.1)
+        if (containsLegacyCommand(message)) {
+            const cmd = parseLegacy(message, from);
+            if (typeof cmd === 'string') { say(cmd); return; }
+            log(`parsed command: ${JSON.stringify(cmd)}`);
+            void run(cmd);
+            return;
+        }
+        void handleChat(from, message, {
+            me: name,
+            model: enabled('command') ? { client: laya, prompt: commandPromptOf(laya.promptFor('command')) } : null,
+            opts: commandOpts(settings),
+            carry: () => readFacts()?.items ?? [],
+            nearestHostile: () => readFacts()?.mobs.find(m => m.dist <= 16)?.name ?? null,
+            say,
+            run: cmd => { log(`command model: ${JSON.stringify(cmd)}`); return run(cmd); },
+            log: line => { if (logDecisions(settings)) jsonl.write('command', line); },
+            note: log,
+        }).catch(e => log(`command: ${String(e)}`));
     };
 
     const run = async (cmd: Command) => {
@@ -136,6 +168,7 @@ async function main() {
         if (!sensors || !body.inGame) return null;
         try { return factsLine(sensors.read()); } catch (e) { return `facts error: ${String(e)}`; }
     };
+    const readFacts = () => { try { return sensors && body.inGame ? sensors.read() : null; } catch { return null; } };
     const activity = () => ({ idle: lease.isFree, label: lease.isFree ? 'Idle' : lease.holderName ?? 'Acting' });
 
     const harness = await startHarness(settings.mindserver_port, {
