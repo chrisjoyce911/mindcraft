@@ -8,6 +8,7 @@
 - [ ] 2.2 Chores sensor: state text (spec in laya-go `games/chores/prompt`), golden test.
 - [ ] 2.3 `chore` job kind on the job stack; director `idle` → chores; interrupts and resume.
 - [ ] 2.4 Director v1.2: player-attacked state line and `defend` target = attacker; golden test.
+- [ ] 2.4b Player kit: sensor line for kit in the home chest; reserve it when taking from the chest.
 - [ ] 2.5 `chores` setting, `!layaChores(on|off)`, command intents.
 - [ ] 2.6 Game tests: idle start, interrupt by command, defend the player, no-trees widening, first day from scratch.
 

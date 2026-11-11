@@ -22,6 +22,8 @@ The choice of chore is a model's (aim: no decision logic outside the Laya models
 - **Director v1.2**: new state line `Player <name> attacked <yes/no> by <mob> <dist>`; a player within 24 blocks being
   attacked → `defend` (andy goes to the player and fights the attacker), above everything except his own flee/eat
   emergencies. `idle` now means "do chores" when chores are on.
+- **Player kit** (user, 2026-11-11): the home chest always holds a set of basic tools, a weapon and food for the
+  player, at andy's best tier.
 - **Interrupts**: any player command stops the chore at once (job stack); a player attacked or a director safety
   activity pauses it; chores resume when the job is done.
 - Setting `chores: true` (default on in the local settings) and chat "andy do your chores" / "andy take a break".
@@ -29,7 +31,8 @@ The choice of chore is a model's (aim: no decision logic outside the Laya models
 ## Chore priority spec v1 (source of the training data)
 First day: logs ≥ 4 → crafting table placed in base → wooden pickaxe (+ axe) → cobblestone ≥ 14 → stone pickaxe,
 stone sword/axe, furnace placed → food: hunt to ~half a stack of meat, cook it → wool ×3 (sheep) → bed placed →
-chest placed (becomes the home chest if none) → stock to 64 logs and 64 cobblestone, mining whole coal/copper veins seen.
+chest placed (becomes the home chest if none) → **player kit in the home chest** (pickaxe, axe, shovel, sword of
+his best tier, 8 cooked food, 16 torches; upgraded with each tier, never taken for his own use) → stock to 64 logs and 64 cobblestone, mining whole coal/copper veins seen.
 First night (before dusk): torches ≥ 16 (coal, else charcoal from logs) → light the base (one torch per 12 blocks,
 ring the base) → shelter in the base (needs the blueprint model; until then skip) → at night: sleep if a bed is placed,
 else mine from the home staircase; never wander the surface at night.

@@ -60,3 +60,18 @@ player's job ends. A director safety activity or a player being attacked SHALL p
 ### Requirement: Chat on and off
 "andy do your chores" SHALL turn chores on and "andy take a break" off (command model intents `chores_on`,
 `chores_off`), saved across restarts.
+
+### Requirement: Player kit in the home chest
+The chores sensor SHALL report which items of the player kit are in the home chest: a pickaxe, axe, shovel and sword
+of the best tier the bot can make (wood, then stone, then iron), 8 cooked food and 16 torches. The chores model SHALL
+choose to make and store missing kit items once the bot has its own tools of that tier and food, and SHALL upgrade
+the kit when it can make a better tier (the old kit items stay in the chest). The bot SHALL NOT take kit items for its
+own use or for crafting; when it takes from the home chest it leaves one kit in place.
+
+#### Scenario: first stone tools
+- **WHEN** the bot has a stone pickaxe, stone sword and cooked food, and the home chest holds no kit
+- **THEN** a later chore crafts a stone pickaxe, axe, shovel and sword and stores them with 8 cooked food in the home chest
+
+#### Scenario: kit is reserved
+- **WHEN** the bot needs planks to craft and the home chest holds the kit and 20 planks
+- **THEN** it takes planks only and leaves the kit's tools and food in the chest
