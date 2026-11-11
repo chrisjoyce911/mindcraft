@@ -8,5 +8,6 @@
 - [x] 6. unstuck paused during rest, eat and heal.
 - [x] 6a. Chores v1.1 mirror (Animals searches, Failed cooldown, need answers and their actuator); golden v1.1 request and laya-go decisions fixture; tests.
 - [x] 7. light_base: one dark-spot test, fresh read; tests.
-- [ ] 8. `npm test`; full game suite with `llm` false (≥ 16/16); game tests: interrupted gather (no restart), a mob attacking nobody (keeps working), a zombie hitting andy (fights), a zombie hitting tester (defends); first day from scratch through the first night; report in `bots/andy/logs/game-tests/`.
+- [x] 8. `npm test` (354/354); full game suite with `llm` false (≥ 16/16); game tests: interrupted gather (no restart), a mob attacking nobody (keeps working), a zombie hitting andy (fights), a zombie hitting tester (defends); first day from scratch through the first night; report in `bots/andy/logs/game-tests/fix-round4-2026-11-11.md` (suite 15/16, `defend` 16/16 after its husk hits andy; game tests A–E pass; first day: 0 rests, 2 failures, 0 restarts).
+- [x] 8a. Found in test C: defend-player and laya_defending fought the same attacker → stop race → kill; the director performs defend-player only with no attacker in the mode's reach, `ActionManager.stop` waits only for its own action; tests.
 - [ ] 9. Merged into `laya-follow`.
