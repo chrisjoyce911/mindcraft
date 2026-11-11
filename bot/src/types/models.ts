@@ -77,3 +77,8 @@ export interface CheckReport {
     answer: { ms: number; answers: Record<string, NormalAnswer> } | null;
     error: string | null;
 }
+
+/** What the model modules need from the client (models/client.ts LayaClient satisfies it; tests pass fakes). */
+export interface ModelDecider {
+    decide(task: string, state: string, questions: Questions): Promise<DecideResult | null>;
+}

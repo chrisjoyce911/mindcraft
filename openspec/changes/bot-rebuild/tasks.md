@@ -52,7 +52,14 @@ lease overrun test passes.
   Latency note (2026-11-12, golaya serve, training idle, p50/max): eat 49/115 ms, director 100/136, defend 120/186,
   craft 185/224, command 300/346, mine 346/417 ms; 2–4 s while the Studio trains. Timeouts: 5 s default, a task's
   `timeout_ms` below 2.5 s (settings.js's 300) is raised to 2.5 s and logged once.
-- [ ] 3.2 Renderers + questions + parsers + rules for director, eat, defend; golden tests.
+- [x] 3.2 Renderers + questions + parsers + rules for director, eat, defend; golden tests.
+  `bot/src/models/{director,eat,defend}/` (render, questions, answer, rules, index), pure (client passed in). Golden
+  requests byte for byte (director v1/v1.2/v1.3, eat v1, defend v1); director rules on its three 1000-situation sets;
+  eat and defend rules are ports of laya-go `games/{eat,defend}/rules.Decide` (the fallback instead of auto-eat and
+  the modes), checked on new 1000-row `test/fixtures/laya-{eat,defend}-v1/decisions.jsonl` (laya-go `3a8fe4c`, seed 7,
+  all 9 and 13 rules). Every fallback carries `why` (no-answer, low-confidence, disagree, veto + `veto`,
+  nothing-to-defend, not-hungry, malformed). laya-go HEAD's eat/defend prompts equal the old JS (no drift). The
+  bot readers (`situation(bot, …)`, `armedOf`, `armorPoints`, `dangerOf`, defend's armour slots) move to 3.3.
 - [ ] 3.3 Sensors: vitals, attacks (fix-round4's `attacks.js`), danger, light/time, player, pack, home, stuck.
 - [ ] 3.4 Director loop, JobStack, priorities, activities defend/flee/eat/heal/escape; defend-only-attackers.
 - [ ] 3.5 Logs: `laya-director/eat/defend.jsonl` identical in format to the fixtures (1.2).
