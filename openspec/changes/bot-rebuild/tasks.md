@@ -200,8 +200,12 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
 - [ ] 5.6 chores v2 (skills-spec v1 §1): Carry/Chest/Made/Kit, Last from the run lines; answers map 1:1 to skill jobs
       or rules actuators (cook, store, sleep, ask, rest). Chores v1.1 stays available as the stopgap until v2 is
       served.
-- [ ] 5.7 Correction path: `andy_logs` (or a small tool) turns a `laya-<model>.jsonl` line into a correction case in
+- [x] 5.7 Correction path: `andy_logs` (or a small tool) turns a `laya-<model>.jsonl` line into a correction case in
       the format laya-go's controller `/job` takes.
+      Done: `bot/src/log/correction.ts` (`node bot/dist/src/log/correction.js --task <task> --right Q=answer,...
+      [--line N | --time ISO | --match text]`). `/job` (laya-go trainctl JobRequest) carries no case data, so the case
+      holds the line's exact state, what was answered and by whom, the outcome and the right answer, plus `job`: the
+      exact `/job` body (model, conf "", priority next, from ""). No network: submit `job` after laya-go has the case.
 
 Done means for each: its scenarios pass, its unit tests (ported from `test/laya_<task>*.test.js`) pass, its log
 matches the fixture. Port every fix the old bot gets meanwhile.
