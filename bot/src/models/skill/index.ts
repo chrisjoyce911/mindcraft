@@ -34,7 +34,7 @@ export type Words = Readonly<Record<string, string>>;
 
 /** One skill model: its state and questions, rules v1, the typed reading of words, and Harmful. */
 export interface SkillModel<S, A, R extends string> {
-    task: 'hunt' | 'gather' | 'place';
+    task: 'hunt' | 'gather' | 'place' | 'chores';
     state(s: S): string;
     questions(s: S): Record<string, ChoiceQuestion>;
     /** Rules v1: the right words and the rule that decided. */
