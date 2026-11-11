@@ -235,8 +235,15 @@ export async function nextActivity(s, deps = {}) {
     if (deps.client && deps.task && !(prompt === 'v1' && V12_RULES.has(rule.rule))) {
         const r = await deps.client.decide('director', text, QUESTIONS).catch(() => null);
         const a = r?.answers?.Activity;
-        if (a?.confident && ACTIVITIES.includes(a.top))
+        // an answer that can't be acted on (defend with no hostile near and
+        // no player attacked) is the rules' to answer, as the mine task's
+        // nonsense answers are
+        // and eat at full hunger (Minecraft won't let him)
+        const nothing = a?.top === 'defend' && !(s.hostiles > 0) && !s.player?.attacked ? 'nothing-to-defend'
+            : a?.top === 'eat' && s.food >= 20 ? 'not-hungry' : null;
+        if (a?.confident && ACTIVITIES.includes(a.top) && !nothing)
             return { activity: a.top, rule: rule.rule, source: 'model', state: text, p: a.topProbability, ruleActivity: rule.activity };
+        if (nothing) return { ...rule, source: 'rules', state: text, why: nothing, model: a.top, p: a.topProbability };
     }
     return { ...rule, source: 'rules', state: text };
 }
@@ -325,7 +332,8 @@ export class Director {
             const s = this.situation();
             const d = await nextActivity(s, this.deps);
             const quiet = event === 'tick' && d.activity === 'idle' && this.last?.activity === 'idle';
-            if (!quiet) logDecision(this.deps.stepLog, { event, state: d.state, answer: d.activity, rule: d.rule, source: d.source, p: d.p });
+            if (!quiet) logDecision(this.deps.stepLog, { event, state: d.state, answer: d.activity, rule: d.rule, source: d.source, p: d.p,
+                ...(d.why ? { why: d.why, model: d.model } : {}) });
             this.last = d;
             this.act(d.activity, s);
             return d;

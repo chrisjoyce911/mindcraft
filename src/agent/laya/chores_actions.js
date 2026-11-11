@@ -8,10 +8,13 @@
 // safety mode stops a chore at once.
 
 import Vec3 from 'vec3';
+import { AsyncLocalStorage } from 'async_hooks';
+import pf from 'mineflayer-pathfinder';
 import * as skills from '../library/skills.js';
 import * as world from '../library/world.js';
 import { bestTiers, haveCounts, kitIn, unreserved, timeWord, biomeWord, toolTier, tier, RAW_MEAT, NOT_FOOD, isSapling, isLog,
-    KIT_FOOD, KIT_TORCHES, KIT_TOOLS, kitTier, ANIMALS } from './chores_state.js';
+    KIT_FOOD, KIT_TORCHES, KIT_TOOLS, kitTier, ANIMALS, saplingOf, STRING_PER_WOOL } from './chores_state.js';
+import { veinOf, exposed } from './mine.js';
 import { BASE, WORK, SEARCHES, BASE_HEIGHT, inColumns, inBase, searchOf, reach, chooseCentre, homeOnPlace, chestToAdopt, CHESTS,
     isBed } from './chores_home.js';
 
@@ -29,7 +32,13 @@ const SOLID_GROUND = /(_block|dirt|stone|sand|gravel|podzol|mycelium|clay|terrac
 // flowers, leaf litter, snow layers): no collision box, not a fluid or fire.
 const isOpenBlock = b => !!b && b.boundingBox === 'empty' && !/water|lava|fire|portal|torch|sign|rail|button|lever|plate|_bed$/.test(b.name);
 
-const stopped = bot => !!bot.interrupt_code;
+// RUN: the running chore's {cancelled} token. A chore runChore has given
+// up on (an interrupt) is cancelled: its actuator, still running in the
+// background under a skill that didn't stop, stops at its next check
+// instead of going on with the chore after the interrupt has cleared.
+const RUN = new AsyncLocalStorage();
+const stopped = bot => !!bot.interrupt_code || !!RUN.getStore()?.cancelled;
+export const stoppedForTest = stopped;
 const v = p => new Vec3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
 const blockAt = (bot, x, y, z) => { try { return bot.blockAt(new Vec3(x, y, z)); } catch { return null; } };
 const ids = (bot, names) => names.map(n => bot.registry.blocksByName[n]?.id).filter(id => id != null);
@@ -258,22 +267,88 @@ function widen(agent, size, what) {
     if (size && size > WORK) agent.openChat(`No ${what} close by: I'm going further (${size}×${size}) for ${what}.`);
 }
 
+// trunkBase: the lowest log of the trunk through p, on dirt-like ground
+// (a tree's foot, where its sapling goes), or null.
+const SAPLING_GROUND = /^(grass_block|dirt|podzol|coarse_dirt|rooted_dirt|mycelium|moss_block|mud|muddy_mangrove_roots)$/;
+export function trunkBase(at, p) {
+    let y = p.y;
+    for (let i = 0; i < 12 && isLog(at(p.x, y - 1, p.z)?.name); i++) y--;
+    const log = at(p.x, y, p.z)?.name;
+    if (!isLog(log) || !SAPLING_GROUND.test(at(p.x, y - 1, p.z)?.name || '')) return null;
+    return { x: p.x, y, z: p.z, log };
+}
+
+// fellable: the tree feet within r of the bot (positions keyed x,y,z).
+function treeFeet(bot, r = 12) {
+    const at = (x, y, z) => blockAt(bot, x, y, z);
+    const out = new Map();
+    let found = [];
+    try { found = bot.findBlocks({ matching: ids(bot, LOGS), point: bot.entity.position, maxDistance: r, count: 96 }); } catch { /* none */ }
+    for (const p of found) {
+        const b = trunkBase(at, p);
+        if (b) out.set(`${b.x},${b.y},${b.z}`, b);
+    }
+    return out;
+}
+
+// felled: the tree feet (before) whose log is gone (cut): stumps where a
+// sapling goes, in the work area only.
+export function felledOf(before, at, inWork) {
+    return [...before.values()].filter(b => !isLog(at(b.x, b.y, b.z)?.name) && inWork(b))
+        .map(b => ({ x: b.x, y: b.y, z: b.z, sapling: saplingOf(b.log) })).filter(b => b.sapling);
+}
+
+// STUMP_MS: a stump with no sapling of its kind waits this long for one.
+const STUMP_MS = 20 * 60_000;
+
+// plantStumps plants each stump's sapling (its tree's kind) where the tree
+// stood, when one is carried; stumps with none wait (agent._chores.stumps).
+async function plantStumps(agent) {
+    const bot = agent.bot;
+    const now = Date.now();
+    const list = (agent._chores.stumps || []).filter(s => now - (s.at || now) < STUMP_MS);
+    const left = [];
+    let planted = 0;
+    for (const st of list) {
+        if (stopped(bot)) { left.push(st); continue; }
+        const spot = blockAt(bot, st.x, st.y, st.z), up = blockAt(bot, st.x, st.y + 1, st.z), ground = blockAt(bot, st.x, st.y - 1, st.z);
+        if (spot && ground && (!isOpenBlock(spot) || !SAPLING_GROUND.test(ground.name) || (up && !isOpenBlock(up)))) continue; // taken
+        if (count(bot, st.sapling) < 1) { left.push(st); continue; }
+        if (await placeAt(agent, st.sapling, st)) planted++;
+        else left.push(st);
+    }
+    agent._chores.stumps = left;
+    agent._saveChores?.();
+    return planted;
+}
+
 async function gatherLogs(agent, n) {
     const bot = agent.bot, cx = agent._choreCtx;
     const t = cx.trees;
     if (!t.size) return fail('no trees within 193 blocks');
     widen(agent, t.size, 'wood');
     const before = countWhere(bot, isLog);
+    const at = (x, y, z) => blockAt(bot, x, y, z);
+    const stumps = [];
     for (const p of t.positions) {
         if (stopped(bot) || countWhere(bot, isLog) - before >= n) break;
         if (bot.entity.position.distanceTo(new Vec3(p.x, p.y, p.z)) > 32 && !await goNear(bot, p, 4)) continue;
         const log = blockAt(bot, p.x, p.y, p.z)?.name;
         if (!log || !isLog(log)) continue;
+        const feet = treeFeet(bot);
         await skills.collectBlock(bot, log, n - (countWhere(bot, isLog) - before));
+        stumps.push(...felledOf(feet, at, b => inColumns(cx.centre, b, WORK)));
         if (!stopped(bot)) await skills.pickupNearbyItems(bot);
     }
+    // a felled tree's sapling goes where it stood (now, or when one drops)
+    if (stumps.length) {
+        const known = new Set((agent._chores.stumps || []).map(s => `${s.x},${s.y},${s.z}`));
+        for (const s1 of stumps) if (!known.has(`${s1.x},${s1.y},${s1.z}`)) { (agent._chores.stumps ||= []).push({ ...s1, at: Date.now() }); known.add(`${s1.x},${s1.y},${s1.z}`); }
+    }
+    const replanted = stopped(bot) ? 0 : await plantStumps(agent);
     const got = countWhere(bot, isLog) - before;
-    return got > 0 ? ok(`${got} logs`) : fail(stopped(bot) ? 'stopped' : 'no log I could reach');
+    const more = replanted ? `, ${replanted} saplings where the trees stood` : '';
+    return got > 0 ? ok(`${got} logs${more}`) : fail(stopped(bot) ? 'stopped' : 'no log I could reach');
 }
 
 async function gatherCobble(agent, n) {
@@ -281,15 +356,53 @@ async function gatherCobble(agent, n) {
     if (!cx.stone.size) return fail('no stone near the surface within 193 blocks');
     widen(agent, cx.stone.size, 'stone');
     const before = count(bot, 'cobblestone') + count(bot, 'cobbled_deepslate');
+    let veins = 0;
     for (const p of cx.stone.positions) {
         if (stopped(bot)) break;
         const have = count(bot, 'cobblestone') + count(bot, 'cobbled_deepslate') - before;
         if (have >= n) break;
         if (!await goNear(bot, p, 4)) continue;
         await skills.collectBlock(bot, 'cobblestone', n - have);
+        if (!stopped(bot)) veins += await mineVeinsSeen(agent);
     }
     const got = count(bot, 'cobblestone') + count(bot, 'cobbled_deepslate') - before;
-    return got > 0 ? ok(`${got} cobblestone`) : fail(stopped(bot) ? 'stopped' : 'no stone I could mine');
+    const ores = veins ? `, ${veins} ore from veins` : '';
+    return got > 0 ? ok(`${got} cobblestone${ores}`) : fail(stopped(bot) ? 'stopped' : 'no stone I could mine');
+}
+
+// VEIN_ORES: ore whose whole vein is mined when seen while mining stone.
+export const VEIN_ORES = {
+    coal: { blocks: ['coal_ore', 'deepslate_coal_ore'], drop: 'coal', pickaxe: 'wooden' },
+    copper: { blocks: ['copper_ore', 'deepslate_copper_ore'], drop: 'raw_copper', pickaxe: 'stone' },
+};
+
+// mineVeinsSeen mines every block of a coal or copper vein seen (open to
+// the air) within 6 blocks of the bot, in the work area, with a pickaxe
+// that can: an actuator detail of a mining chore. Returns the drops got.
+async function mineVeinsSeen(agent, r = 6) {
+    const bot = agent.bot, cx = agent._choreCtx;
+    const at = (x, y, z) => blockAt(bot, x, y, z);
+    const pick = bestTiers(bot.inventory.items().map(i => i.name)).pickaxe;
+    let got = 0;
+    for (const ore of Object.values(VEIN_ORES)) {
+        if (tier(pick) < tier(ore.pickaxe)) continue;
+        const before = count(bot, ore.drop);
+        const tried = new Set();
+        for (let n = 0; n < 4 && !stopped(bot); n++) {
+            let seen = [];
+            try { seen = bot.findBlocks({ matching: ids(bot, ore.blocks), point: bot.entity.position, maxDistance: r, count: 16 }); } catch { /* none */ }
+            const start = seen.map(p => ({ x: p.x, y: p.y, z: p.z }))
+                .find(p => !tried.has(`${p.x},${p.y},${p.z}`) && exposed(at, p) && inColumns(cx.centre, p, WORK));
+            if (!start) break;
+            for (const b of veinOf(at, start, ore.blocks, { max: 16, range: 6 })) {
+                if (stopped(bot)) break;
+                tried.add(`${b.x},${b.y},${b.z}`);
+                await skills.collectOreAt(bot, b, ore.blocks, ore.drop).catch(() => false);
+            }
+        }
+        got += Math.max(0, count(bot, ore.drop) - before);
+    }
+    return got;
 }
 
 async function craft(bot, item, n = 1) {
@@ -305,7 +418,9 @@ async function craftTools(agent, tierName, kinds) {
         const have = bestTiers(bot.inventory.items().map(i => i.name))[k];
         if (tier(have) >= tier(tierName)) continue;
         if (await craft(bot, `${tierName}_${k}`, 1)) made.push(k);
-        else return fail(`couldn't make a ${tierName} ${k}`);
+        // made after all (the inventory shows a craft late)
+        else if (tier(bestTiers(bot.inventory.items().map(i => i.name))[k]) >= tier(tierName)) made.push(k);
+        else return fail(stopped(bot) ? 'stopped' : `couldn't make a ${tierName} ${k}`);
     }
     return ok(made.length ? `made ${made.join(', ')}` : 'had them');
 }
@@ -336,20 +451,54 @@ function freeSpot(bot, centre, { wide = false, skip = [] } = {}) {
     return null;
 }
 
-// placeAt places item at p from nearby; true when the block is there.
-async function placeAt(agent, item, p) {
-    const bot = agent.bot;
-    if (!await goNear(bot, p, 3)) return false;
-    agent._placingAt = { ...p, at: Date.now() };
-    // ground cover placeBlock doesn't replace (leaf litter, flowers): clear it first
-    const cover = blockAt(bot, p.x, p.y, p.z);
-    if (cover && cover.name !== 'air' && cover.name !== 'cave_air' && isOpenBlock(cover)
-        && !['grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern'].includes(cover.name)) {
-        try { await bot.dig(cover); } catch { /* placeBlock says why */ }
-    }
-    try { await skills.placeBlock(bot, item, p.x, p.y, p.z); } catch { /* checked below */ }
+// SMALL: items placed from where the bot stands (placeBlock doesn't step
+// back for them).
+const SMALL = /torch|sapling|propagule|_button$|lever|rail/;
+
+// placed: the block at p is item (any bed for a bed, any torch for a torch).
+const placedIs = (bot, item, p) => {
     const b = blockAt(bot, p.x, p.y, p.z);
     return !!b && (b.name === item || (isBed(item) && isBed(b.name)) || (item === 'torch' && /torch/.test(b.name)));
+};
+
+// stepBack walks out of the cell next to p (within 1.6 of its centre),
+// so placing a block there needs no walk inside placeBlock (a pathfinder
+// goal a mode can cancel, which made the placing fail at once).
+async function stepBack(bot, p) {
+    const c = new Vec3(p.x + 0.5, p.y, p.z + 0.5);
+    if (bot.entity.position.distanceTo(c) >= 1.6) return;
+    const goal = new pf.goals.GoalInvert(new pf.goals.GoalNear(p.x, p.y, p.z, 2));
+    let timer;
+    try {
+        await Promise.race([bot.pathfinder.goto(goal), new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 4000); })]);
+    } catch { try { bot.pathfinder.setGoal(null); } catch { /* none */ } } finally { clearTimeout(timer); }
+}
+
+// placeAt places item at p from nearby; true when the block is there. It
+// tries twice; agent._placeWhy says why the last try failed (placeBlock's
+// own words).
+async function placeAt(agent, item, p, tries = 2) {
+    const bot = agent.bot;
+    agent._placeWhy = null;
+    for (let i = 0; i < tries && !stopped(bot); i++) {
+        if (i) await new Promise(r => setTimeout(r, 300));
+        if (!await goNear(bot, p, 3)) { agent._placeWhy = `couldn't get near ${p.x} ${p.y} ${p.z}`; continue; }
+        if (stopped(bot)) break;
+        if (!SMALL.test(item)) await stepBack(bot, p);
+        agent._placingAt = { ...p, at: Date.now() };
+        // ground cover placeBlock doesn't replace (leaf litter, flowers): clear it first
+        const cover = blockAt(bot, p.x, p.y, p.z);
+        if (cover && cover.name !== 'air' && cover.name !== 'cave_air' && isOpenBlock(cover)
+            && !['grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern'].includes(cover.name)) {
+            try { await bot.dig(cover); } catch { /* placeBlock says why */ }
+        }
+        const from = String(bot.output || '').length;
+        try { await skills.placeBlock(bot, item, p.x, p.y, p.z, 'bottom', true); } catch (err) { agent._placeWhy = err?.message || String(err); }
+        if (placedIs(bot, item, p)) { agent._placeWhy = null; return true; }
+        const said = String(bot.output || '').slice(from).trim().split('\n').filter(Boolean).pop();
+        agent._placeWhy = said || agent._placeWhy || 'placeBlock failed';
+    }
+    return placedIs(bot, item, p);
 }
 
 // remember applies homeOnPlace's saves for a block the bot placed.
@@ -366,11 +515,20 @@ function remember(agent, kind, p, mine = false) {
 async function placeStation(agent, item, kind) {
     const bot = agent.bot;
     if (count(bot, item) < 1 && !await craft(bot, item, 1)) return fail(`couldn't make a ${item}`);
-    const p = freeSpot(bot, agent._choreCtx.centre);
-    if (!p) return fail('no free spot in the base');
-    if (!await placeAt(agent, item, p)) return fail(stopped(bot) ? 'stopped' : `couldn't place the ${item}`);
-    if (kind) remember(agent, kind, p);
-    return ok(`placed at ${p.x} ${p.y} ${p.z}`);
+    // up to 3 spots: one that won't take the block (an entity in it, out of
+    // reach) is skipped for the next
+    const skip = [];
+    for (let i = 0; i < 3 && !stopped(bot); i++) {
+        const p = freeSpot(bot, agent._choreCtx.centre, { skip });
+        if (!p) break;
+        if (await placeAt(agent, item, p)) {
+            if (kind) remember(agent, kind, p);
+            return ok(`placed at ${p.x} ${p.y} ${p.z}`);
+        }
+        skip.push(p);
+    }
+    if (stopped(bot)) return fail('stopped');
+    return fail(skip.length ? `couldn't place the ${item} (${agent._placeWhy || 'unknown'})` : 'no free spot in the base');
 }
 
 async function huntFood(agent) {
@@ -413,7 +571,7 @@ async function lightBase(agent) {
         if (!isOpenBlock(b) || (b.light ?? 15) >= 8) continue;
         if (await placeAt(agent, 'torch', p)) placed++;
     }
-    return placed ? ok(`${placed} torches placed`) : fail(stopped(bot) ? 'stopped' : 'couldn\'t place a torch');
+    return placed ? ok(`${placed} torches placed`) : fail(stopped(bot) ? 'stopped' : `couldn't place a torch (${agent._placeWhy || 'no dark spot open'})`);
 }
 
 async function getSeeds(agent) {
@@ -466,10 +624,25 @@ async function startFarm(agent) {
     return planted ? ok(`planted ${planted}`) : fail(stopped(bot) ? 'stopped' : 'couldn\'t plant');
 }
 
+// woolFromString crafts white wool from string (4 each), taking string
+// from the home chest when the pack has too little; returns wool made.
+async function woolFromString(agent, want = 64) {
+    const bot = agent.bot;
+    const before = count(bot, 'white_wool');
+    if (count(bot, 'string') < STRING_PER_WOOL && agent.homeChest()) await takeFromHome(agent, 'string', want * STRING_PER_WOOL);
+    const n = Math.min(want, Math.floor(count(bot, 'string') / STRING_PER_WOOL));
+    if (n > 0) await craft(bot, 'white_wool', n);
+    return count(bot, 'white_wool') - before;
+}
+
 async function gatherWool(agent) {
     const bot = agent.bot, cx = agent._choreCtx;
     const sheep = cx.animals.list.filter(e => e.name === 'sheep').sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position))[0];
-    if (!sheep) return fail('no sheep near');
+    if (!sheep) {
+        // no sheep: string makes wool (spiders drop it)
+        const made = await woolFromString(agent);
+        return made > 0 ? ok(`${made} wool from string`) : fail(stopped(bot) ? 'stopped' : 'no sheep near and not 4 string');
+    }
     const before = countWhere(bot, n => /_wool$/.test(n));
     if (count(bot, 'shears') > 0) {
         try { await skills.useToolOn(bot, 'shears', 'sheep'); } catch { /* none sheared */ }
@@ -486,7 +659,9 @@ async function makeBeds(agent) {
     const want = (h.homeBed ? 0 : 1) + (h.playerBed ? 0 : 1);
     const beds = () => bot.inventory.items().filter(i => isBed(i.name));
     while (beds().reduce((n, i) => n + i.count, 0) < want && !stopped(bot)) {
-        const wool = bot.inventory.items().filter(i => /_wool$/.test(i.name) && i.count >= 3)[0];
+        let wool = bot.inventory.items().filter(i => /_wool$/.test(i.name) && i.count >= 3)[0];
+        if (!wool && await woolFromString(agent, 3 - count(bot, 'white_wool')) > 0)
+            wool = bot.inventory.items().filter(i => /_wool$/.test(i.name) && i.count >= 3)[0];
         if (!wool) return fail('not 3 wool of one colour');
         if (!await craft(bot, wool.name.replace(/_wool$/, '_bed'), 1)) return fail('couldn\'t make a bed');
     }
@@ -507,7 +682,7 @@ async function makeBeds(agent) {
         }
         p ||= freeSpot(bot, agent._choreCtx.centre, { wide: true });
         if (!p) return fail('no room for a bed in the base');
-        if (!await placeAt(agent, bed.name, p)) return fail(stopped(bot) ? 'stopped' : 'couldn\'t place the bed');
+        if (!await placeAt(agent, bed.name, p)) return fail(stopped(bot) ? 'stopped' : `couldn't place the bed (${agent._placeWhy || 'unknown'})`);
         agent.memory_bank.rememberPlace(who === 'me' ? 'home_bed' : 'player_bed', p.x, p.y, p.z);
         if (who === 'me') { first = p; agent.openChat(`My bed is at ${p.x} ${p.y} ${p.z}; my home is now there.`); }
         else agent.openChat(`I put a bed for you beside mine at ${p.x} ${p.y} ${p.z}.`);
@@ -631,8 +806,9 @@ async function replantSaplings(agent) {
         await goNear(bot, v(e.position), 1);
     }
     if (!stopped(bot) && cx.ground.length) await skills.pickupNearbyItems(bot);
+    // where a cut tree stood first
+    let planted = stopped(bot) ? 0 : await plantStumps(agent);
     const used = [];
-    let planted = 0;
     for (const s of bot.inventory.items().filter(i => isSapling(i.name))) {
         for (let n = 0; n < s.count && !stopped(bot); n++) {
             const p = saplingSpot(bot, cx.centre, used);
@@ -706,15 +882,18 @@ export async function runChore(agent, chore) {
     const f = ACTUATORS[chore];
     if (!f) return fail(`no actuator for ${chore}`);
     const bot = agent.bot;
+    const token = { cancelled: false };
     let timer = null;
     const stop = new Promise(resolve => {
-        timer = setInterval(() => { if (stopped(bot)) resolve(fail('stopped')); }, STOP_MS);
+        timer = setInterval(() => { if (bot.interrupt_code) { token.cancelled = true; resolve(fail('stopped')); } }, STOP_MS);
     });
     try {
-        return await Promise.race([Promise.resolve().then(() => f(agent)), stop]);
+        const r = await Promise.race([RUN.run(token, () => Promise.resolve().then(() => f(agent))), stop]);
+        return r;
     } catch (err) {
         return fail(err?.message || String(err));
     } finally {
+        token.cancelled = true; // nothing of this chore goes on after it ends
         clearInterval(timer);
     }
 }
