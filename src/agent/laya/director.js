@@ -1,13 +1,18 @@
 // The director: the job stack and the one decision point for what andy does
 // next (nextActivity). Pure (no mineflayer), tested with fakes.
 //
-// It follows the shared director spec v1.1 (Mindcraft decision point ↔
+// It follows the shared director spec v1.2 (Mindcraft decision point ↔
 // laya-go director model, games/director): the same state text, the same
 // question and answer words and the same rules (and rule names) in the same
 // order, so the laya-go director model can replace the rules
 // (decision_models.tasks.director) with no code change.
 // test/laya_director.test.js checks the request against laya-go's golden
-// v1_sample_request.json byte for byte.
+// v1.2_sample_request.json byte for byte and the rules on 1000 of its
+// situations. v1.2 adds the Player line (a player near the bot attacked by a
+// mob), defend-player and flee-ranged. A served model on prompt v1 (v1.1
+// data) is sent the v1 text, without the Player line; it can't see the v1.2
+// facts, so where a v1.2 rule decides (defend-player, flee-ranged) that
+// rule's answer stands.
 //
 // The job stack holds the current Laya job (!layaMine, !layaFarm,
 // !layaCraft, !layaGather) and, when a safety activity (defend, flee, eat,
@@ -45,6 +50,11 @@ export const KIND_OF = {
 export const SAFETY_MODES = new Set(['laya_defending', 'self_defense', 'cowardice', 'self_preservation', 'unstuck']);
 
 export const NEAREST_KINDS = ['zombie', 'skeleton', 'creeper', 'spider'];
+// mobKind: a mob's name as the state's Nearest/By kinds name it (strays and
+// bogged are skeletons, v1.2), else other.
+export const mobKind = name => (name === 'stray' || name === 'bogged' ? 'skeleton' : NEAREST_KINDS.includes(name) ? name : 'other');
+export const PLAYER_REACH = 24; // the Player line's reach (v1.2)
+export const RANGED_REACH = 16; // flee-ranged's reach (v1.2)
 export const DANGERS = ['none', 'fluid', 'fall', 'drowning', 'fire'];
 export const LASTS = ['none', 'done', 'failed', 'interrupted', 'blocked'];
 
@@ -148,17 +158,20 @@ const left = l => (l === 'any' ? 'any' : cap(l, 999));
 //   job {kind, item, left} | null, paused (kind) | null,
 //   health, food, armed (none|sword|axe|other), armor 0–20,
 //   hostiles, nearest {kind, dist} | null, light 0–15, night, under,
-//   free, home (dist) | null, valuables, foodItems, danger, last
-export function directorState(s) {
+//   free, home (dist) | null, valuables, foodItems, danger, last,
+//   player {name, attacked, by, dist} | null (v1.2: the nearest player
+//   within 24 a mob hit in the last 5 s, else the nearest within 24)
+// prompt 'v1' leaves the Player line out (a model trained on v1.1 data).
+export function directorState(s, prompt = 'v1.2') {
     const j = s.job;
     const kind = j?.kind && JOB_KINDS.includes(j.kind) ? j.kind : null;
-    const near = s.nearest && s.hostiles > 0
-        ? `${NEAREST_KINDS.includes(s.nearest.kind) ? s.nearest.kind : 'other'} ${cap(s.nearest.dist, 16)}` : 'none none';
+    const near = s.nearest && s.hostiles > 0 ? `${mobKind(s.nearest.kind)} ${cap(s.nearest.dist, 16)}` : 'none none';
     return ['Director.',
         `Job ${kind || 'none'} ${kind ? word(j.item) : 'none'} left ${kind ? left(j.left) : 0}`,
         `Paused ${JOB_KINDS.includes(s.paused) ? s.paused : 'none'}`,
         `Health ${cap(s.health, 20)} Food ${cap(s.food, 20)} Armed ${s.armed || 'none'} Armor ${cap(s.armor || 0, 20)}`,
         `Hostiles ${cap(s.hostiles, 9)} Nearest ${near}`,
+        ...(prompt === 'v1' ? [] : [playerLine(s.player)]),
         `Light ${cap(s.light, 15)} Night ${s.night ? 'yes' : 'no'} Under ${s.under ? 'yes' : 'no'}`,
         `Pack ${cap(s.free, 36)} Home ${s.home == null ? 'none' : cap(s.home, 99)} Valuables ${cap(s.valuables || 0, 99)}`,
         `Food items ${cap(s.foodItems || 0, 99)}`,
@@ -167,11 +180,21 @@ export function directorState(s) {
     ].join('\n');
 }
 
-// RULES are the rule names, in order (laya-go games/director/rules).
-export const RULES = ['flee-danger', 'flee-hostile', 'flee-creeper', 'flee-low', 'defend', 'heal', 'eat-hungry', 'unload-full',
-    'unload-near', 'unload-valuables', 'resume-paused', 'continue', 'resume-failed', 'idle-failed', 'eat-idle', 'idle'];
+// playerLine is the v1.2 Player line: "Player <name> attacked <yes|no> by
+// <kind|none> <dist>", or "Player none attacked no by none none".
+export function playerLine(p) {
+    if (!p || !p.name || !(p.dist <= PLAYER_REACH)) return 'Player none attacked no by none none';
+    const name = String(p.name).toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+    return `Player ${name} attacked ${p.attacked ? 'yes' : 'no'} by ${p.attacked ? mobKind(p.by) : 'none'} ${cap(p.dist, PLAYER_REACH)}`;
+}
 
-// decide is the spec's rules (v1.1), in order: {activity, rule}.
+// RULES are the rule names, in order (laya-go games/director/rules).
+export const RULES = ['flee-danger', 'flee-hostile', 'flee-creeper', 'flee-low', 'flee-ranged', 'defend', 'defend-player', 'heal',
+    'eat-hungry', 'unload-full', 'unload-near', 'unload-valuables', 'resume-paused', 'continue', 'resume-failed', 'idle-failed', 'eat-idle', 'idle'];
+// V12_RULES decide on facts a prompt v1 model can't see.
+export const V12_RULES = new Set(['flee-ranged', 'defend-player']);
+
+// decide is the spec's rules (v1.2), in order: {activity, rule}.
 export function decide(s) {
     const within = d => s.hostiles > 0 && !!s.nearest && Math.min(s.nearest.dist, 16) <= d;
     const r = (activity, rule) => ({ activity, rule });
@@ -180,7 +203,11 @@ export function decide(s) {
     if (within(4) && (s.health <= 6 || (s.armed === 'none' && s.health <= 10))) return r('flee', 'flee-hostile');
     if (within(3) && s.nearest.kind === 'creeper') return r('flee', 'flee-creeper');
     if (within(8) && s.health <= 6) return r('flee', 'flee-low'); // v1.1
+    // v1.2: a skeleton in range, low and nothing to eat: healing in its sight kills
+    if (within(RANGED_REACH) && mobKind(s.nearest.kind) === 'skeleton' && s.health <= 6 && !(s.foodItems > 0)) return r('flee', 'flee-ranged');
     if (within(8) && s.health > 6) return r('defend', 'defend');
+    // v1.2: a player near is attacked, unless the bot is hungry with food to eat
+    if (s.player?.attacked && s.player.dist <= PLAYER_REACH && !(s.food <= 6 && s.foodItems > 0)) return r('defend', 'defend-player');
     if (s.health <= 8 && !within(8)) return r('heal', 'heal');
     if (s.food <= 6 && s.foodItems > 0) return r('eat', 'eat-hungry');
     if (job || paused) { // v1.1: never unload while idle
@@ -202,9 +229,10 @@ export function decide(s) {
 // and deps.task are given and its answer is confident, else the rules.
 // Returns {activity, rule, source, state, p}.
 export async function nextActivity(s, deps = {}) {
-    const text = directorState(s);
+    const prompt = deps.task?.prompt === 'v1' ? 'v1' : 'v1.2';
+    const text = directorState(s, prompt);
     const rule = decide(s);
-    if (deps.client && deps.task) {
+    if (deps.client && deps.task && !(prompt === 'v1' && V12_RULES.has(rule.rule))) {
         const r = await deps.client.decide('director', text, QUESTIONS).catch(() => null);
         const a = r?.answers?.Activity;
         if (a?.confident && ACTIVITIES.includes(a.top))
