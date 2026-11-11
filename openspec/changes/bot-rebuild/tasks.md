@@ -48,7 +48,10 @@ Done means: `bot_start` with `ANDY_BOT=new` joins the test world, `andy_status` 
 lease overrun test passes.
 
 ## 3. Models, sensors, director, safety
-- [ ] 3.1 `models/client.ts` (port of `src/models/laya.js`), served prompt version.
+- [x] 3.1 `models/client.ts` (port of `src/models/laya.js`), served prompt version.
+  Latency note (2026-11-12, golaya serve, training idle, p50/max): eat 49/115 ms, director 100/136, defend 120/186,
+  craft 185/224, command 300/346, mine 346/417 ms; 2–4 s while the Studio trains. Timeouts: 5 s default, a task's
+  `timeout_ms` below 2.5 s (settings.js's 300) is raised to 2.5 s and logged once.
 - [ ] 3.2 Renderers + questions + parsers + rules for director, eat, defend; golden tests.
 - [ ] 3.3 Sensors: vitals, attacks (fix-round4's `attacks.js`), danger, light/time, player, pack, home, stuck.
 - [ ] 3.4 Director loop, JobStack, priorities, activities defend/flee/eat/heal/escape; defend-only-attackers.

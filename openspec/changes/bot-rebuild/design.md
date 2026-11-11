@@ -228,7 +228,9 @@ old bot and the new for each file (same state text, same keys). The console log 
   sets.
 - **Batching:** the director, eat and defend questions are asked in one `/v1/decisions` request per tick when more than
   one is due (the API already takes several questions; separate tasks → parallel requests with one shared deadline).
-- Timeouts as settings today (300 ms most, craft 2 s).
+- Timeouts from measured latency (2026-11-12: p50 49–346 ms, max 417 ms idle; 2–4 s while the Studio trains): 5 s
+  per request when a task sets none; a task's `timeout_ms` below 2.5 s (the old 300 ms / 2 s settings) is raised to
+  2.5 s and logged once. Callers never block the tick on an answer.
 
 ## 7. Efficiency (measure before and after)
 
