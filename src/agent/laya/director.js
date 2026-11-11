@@ -238,10 +238,12 @@ export async function nextActivity(s, deps = {}) {
         // an answer that can't be acted on (defend with no hostile near and
         // no player attacked) is the rules' to answer, as the mine task's
         // nonsense answers are
-        const nothing = a?.top === 'defend' && !(s.hostiles > 0) && !s.player?.attacked;
+        // and eat at full hunger (Minecraft won't let him)
+        const nothing = a?.top === 'defend' && !(s.hostiles > 0) && !s.player?.attacked ? 'nothing-to-defend'
+            : a?.top === 'eat' && s.food >= 20 ? 'not-hungry' : null;
         if (a?.confident && ACTIVITIES.includes(a.top) && !nothing)
             return { activity: a.top, rule: rule.rule, source: 'model', state: text, p: a.topProbability, ruleActivity: rule.activity };
-        if (nothing) return { ...rule, source: 'rules', state: text, why: 'nothing-to-defend', model: a.top, p: a.topProbability };
+        if (nothing) return { ...rule, source: 'rules', state: text, why: nothing, model: a.top, p: a.topProbability };
     }
     return { ...rule, source: 'rules', state: text };
 }

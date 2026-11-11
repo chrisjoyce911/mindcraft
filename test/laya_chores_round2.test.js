@@ -79,6 +79,11 @@ test('director: a model "defend" with nothing to defend is the rules\' answer', 
     assert.deepEqual([d.activity, d.source], ['defend', 'model']);
     d = await nextActivity({ ...calm, player: { name: 'tester', attacked: true, by: 'zombie', dist: 10 } }, { client, task: { prompt: 'v1.2' } });
     assert.deepEqual([d.activity, d.source], ['defend', 'model']);
+    const eats = { decide: () => Promise.resolve({ answers: { Activity: { top: 'eat', topProbability: 0.99, confident: true } } }) };
+    d = await nextActivity(calm, { client: eats, task: { prompt: 'v1.2' } });
+    assert.deepEqual([d.activity, d.source, d.why], ['idle', 'rules', 'not-hungry'], 'eat at food 20');
+    d = await nextActivity({ ...calm, food: 12 }, { client: eats, task: { prompt: 'v1.2' } });
+    assert.deepEqual([d.activity, d.source], ['eat', 'model']);
 });
 
 test('runChore: a chore given up on by an interrupt does nothing more after it', async () => {

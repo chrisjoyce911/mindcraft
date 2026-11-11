@@ -33,7 +33,7 @@ Actuators and sensors only; no chore is chosen in code (aim: decisions in the La
 - Wool: the sensor's wool counts 4 string as 1 white wool; gather_wool with no sheep and make_beds craft white wool
   from string (taking string from the home chest when needed). Spiders stay the model's choice.
 - Director: a `defend` answer with nothing to defend (no hostile, no player attacked) goes to the rules, logged
-  `why: nothing-to-defend` (like the mine task's nonsense answers).
+  `why: nothing-to-defend` (like the mine task's nonsense answers); `eat` at food 20 likewise (`not-hungry`).
 
 ## Keep
 "andy stop" holds chores 5 minutes or until the next command. Shelter stays out (needs the blueprint model).
