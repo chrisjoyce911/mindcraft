@@ -101,6 +101,10 @@ lease overrun test passes.
   (`bot-rebuild-3.5-2026-11-12.md`): the 3.4 scenarios pass; every line's keys match an old shape.
 
 Done means: golden green; suite scenarios for defend, flee, eat and night survival pass on the new bot; no mode exists.
+Gate passed 2026-11-12 (02:08 AEST, HEAD b03c029, no code change): `bot` npm test 126/126, harness 38/38; eat,
+defend-fight, flee-creeper, night-survival pass twice each (training held); `defend` stops at its `!followPlayer`
+step as expected (4.2); no mode (grep, check:deps, live modes "none", `!setMode` not a command). Report
+`bots/andy/logs/game-tests/bot-rebuild-phase3-2026-11-12.md`.
 
 ## 4. Command and simple jobs
 - [ ] 4.1 Command model (prompt v2.1/v2.2) → typed `Command`; canned reply; `laya-command.jsonl`.
