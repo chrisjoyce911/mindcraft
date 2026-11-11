@@ -22,15 +22,26 @@ export type DirectorEvent = 'tick' | 'hurt' | 'death' | 'spawn' | 'chat' | 'job-
 export interface DirectorLogEntry {
     event: DirectorEvent; state: string; answer: Activity; rule: string; source: 'model' | 'rules';
     p?: number; why?: string; model?: string;
-    /** What the director did with the answer when it differs from the answer (e.g. eat-model, quiet, unload-not-yet). */
+    /**
+     * What the director did with the answer when it differs from the answer (e.g. eat-model, quiet,
+     * unload-not-yet). The console's only: laya-director.jsonl keeps the old fields (log/jsonl.ts).
+     */
     acted?: string;
+}
+
+/** directorEntry: a decision as the log keeps it (acted: what the director did, when not the answer). */
+export function directorEntry(event: DirectorEvent, d: DirectorDecision, acted?: string): DirectorLogEntry {
+    return {
+        event, state: d.state, answer: d.answer, rule: d.rule, source: d.source,
+        ...(d.p !== undefined ? { p: d.p } : {}),
+        ...(d.why ? { why: d.why, ...(d.model !== undefined ? { model: d.model } : {}) } : {}),
+        ...(acted ? { acted } : {}),
+    };
 }
 
 /** Where decisions go: the director's here, eat/defend through the activities' log. */
 export interface DecisionSink extends ActivityLog {
     director(e: DirectorLogEntry): void;
-    /** Lines that are not decisions (stop-overrun, warnings). */
-    note(text: string): void;
 }
 
 export interface Models {
@@ -182,13 +193,9 @@ export class Director {
         const quiet = event === 'tick' && d.answer === 'idle' && this.lastAnswer === 'idle' && !acted;
         this.lastAnswer = d.answer;
         if (!quiet) {
-            this.deps.sink.director({
-                event, state: d.state, answer: d.answer, rule: d.rule, source: d.source,
-                ...(d.p !== undefined ? { p: d.p } : {}),
-                ...(d.why ? { why: d.why, ...(d.model !== undefined ? { model: d.model } : {}) } : {}),
-                ...(acted ? { acted } : {}),
-            });
+            this.deps.sink.director(directorEntry(event, d, acted));
         }
+        // the eat activity reports a decision it runs; an eat answer not acted on now is asked again after checkMs
         if (e && !(e.eat && acted === 'eat-model')) this.deps.sink.eat(e, e.eat ? 'eat-later' : 'no-eat');
         return d;
     }

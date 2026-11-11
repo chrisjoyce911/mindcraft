@@ -87,7 +87,18 @@ lease overrun test passes.
   starving), the director's `eat` answer is held for up to 30 s and nothing runs, so a paused job is not resumed
   while the director's `Food items` still counts the refused food. Fix in the spec: the director's `Food items`
   should count only the foods the eat model may choose. No "resume instead" rule in code.
-- [ ] 3.5 Logs: `laya-director/eat/defend.jsonl` identical in format to the fixtures (1.2).
+- [x] 3.5 Logs: `laya-director/eat/defend.jsonl` identical in format to the fixtures (1.2).
+  `bot/src/log/jsonl.ts`: typed line builders (the old fields, order and values: eat `eat` is the Eat probability,
+  `food`/`p`/`ms` the model's words; defend `action/target/weapon` the model's words, written before acting, `outcome`
+  the action taken, `override` kept; a fallback is `outcome:"fallback"` + `reason` (+ `veto`)) and one writer
+  (`{time, ...line}`, never throws); `log_steps: false` turns eat/defend lines off. No new fields: the director's
+  `acted`, eat-failed/target-gone reasons stay on the console. Not written (as the old bot): decisions the rules made
+  alone (task off, model not asked) and an eat answer not acted on yet (re-asked after check_ms). Values that differ
+  from the old bot's: director `event` is the new bot's word (`hurt`, `job-end`, `<activity>-done`, no `idle`), and
+  the `reason`/`why` words `not-hungry`, `nothing-to-defend`, `malformed` (and director `why` low-confidence/no-answer)
+  are new values in old fields. Golden `bot/test/logs.test.ts`: the three 1.2 fixture lines and one line per branch
+  recorded from the old JS (`test/fixtures/laya-logs/branches/`), byte for byte. Live
+  (`bot-rebuild-3.5-2026-11-12.md`): the 3.4 scenarios pass; every line's keys match an old shape.
 
 Done means: golden green; suite scenarios for defend, flee, eat and night survival pass on the new bot; no mode exists.
 

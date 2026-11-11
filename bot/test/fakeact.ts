@@ -122,7 +122,7 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
     const sink: DecisionSink = {
         director: e => w.logs.push(e),
         eat: (d, outcome) => w.eats.push(`${d.food ?? 'none'} ${outcome}`),
-        defend: (d, outcome) => w.defends.push(`${d.answer} ${d.targetWord} ${outcome}`),
+        defend: d => w.defends.push(`${d.answer} ${d.targetWord}`),
         note: t => w.notes.push(t),
     };
     w.director = new Director({

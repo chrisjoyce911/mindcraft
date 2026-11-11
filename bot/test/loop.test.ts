@@ -124,7 +124,7 @@ test('Motion.moveFor: sets a dynamic goal for ms then clears it; abort clears it
 function ctxOf(w: World): ActivityCtx {
     return {
         act: w.act, facts: () => w.facts, eatModel: null, defendModel: null, say: t => w.said.push(t),
-        log: { eat: (d, o) => w.eats.push(`${d.food ?? 'none'} ${o}`), defend: () => {} },
+        log: { eat: (d, o) => w.eats.push(`${d.food ?? 'none'} ${o}`), defend: () => {}, note: t => w.notes.push(t) },
         timing: DEFAULT_TIMING, now: Date.now, askedFoodAt: 0,
     };
 }

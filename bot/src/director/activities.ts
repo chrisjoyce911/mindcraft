@@ -14,6 +14,7 @@ import { bestWeapon, hold } from '../actuators/equip.js';
 import { decideEat, eatSituation, type EatDecision } from '../models/eat/index.js';
 import { active, decideDefend, defendSituation, type DefendDecision, type NearMob } from '../models/defend/index.js';
 import type { ActivityRunnerName, Vec3Like } from '../types/index.js';
+import type { EatOutcome } from '../log/jsonl.js';
 
 const dist3 = (a: Vec3Like, b: Vec3Like): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
@@ -37,10 +38,16 @@ export interface Timing {
 }
 export const DEFAULT_TIMING: Timing = { stepMs: 400, quietMs: 3000, maxEngageMs: 60000, checkMs: 2000, healMs: 60000 };
 
-/** The decision lines the activities write (laya-eat.jsonl, laya-defend.jsonl; 3.5 makes them exact). */
+/**
+ * Where the activities report: every eat and defend decision once (log/jsonl.ts writes the lines the old bot
+ * wrote: model-asked decisions only) and notes for the console (what the old format has no field for).
+ */
 export interface ActivityLog {
-    eat(d: EatDecision, outcome: string): void;
-    defend(d: DefendDecision, outcome: string): void;
+    /** An eat decision and what became of it (a fallback's line ignores the outcome). */
+    eat(d: EatDecision, outcome: EatOutcome): void;
+    /** A defend decision, before it is carried out (the old step's order). */
+    defend(d: DefendDecision): void;
+    note(text: string): void;
 }
 
 export interface ActivityCtx {
@@ -79,7 +86,8 @@ async function eatOnce(ctx: ActivityCtx, signal: AbortSignal, preset?: EatDecisi
     const d = preset ?? await decideEat(eatSituation(ctx.facts(true)), ctx.eatModel);
     if (!d.eat || !d.food) { if (!preset) ctx.log.eat(d, 'no-eat'); return 'no-eat'; }
     const o = await eatFood(ctx.act.bot, d.food, signal);
-    ctx.log.eat(d, o.ok ? 'ate' : `failed:${o.reason}`);
+    ctx.log.eat(d, o.ok ? 'ate' : 'eat-failed');
+    if (!o.ok) ctx.log.note(`eat ${d.food} failed: ${o.reason}`);
     return o.ok ? 'ate' : 'failed';
 }
 
@@ -182,15 +190,16 @@ export function runDefend(ctx: ActivityCtx, signal: AbortSignal): Promise<Activi
             }
             const d = await decideDefend(s, ctx.defendModel);
             if (signal.aborted) return 'stopped';
-            if (d.answer === 'ignore') { ctx.log.defend(d, 'ignore'); return 'ignore'; }
+            ctx.log.defend(d);
+            if (d.answer === 'ignore') return 'ignore';
             let o: Outcome;
             if (d.answer === 'eat') o = await eatApple(ctx.act, signal);
             else {
                 const target = entityOf(ctx, (s.mobs as NearMob[])[d.target]?.id);
-                if (!target) { ctx.log.defend(d, 'gone'); return 'gone'; }
+                if (!target) { ctx.log.note(`defend ${d.answer} ${d.targetWord}: target gone`); return 'gone'; }
                 o = await act(ctx, d, target, signal);
             }
-            ctx.log.defend(d, o.ok ? d.answer : `${d.answer}:${o.reason}`);
+            if (!o.ok) ctx.log.note(`defend ${d.answer} ${d.targetWord} failed: ${o.reason}`);
             if (signal.aborted) return 'stopped';
             await sleep(ctx.timing.stepMs, signal);
         }

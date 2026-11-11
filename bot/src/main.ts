@@ -17,6 +17,7 @@ import { actBot, realGoals } from './actuators/bot.js';
 import { Director, type DecisionSink, type Models } from './director/loop.js';
 import type { Timing } from './director/activities.js';
 import type { Command, Places } from './types/index.js';
+import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // dist/src/main.js → repo root is three up (bot/dist/src)
@@ -25,6 +26,12 @@ const CANNED = "Sorry, I only understand simple commands, like: follow me, come 
     "get 16 logs, craft a stone pickaxe, farm wheat, give me your coal, store everything, this is your chest.";
 
 function log(m: string) { console.log(m); }
+
+/** A task's log_steps setting (decision_models.tasks.<task>.log_steps; default true, as the old DEFAULTS). */
+function logSteps(settings: Record<string, unknown>, task: string): boolean {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    return dm?.tasks?.[task]?.log_steps !== false;
+}
 
 /** A task's number setting (decision_models.tasks.<task>.<key>), e.g. defend step_ms. */
 function taskNumber(settings: Record<string, unknown>, task: string, key: string): number | undefined {
@@ -62,17 +69,18 @@ async function main() {
     fs.mkdirSync(path.join(botDir, 'logs'), { recursive: true });
     const onlyChatWith = Array.isArray(settings.only_chat_with) ? settings.only_chat_with as string[] : [];
 
+    const jsonl = new JsonlLog(path.join(botDir, 'logs'));
     const body = new Body({ host: settings.host, port: settings.port, username: name, version: settings.minecraft_version, auth: settings.auth }, log);
     const lease = new BodyLease({
         resetBody: () => body.reset(),
         log: e => {
             log(`[laya] director: stop-overrun ${e.runner} (${e.waitedMs} ms)`);
-            fs.appendFileSync(path.join(botDir, 'logs', 'laya-director.jsonl'), JSON.stringify({ time: new Date().toISOString(), ...e }) + '\n');
+            jsonl.write('director', e);
         },
     });
     let stopping = false;
 
-    // decision models (3.1) and the decision log lines (3.5 makes them identical to the fixtures)
+    // decision models (3.1) and the decision log lines (3.5: the old bot's format, log/jsonl.ts)
     const laya = createLayaClient({ getConfig: () => decisionModels(settings), log });
     const enabled = (task: string) => decisionModels(settings)?.tasks[task]?.enabled === true;
     const models: Models = {
@@ -80,23 +88,13 @@ async function main() {
         eat: () => (enabled('eat') ? laya : null),
         defend: () => (enabled('defend') ? laya : null),
     };
-    const logLine = (task: string, entry: object) => {
-        try { fs.appendFileSync(path.join(botDir, 'logs', `laya-${task}.jsonl`), JSON.stringify({ time: new Date().toISOString(), ...entry }) + '\n'); } catch { /* never stops the bot */ }
-    };
     const sink: DecisionSink = {
         director: e => {
             log(`[laya] director: ${e.event} → ${e.answer} (${e.source} ${e.rule}${e.why ? `, ${e.why}` : ''}${e.acted ? `; ${e.acted}` : ''})`);
-            logLine('director', e);
+            jsonl.write('director', directorLine(e));
         },
-        eat: (d, outcome) => logLine('eat', {
-            state: d.state, eat: d.eat ? 1 : 0, food: d.food ?? 'none', ...(d.p !== undefined ? { p: d.p } : {}),
-            source: d.source, rule: d.rule, ...(d.why ? { why: d.why } : {}), ...(d.veto ? { veto: d.veto } : {}), outcome,
-        }),
-        defend: (d, outcome) => logLine('defend', {
-            state: d.state, action: d.answer, target: d.targetWord, weapon: d.weapon ?? 'none', ...(d.p !== undefined ? { p: d.p } : {}),
-            danger: d.danger, source: d.source, rule: d.rule, ...(d.why ? { why: d.why } : {}), ...(d.veto ? { veto: d.veto } : {}),
-            ...(d.override ? { override: d.override } : {}), outcome,
-        }),
+        eat: (d, outcome) => { if (logSteps(settings, 'eat')) jsonl.write('eat', eatLine(d, outcome)); },
+        defend: d => { if (logSteps(settings, 'defend')) jsonl.write('defend', defendLine(d)); },
         note: text => log(`[laya] director: ${text}`),
     };
     let director: Director | null = null;
