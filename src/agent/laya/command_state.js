@@ -4,14 +4,16 @@
 // turns the Item kind into a Minecraft item with the bot's inventory.
 // test/laya_command.test.js checks it all against laya-go's fixtures.
 
-export const VERSION = 'v1'; // the default; v2 adds farm, v2.1 animal drops (settings decision_models.tasks.command.prompt)
-export const VERSIONS = ['v1', 'v2', 'v2.1'];
+export const VERSION = 'v1'; // the default; v2 adds farm, v2.1 animal drops, v2.2 chores_on/chores_off (settings decision_models.tasks.command.prompt)
+export const VERSIONS = ['v1', 'v2', 'v2.1', 'v2.2'];
 export const MAX_MESSAGE = 120;
 export const NONE = 'none';
 
 export const COMMANDS = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'give', 'attack', 'store', 'eat', 'inventory', 'chat'];
 // COMMANDS_V2: prompt v2's: v1's with farm after mine and home after store.
 export const COMMANDS_V2 = ['follow', 'come', 'stop', 'stay', 'gather', 'craft', 'mine', 'farm', 'give', 'attack', 'store', 'home', 'eat', 'inventory', 'chat'];
+// COMMANDS_V22: prompt v2.2's: v2's with chores_on and chores_off before chat.
+export const COMMANDS_V22 = [...COMMANDS_V2.slice(0, -1), 'chores_on', 'chores_off', 'chat'];
 export const TIERS = ['wooden', 'stone', 'iron', 'diamond', NONE];
 export const COUNTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '16', '20', '24', '32', '48', '64', 'all', 'any'];
 export const CROPS = ['wheat', 'carrots', 'potatoes', 'beetroot'];
@@ -108,7 +110,7 @@ export const ITEMS_V21 = [...ITEMS_V2.slice(0, -1), ...DROPS.map(k => k.key).fil
 
 // kindOf: prompt version v's kind (laya-go kindOfFor): v2's kinds for v1
 // and v2, v2.1's (with the drops) for v2.1.
-const kindOf = (key, v = 'v2') => (v === 'v2.1' ? KINDS_V21 : KINDS_V2).find(k => k.key === key);
+const kindOf = (key, v = 'v2') => (v === 'v2.1' || v === 'v2.2' ? KINDS_V21 : KINDS_V2).find(k => k.key === key);
 
 // huntFor is laya-go's HuntFor: the mob a gather of item (resolve's answer)
 // hunts, or '' when it isn't an animal drop (v2.1's drops, wool from sheep,
@@ -166,8 +168,14 @@ export const QUESTIONS_V21 = {
     Item: { ...QUESTIONS.Item, criteria: ITEMS_V21.slice() },
 };
 
-// questionsFor returns prompt version v's questions (v1 unless 'v2' or 'v2.1').
-export const questionsFor = v => (v === 'v2.1' ? QUESTIONS_V21 : v === 'v2' ? QUESTIONS_V2 : QUESTIONS);
+// QUESTIONS_V22: prompt v2.2's (v2.1's, with chores_on and chores_off).
+export const QUESTIONS_V22 = {
+    ...QUESTIONS_V21,
+    Command: { ...QUESTIONS.Command, criteria: COMMANDS_V22.slice() },
+};
+
+// questionsFor returns prompt version v's questions (v1 unless 'v2', 'v2.1' or 'v2.2').
+export const questionsFor = v => (v === 'v2.2' ? QUESTIONS_V22 : v === 'v2.1' ? QUESTIONS_V21 : v === 'v2' ? QUESTIONS_V2 : QUESTIONS);
 
 // bestTier: the tier a tool without one is made in (laya-go BestTier).
 export function bestTier(carry) {

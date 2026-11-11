@@ -279,3 +279,24 @@ test('laya:check has v2.1 samples (command v2.1, mine and farm on v2 text)', asy
     assert.ok(loadSample('mine', 'v2.1').questions.Unload);
     assert.ok(loadSample('farm', 'v2.1').questions.Unload);
 });
+
+// ---- prompt v2.2: chores_on, chores_off ----
+import { QUESTIONS_V22, COMMANDS_V22 } from '../src/agent/laya/command_state.js';
+
+test('golden v2.2 request: "andy do your chores" matches laya-go byte for byte', () => {
+    const g = JSON.parse(readFileSync(new URL('./fixtures/laya-command-v22/v22_chores_request.json', import.meta.url), 'utf8'));
+    assert.equal(state('andy', 'chrisjoyce911', 'andy do your chores'), g.state);
+    assert.deepEqual(JSON.parse(JSON.stringify(QUESTIONS_V22)), g.questions);
+    assert.equal(questionsFor('v2.2'), QUESTIONS_V22);
+    assert.deepEqual(COMMANDS_V22.slice(-3), ['chores_on', 'chores_off', 'chat']);
+});
+
+test('v2.2 plan: chores_on and chores_off run !layaChores', async () => {
+    const { plan } = await import('../src/agent/laya/command.js');
+    const ans = cmd => ({ answers: { Addressed: { probability: 0.99 }, Command: { top: cmd, topProbability: 0.95 },
+        Item: { top: 'none' }, Tier: { top: 'none' }, Count: { top: 'any' } } });
+    const ctx = { speaker: 'tester', has: n => n === '!layaChores', opts: { prompt: 'v2.2' }, carry: [] };
+    assert.deepEqual(plan(ans('chores_on'), ctx).lines, ['!layaChores("on")']);
+    assert.deepEqual(plan(ans('chores_off'), ctx).lines, ['!layaChores("off")']);
+    assert.equal(plan(ans('chores_on'), { ...ctx, has: () => false }).kind, 'llm');
+});

@@ -4,6 +4,7 @@ import { parseGoal as parseFarmGoal } from '../laya/farm.js';
 import { nearestChestTo } from '../laya/pack_actions.js';
 import { isHomeName } from '../laya/home_chest.js';
 import { jobFailedMessage } from '../laya/job_message.js';
+import { parseOnOff } from '../laya/chores.js';
 
 // homeChestAdopter lets a Laya task save a chest marked by a sign with the
 // bot's name as the home chest (when none is saved), telling the player.
@@ -64,9 +65,11 @@ export async function runJob(agent, job) {
         else {
             const how = !r.success ? 'blocked' : (result === false || result?.ok === false) ? 'failed' : 'done';
             stack.ended(job, how);
-            // a job that ends without doing it says why (a resumed job's
-            // output reaches no one else)
-            if (how !== 'done') agent.openChat(jobFailedMessage(job, result, r));
+            // a chore reports its end to the chores runner (a failed chore
+            // goes in Failed, quietly); a job that ends without doing it
+            // says why (a resumed job's output reaches no one else)
+            if (job.onEnd) job.onEnd(how, result, r);
+            else if (how !== 'done') agent.openChat(jobFailedMessage(job, result, r));
         }
     }
     agent.director.tick('job-ended').catch(() => {});
@@ -262,6 +265,18 @@ export const actionsList = [
         })
     },
     {
+        name: '!layaChores',
+        description: 'Turn chores on or off: with chores on, when nobody has given you a job you work by yourself (wood, tools, a farm, food, torches, a chest, beds, a kit for the player). Saved across restarts.',
+        params: { 'state': { type: 'string', description: 'on or off.' } },
+        perform: async function (agent, state) {
+            const on = parseOnOff(state);
+            if (on == null) return 'Say on or off.';
+            agent.setChores(on);
+            if (on) setTimeout(() => agent.director.tick('chores-on').catch(() => {}), 200);
+            return on ? "Okay, I'll do my chores when nobody needs me." : "Okay, I'm taking a break from chores.";
+        }
+    },
+    {
         name: '!setHomeChest',
         description: 'Make the chest next to the player who spoke last (or next to you) your home chest, where Laya mining and farming empty a full pack.',
         perform: async function (agent) {
@@ -270,6 +285,9 @@ export const actionsList = [
             const c = nearestChestTo(agent.bot, at);
             if (!c) return "I can't see a chest near you.";
             agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z);
+            // a player set the home: it replaces a table home and the chores centre
+            agent.memory_bank.forgetPlace('home_table');
+            agent.memory_bank.forgetPlace('chores_centre');
             return `Home chest set at ${c.x} ${c.y} ${c.z}.`;
         }
     },

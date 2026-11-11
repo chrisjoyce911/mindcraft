@@ -13,6 +13,7 @@ import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
 import { packDeps } from "../laya/pack_actions.js";
 import { huntUntil } from "../laya/hunt.js";
+import { kitIn } from "../laya/chores_state.js";
 import { mineStore } from "../laya/mine_memory.js";
 import { readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, mkdirSync as mkdirSyncFs } from "fs";
 
@@ -976,6 +977,19 @@ export async function takeFromChest(bot, itemName, num=-1) {
     }
     
     let totalAvailable = matchingItems.reduce((sum, item) => sum + item.count, 0);
+    // the home chest keeps one player kit (laya-chores): its tools, 8 cooked
+    // food and 16 torches are never taken
+    const home = bot.layaHomeChest?.();
+    if (home && chest.position.x === Math.floor(home[0]) && chest.position.y === Math.floor(home[1]) && chest.position.z === Math.floor(home[2])) {
+        const all = chestContainer.containerItems().map(i => ({ name: i.name, count: i.count }));
+        const { reserved } = kitIn(all, n => !!(bot.registry.foodsByName || {})[n]);
+        totalAvailable = Math.max(0, totalAvailable - (reserved[itemName] || 0));
+        if (totalAvailable === 0) {
+            log(bot, `The ${itemName} in the home chest is the player's kit; I'm leaving it.`);
+            await chestContainer.close();
+            return false;
+        }
+    }
     let remaining = num === -1 ? totalAvailable : Math.min(num, totalAvailable);
     let totalTaken = 0;
     

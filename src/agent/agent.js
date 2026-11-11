@@ -19,7 +19,11 @@ import { speak } from './speak.js';
 import { laya, taskSettings } from '../models/laya.js';
 import { handleCommand, CANNED } from './laya/command.js';
 import { llmOn, route, NO_LLM_REPLY, deathMessage } from './llm_gate.js';
-import { Director, KIND_OF, armedOf, armorPoints, dangerOf, HARMFUL } from './laya/director.js';
+import { Director, KIND_OF, armedOf, armorPoints, dangerOf, HARMFUL, mobKind } from './laya/director.js';
+import { Chores, CHORE_JOB, loadChoresState, saveChoresState } from './laya/chores.js';
+import { sense as senseChores, runChore, playerFact, CAN as CHORE_CAN, homeFacts } from './laya/chores_actions.js';
+import { homeOnPlace, placedBy, isBed } from './laya/chores_home.js';
+import * as skills from './library/skills.js';
 import { valuables } from './laya/mine_state.js';
 import { depositList } from './laya/mine.js';
 import { packDeps } from './laya/pack_actions.js';
@@ -31,6 +35,10 @@ import Vec3 from 'vec3';
 import { runJob } from './commands/actions.js';
 import { getNearestEntityWhere, getInventoryCounts } from './library/world.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
+
+// CHORES_HOLD_MS: after a player's !stop no chore starts for this long
+// (or until the player's next command).
+export const CHORES_HOLD_MS = 5 * 60_000;
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -60,6 +68,7 @@ export class Agent {
         this.memory_bank = new MemoryBank(() => this._savePlaces());
         this.self_prompter = new SelfPrompter(this);
         this.director = this._makeDirector();
+        this._initChores();
         convoManager.initAgent(this);
         await this.prompter.initExamples();
 
@@ -448,8 +457,13 @@ export class Agent {
     // job (a new Laya job replaces it itself); !stop clears the stack.
     _playerCommand(name) {
         if (!name) return;
-        if (name === '!stop') this.director.stack.clear();
-        else if (isAction(name) && !name.startsWith('!laya')) this.director.stack.replaceTop();
+        if (name === '!stop') {
+            this.director.stack.clear();
+            this._choresHoldUntil = Date.now() + CHORES_HOLD_MS; // stop means stop: no chore for a while
+        } else {
+            if (isAction(name)) this._choresHoldUntil = 0;
+            if (isAction(name) && !name.startsWith('!laya')) this.director.stack.replaceTop();
+        }
     }
 
     async routeResponse(to_player, message) {
@@ -522,6 +536,7 @@ export class Agent {
             }
             prev_health = this.bot.health;
         });
+        this._choreSensors();
         // Logging callbacks
         this.bot.on('error' , (err) => {
             console.error('Error event!', err);
@@ -619,6 +634,8 @@ export class Agent {
             stop: activity => this._stopActivity(activity),
             client: taskSettings('director') ? laya : null,
             task: taskSettings('director') || null,
+            chore: () => this._startChore(),
+            choresOn: () => !!this._chores?.on && !this._choresHeld(),
             now: () => Date.now(),
             warn: err => console.warn('[laya] director:', err?.message || err),
             stepLog: `./bots/${this.name}/logs/laya-director.jsonl`,
@@ -657,6 +674,7 @@ export class Agent {
             home: home ? Math.ceil(Math.hypot(home.x - pos.x, home.y - pos.y, home.z - pos.z)) : null,
             valuables: valuables(inv),
             foodItems: items.filter(i => foods[i.name] && !HARMFUL.has(i.name)).reduce((n, i) => n + i.count, 0),
+            player: playerFact(bot, this._playerHits || {}),
             danger: dangerOf({
                 onFire: !!((bot.entity.metadata?.[0] ?? 0) & 1), inFire: /fire$/.test(here?.name || ''),
                 oxygen: bot.oxygenLevel, headInWater: head?.name === 'water',
@@ -711,8 +729,130 @@ export class Agent {
             askedFoodAt: () => this._askedFoodAt || 0,
             setAskedFoodAt: t => { this._askedFoodAt = t; },
             unload: () => this._unload(),
+            defend: () => this._defendPlayer(),
+            flee: () => skills.avoidEnemies(bot, 24),
         });
         if (why === 'stopped') console.log(`[laya] director: ${activity} stopped`);
+    }
+
+    // _defendPlayer: go to the attacked player and fight the attacker
+    // (director v1.2 defend-player); the attacker is the mob that hit them
+    // (or the nearest hostile within 4 of them).
+    async _defendPlayer() {
+        const bot = this.bot;
+        const p = playerFact(bot, this._playerHits || {});
+        if (!p?.attacked) return;
+        let mob = p.entity?.isValid !== false ? p.entity : null;
+        const player = bot.players?.[p.name]?.entity;
+        if (!mob && player) mob = getNearestEntityWhere(bot, e => isHostile(e) && e.position.distanceTo(player.position) <= 4, 28);
+        if (!mob) { await new Promise(r => setTimeout(r, 500)); return; } // nothing to hit (yet)
+        this.openChat(`Hang on ${p.name}, I'm coming for that ${String(mob.name).replace(/_/g, ' ')}!`);
+        await skills.attackEntity(bot, mob, true);
+    }
+
+    // ---- chores (laya/chores.js) ----
+
+    _initChores() {
+        this._choresPath = `./bots/${this.name}/laya-chores.json`;
+        this._chores = loadChoresState(this._choresPath, !!settings.chores);
+        this._playerPlaced = [];
+        this._playerHits = {};
+        this._saveChores = () => saveChoresState(this._choresPath, this._chores);
+        const task = taskSettings('chores');
+        this.choresRunner = new Chores({
+            sense: () => Promise.resolve().then(() => senseChores(this, this._chores, {
+                place: (settings.decision_models?.tasks?.chores?.can_place ?? true) && CHORE_CAN.place,
+                smelt: (settings.decision_models?.tasks?.chores?.can_smelt ?? true) && CHORE_CAN.smelt,
+            })),
+            client: task ? laya : null,
+            task: task || null,
+            stepLog: `./bots/${this.name}/logs/laya-chores.jsonl`,
+        });
+    }
+
+    // setChores turns chores on or off (saved across restarts).
+    setChores(on) {
+        this._chores.on = !!on;
+        this._choresHoldUntil = 0;
+        this._saveChores();
+        if (!on && this.director.stack.job()?.chore) {
+            this.director.stack.clear();
+            this.actions.stop().catch(() => {});
+        }
+    }
+
+    // _choresHeld: a player's !stop holds chores for a while (until the
+    // next player command or CHORES_HOLD_MS).
+    _choresHeld() { return Date.now() < (this._choresHoldUntil || 0); }
+
+    // _startChore asks for the next chore and runs it as a job of kind
+    // chore on the job stack (the director answered idle, nothing runs).
+    async _startChore() {
+        const d = await this.choresRunner.next();
+        if (!d) return;
+        // something started while it asked
+        if (!this.isIdle() || this.director.stack.depth > 0 || this.director.performing || !this._chores.on || this._choresHeld()) return;
+        const [kind, item] = CHORE_JOB[d.chore] || ['gather', 'none'];
+        const chore = d.chore;
+        console.log(`[laya] chores: ${chore} (${d.source}${d.source === 'rules' ? ' ' + d.rule : ''})`);
+        let result = null;
+        const job = this.director.stack.start('chore', [chore], { kind, item, chore, timeout: 10,
+            work: async () => { result = await runChore(this, chore); return result; },
+            onEnd: how => this.choresRunner.ended(chore, how, result?.reason) });
+        await runJob(this, job);
+    }
+
+    // _choreSensors: who placed a chest, table or bed (a player within 5 of
+    // it, nearer than anyone else), and a player hurt by a mob (the
+    // director's Player line).
+    _choreSensors() {
+        const bot = this.bot;
+        bot.layaHomeChest = () => this.homeChest(); // takeFromChest leaves the player kit in it
+        bot.on('entityHurt', (entity, source) => {
+            if (!entity || entity.type !== 'player' || entity === bot.entity || !entity.username) return;
+            if (entity.position.distanceTo(bot.entity.position) > 24) return;
+            let mob = source && isHostile(source) ? source : null;
+            if (!mob) mob = getNearestEntityWhere(bot, e => isHostile(e) && e.position.distanceTo(entity.position) <= 4, 32);
+            if (!mob) return; // not a mob's hit (a fall, a player)
+            this._playerHits[entity.username] = { at: Date.now(), by: mobKind(mob.name), entity: mob };
+        });
+        bot.on('blockUpdate', (oldBlock, newBlock) => {
+            if (!newBlock || oldBlock?.name === newBlock.name) return;
+            const kind = newBlock.name === 'crafting_table' ? 'table' : ['chest', 'trapped_chest', 'barrel'].includes(newBlock.name) ? 'chest'
+                : isBed(newBlock.name) && newBlock.getProperties?.().part !== 'head' ? 'bed' : null;
+            if (!kind) return;
+            const pos = newBlock.position;
+            const mine = this._placingAt && this._placingAt.x === pos.x && this._placingAt.y === pos.y && this._placingAt.z === pos.z
+                && Date.now() - this._placingAt.at < 15000;
+            if (mine) return; // the chore that placed it remembers it
+            const players = Object.values(bot.players || {}).filter(p => p.entity && p.entity !== bot.entity)
+                .map(p => ({ name: p.username, x: p.entity.position.x, y: p.entity.position.y, z: p.entity.position.z }));
+            const who = placedBy(pos, players, bot.entity.position);
+            if (!who) return;
+            const at = { x: pos.x, y: pos.y, z: pos.z };
+            if (kind === 'bed') {
+                const h = homeFacts(this);
+                for (const sv of homeOnPlace('bed', at, 'player', { ...h })) {
+                    this.memory_bank.rememberPlace(sv.place, sv.pos.x, sv.pos.y, sv.pos.z);
+                    if (sv.say) this.openChat(sv.say);
+                }
+                return;
+            }
+            const h = homeFacts(this);
+            if (!h.homeBed && !h.homeChest && !h.homeTable) {
+                this._playerPlaced.push({ kind, pos: at, player: who, at: Date.now() });
+                this._playerPlaced = this._playerPlaced.slice(-4);
+            }
+        });
+        // the bed he last slept in is his home bed when he has none
+        bot.on('sleep', () => {
+            if (this.memory_bank.recallPlace('home_bed')) return;
+            const b = bot.findBlock?.({ matching: blk => isBed(blk.name), maxDistance: 3 });
+            if (b) {
+                this.memory_bank.rememberPlace('home_bed', b.position.x, b.position.y, b.position.z);
+                this.openChat(`My home is now at ${b.position.x} ${b.position.y} ${b.position.z}.`);
+            }
+        });
     }
 
     async _unload() {

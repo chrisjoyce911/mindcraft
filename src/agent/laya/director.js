@@ -294,6 +294,14 @@ export function logDecision(path, entry) {
 //     resume(job) runs the paused job again; stop(activity) ends the
 //     running eat/heal/unload when the director answers something else
 //   client/task (the director model, optional), stepLog, now(), warn(err)
+//   chore() (optional) → Promise: with chores on, start and run the next
+//     chore as a job (laya/chores.js); called when the answer is idle,
+//     nothing runs and the stack is empty
+//   choresOn() → whether chores are on
+// defend with no hostile near the bot but a player attacked (defend-player)
+// and flee from a skeleton out of the modes' reach (flee-ranged) are
+// performed as activities too (perform('defend'), perform('flee')); other
+// defend and flee answers stay the modes'.
 export class Director {
     constructor(deps) {
         this.deps = deps;
@@ -319,15 +327,16 @@ export class Director {
             const quiet = event === 'tick' && d.activity === 'idle' && this.last?.activity === 'idle';
             if (!quiet) logDecision(this.deps.stepLog, { event, state: d.state, answer: d.activity, rule: d.rule, source: d.source, p: d.p });
             this.last = d;
-            this.act(d.activity);
+            this.act(d.activity, s);
             return d;
         } finally {
             this.busy = false;
         }
     }
 
-    // act runs an answer (not awaited: it runs as the agent's action).
-    act(activity) {
+    // act runs an answer (not awaited: it runs as the agent's action). s:
+    // the situation it was decided on.
+    act(activity, s = {}) {
         if (this.performing) {
             // the director answered something else: the running eat, heal
             // or unload ends (a resumed job runs on), and its -done tick
@@ -346,10 +355,19 @@ export class Director {
                 this.tick(`${activity}-done`).catch(err => this.deps.warn?.(err));
             });
         };
+        const near = !!s.nearest && s.hostiles > 0 && Math.min(s.nearest.dist, 16) <= 8;
+        const performed = activity === 'eat' || activity === 'heal' || activity === 'unload'
+            || (activity === 'defend' && !near && !!s.player?.attacked)
+            || (activity === 'flee' && !near && !!s.nearest && mobKind(s.nearest.kind) === 'skeleton');
         if (activity === 'resume') {
             const job = this.stack.job();
             if (job?.state === 'paused' && this.deps.idle()) run(() => this.deps.resume(job));
-        } else if (activity === 'eat' || activity === 'heal' || activity === 'unload') {
+        } else if (activity === 'idle') {
+            if (this.choring || !this.deps.chore || !this.deps.choresOn?.() || this.stack.depth > 0 || !this.deps.idle()) return;
+            this.choring = true;
+            Promise.resolve().then(() => this.deps.chore()).catch(err => this.deps.warn?.(err))
+                .finally(() => { this.choring = false; });
+        } else if (performed) {
             const laya = this.stack.running();
             // a non-Laya action (follow, come, ...) isn't stopped for these
             if (!laya && !this.deps.idle()) return;
@@ -358,6 +376,6 @@ export class Director {
                 try { await this.deps.perform(activity); } finally { if (e) this.stack.done(e); }
             });
         }
-        // continue, idle: nothing to do; defend and flee: the modes act
+        // continue: nothing to do; other defend and flee: the modes act
     }
 }
