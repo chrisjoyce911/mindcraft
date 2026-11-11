@@ -101,7 +101,7 @@ export function readJobs(file: string, now: number = Date.now()): LoadedJobs | n
     if (!isObj(doc)) return null;
     if (str(doc.name) && Array.isArray(doc.args)) {
         const at = num(doc.at) ? doc.at : 0;
-        return { kind: 'legacy', entry: { name: doc.name, args: doc.args, at }, fresh: now - at <= MAX_AGE_MS };
+        return { kind: 'legacy', entry: { name: doc.name, args: doc.args, at }, fresh: now - at < MAX_AGE_MS };
     }
     if (!num(doc.savedAt) || !Array.isArray(doc.entries)) return null;
     const entries: SavedJob[] = [];
@@ -222,8 +222,8 @@ export function planRestore(loaded: LoadedJobs | null, canRun: (j: SavedJob) => 
         return plan;
     }
     for (const j of loaded.entries) {
-        const p = j.progress as { tossed?: unknown } | null;
-        if (j.spec.kind === 'give' && p && typeof p === 'object' && p.tossed) {
+        const p = j.progress as { tossing?: unknown; tossed?: unknown } | null;
+        if (j.spec.kind === 'give' && p && typeof p === 'object' && (p.tossed || p.tossing)) {
             plan.notes.push(`restart: job give dropped (already tossed)`);
         } else if (loaded.fresh && canRun(j)) {
             plan.restore.push(j);

@@ -36,6 +36,7 @@ export function storeRunner(job: JobOf<'store'>, deps: JobDeps): JobStepper {
             if (!held) return done ? stored() : failed(`You do not have any ${item} to put in the chest.`);
             const n = count > 0 ? Math.min(count - done, held) : held;
             p.heldAtDeposit = held;
+            deps.checkpoint?.(); // on disk before the deposit: a kill mid-deposit counts what went in on restore
             const o = await deposit(a, chest, item, n, signal);
             if (o.ok) {
                 delete p.heldAtDeposit;

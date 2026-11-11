@@ -5,8 +5,11 @@ import { notFound, type JobDeps, type JobOf } from './deps.js';
 
 const failed = (say: string): StepResult => ({ how: 'end', end: { how: 'failed', reason: say }, say });
 
-/** A give's progress: once tossed, never toss again (a runner is rebuilt on resume; this is all it keeps). */
-export interface GiveProgress { tossed?: number; received?: boolean }
+/**
+ * A give's progress: once tossed, never toss again (a runner is rebuilt on resume; this is all it keeps). tossing is
+ * set and checkpointed to disk right before the toss, so a restart never restores a give whose items may be gone.
+ */
+export interface GiveProgress { tossing?: boolean; tossed?: number; received?: boolean }
 
 /** The pickup wait still running when a give paused after its toss (not saved: ≤ COLLECT_MS long). */
 const pickups = new WeakMap<object, Promise<boolean>>();
@@ -31,15 +34,21 @@ export function giveRunner(job: JobOf<'give'>, deps: JobDeps): JobStepper {
             if (!player) return failed(notFound(username));
             const held = a.bot.items().filter(i => i.name === item).reduce((n, i) => n + i.count, 0);
             if (!held) return failed(`You do not have any ${item}.`);
-            const r = await giveTo(a, player, username, item, count > 0 ? count : held, signal);
+            if (p.tossing) return neverReceived(item, username); // a toss that never returned: never toss again
+            const r = await giveTo(a, player, username, item, count > 0 ? count : held, signal, () => {
+                p.tossing = true;
+                deps.checkpoint?.();
+            });
             if (r.ok) return { how: 'end', end: { how: 'done' }, say: `${username} received ${item}.` };
             if ('tossed' in r) {
                 p.tossed = r.tossed;
                 const seen = r.collected.then(v => { p.received = v; pickups.delete(p); return v; });
                 pickups.set(p, seen);
+                deps.checkpoint?.();
                 return { how: 'more' };
             }
             if (signal.aborted || r.why === 'cancelled') return { how: 'more' };
+            if (r.why === 'no-item' && p.tossing) delete p.tossing; // nothing left andy
             if (r.why === 'no-item') return failed(`You do not have any ${item}.`);
             if (r.why === 'too close') return failed(`Failed to give ${item} to ${username}, too close.`);
             return neverReceived(item, username);

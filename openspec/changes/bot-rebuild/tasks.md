@@ -144,6 +144,11 @@ step as expected (4.2); no mode (grep, check:deps, live modes "none", `!setMode`
   tests ported). Live: kill -9 mid-follow resumes, graceful restart mid-stay, stale, stop/death/come, world_reset,
   and follow/defend/home-chest ×2 pass; report `bots/andy/logs/game-tests/bot-rebuild-4.3-2026-11-12.md`. For 5.6:
   a chore must not start before the restore has run (a chore-only stack removes the file).
+  Review fix: give and store checkpoint the file unthrottled right before the act that can't be undone
+  (`JobDeps.checkpoint`): a give saves `tossing` before the toss, a store `heldAtDeposit` before the deposit, so a
+  kill -9 mid-act never tosses twice or deposits the count again (live: kill -9 at the toss → "give dropped", one
+  toss). npm test 202/202. Known: the 10 min window counts from the last save, so a bot that keeps restarting keeps
+  its job.
 
 Done means: follow/come/give/store scenarios pass; a restart test (kill mid-follow) resumes.
 

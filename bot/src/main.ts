@@ -136,6 +136,7 @@ async function main() {
         follow: () => followOf(settings, enabled('follow') ? laya : null, laya.promptFor('follow')),
         followLog: line => jsonl.write('follow', line),
         note: text => log(`[laya] ${text}`),
+        checkpoint: () => saver.save(),
     };
 
     const say = (text: string) => { body.say(text); harness.output(text); };
@@ -212,8 +213,10 @@ async function main() {
         const t0 = Date.now();
         const who = waitsFor(readJobs(jobFile));
         const check = () => {
-            if (director !== d || !body.bot || !body.inGame) return;
-            const bot = body.bot, waited = Date.now() - t0;
+            if (director !== d) return;
+            const waited = Date.now() - t0;
+            if (!body.bot || !body.inGame) { if (waited < RESTORE_MAX_MS) setTimeout(check, 250).unref(); return; }
+            const bot = body.bot;
             const seen = who.every(n => !!bot.players[n]?.entity);
             if (waited < RESTORE_MIN_MS || (!seen && waited < RESTORE_MAX_MS)) { setTimeout(check, 250).unref(); return; }
             if (d.stack.depth > 0) return;

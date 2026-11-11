@@ -25,8 +25,8 @@ function collectedOrAborted(collected: Promise<boolean>, signal: AbortSignal): P
 
 const dist = (a: Vec3Like, b: Vec3Like) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
-/** giveTo gives count of item to player (the entity is looked up by the caller). */
-export async function giveTo(a: Act, player: ActEntity, username: string, item: string, count: number, signal: AbortSignal): Promise<GiveResult> {
+/** giveTo gives count of item to player (the entity is looked up by the caller); beforeToss runs right before the toss. */
+export async function giveTo(a: Act, player: ActEntity, username: string, item: string, count: number, signal: AbortSignal, beforeToss?: () => void): Promise<GiveResult> {
     const go = async (range: number) => a.motion.goTo(a.goals.follow(player, Math.max(range, 0.5)), signal, { timeoutMs: GIVE_CEILING_MS });
     // a goal not quite reached still gives (the old goToPlayer didn't check): the toss is checked by the pickup
     await go(3);
@@ -49,6 +49,7 @@ export async function giveTo(a: Act, player: ActEntity, username: string, item: 
     // whether the player got it (the job must never toss again on resume)
     const collected = a.bot.waitCollect(username, COLLECT_MS, new AbortController().signal);
     let tossed = 0;
+    beforeToss?.();
     try { tossed = await a.bot.toss(item, count); } catch (e) { return { ok: false, why: 'never received', outcome: fail('error', String(e)) }; }
     if (!tossed) return { ok: false, why: 'no-item' };
     const got = await collectedOrAborted(collected, signal);

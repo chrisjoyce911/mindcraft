@@ -29,6 +29,11 @@ export interface JobDeps {
     followLog(line: FollowLine): void;
     /** The console. */
     note(text: string): void;
+    /**
+     * checkpoint writes the jobs' progress to disk now, unthrottled: a job calls it right before an act that
+     * can't be undone (a toss, a deposit), so a kill -9 during the act never restores the job as if it hadn't run.
+     */
+    checkpoint?: () => void;
     now?: () => number;
 }
 

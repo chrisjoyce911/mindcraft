@@ -16,7 +16,9 @@ import { MAX_MINES, mineBook, mineStore, nearestMine, upsertMine, type MineRecor
 import { sleep } from '../src/core/abort.js';
 import type { JobRunner } from '../src/director/jobs.js';
 import type { JobFile, SavedJob } from '../src/types/index.js';
-import { world, until, flush } from './fakeact.js';
+import { world, until, flush, type World } from './fakeact.js';
+import { makeRunner, FOLLOW_DEFAULTS, type JobDeps } from '../src/jobs/index.js';
+import type { PlaceBook } from '../src/home/places.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const tmp = (name: string): string => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'andy-persist-')), 'bots', 'andy', name);
@@ -275,4 +277,77 @@ test('mine memory file: laya-mines.json as JSON.stringify(list, null, 1), atomic
     st.forget(a.entrance);
     assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), []);
     assert.deepEqual(fs.readdirSync(path.dirname(file)), ['laya-mines.json'], 'no temp file left');
+});
+
+/** A world whose jobs are the real runners, with checkpoint wired to a JobSaver on file (as main.ts does). */
+function savingWorld(file: string, items: { name: string; count: number }[]): { w: World; saver: JobSaver } {
+    const saver = new JobSaver(file); // the default 2 s progress throttle: only checkpoint() can beat it
+    const places: PlaceBook = { all: () => ({}), recall: () => null, remember: () => {}, forget: () => {} };
+    const deps = (x: World): JobDeps => ({
+        act: () => x.act, places, follow: () => ({ ...FOLLOW_DEFAULTS, model: null }),
+        followLog: () => {}, note: () => {}, checkpoint: () => saver.save(),
+    });
+    const w = world({ items, jobs: x => e => makeRunner(e, deps(x)) });
+    w.players.tester = { id: 9, username: 'tester', position: { x: 6.5, y: 64, z: 0.5 } };
+    saver.attach(w.director.stack);
+    return { w, saver };
+}
+
+test('give: tossing is on disk before the toss (unthrottled); a restart from that file never tosses again', async () => {
+    const file = tmp('laya-job.json');
+    const { w, saver } = savingWorld(file, [{ name: 'dirt', count: 5 }]);
+    let atToss: JobFile | null = null;
+    w.onToss = () => { atToss = read(file); };
+    w.collects = false;
+    w.collectMs = 200;
+    const job = await w.director.startJob({ kind: 'give', player: 'tester', item: 'dirt', count: 3 }, 'player', {}, 'tester');
+    assert.ok(await until(() => atToss !== null), 'tossed');
+    const snap = atToss as unknown as JobFile;
+    assert.deepEqual(snap.entries[0]?.progress, { tossing: true }, 'the file said tossing when the items left andy');
+    // kill -9 right after the toss: the file is what it was at the toss; the next process loads it
+    saver.detach();
+    await w.director.dispose();
+    void job;
+    const again = tmp('laya-job.json');
+    fs.mkdirSync(path.dirname(again), { recursive: true });
+    fs.writeFileSync(again, JSON.stringify(snap));
+    const plan = planRestore(loadJobs(again), () => true);
+    assert.deepEqual(plan, { restore: [], say: [], notes: ['restart: job give dropped (already tossed)'] });
+    assert.deepEqual(w.tossed, [{ name: 'dirt', count: 3 }], 'one toss');
+});
+
+test('planRestore: a give saved tossing (the toss may have happened) is dropped quietly', () => {
+    const p = planRestore(typed([saved({ spec: { kind: 'give', player: 'tester', item: 'dirt', count: 3 }, progress: { tossing: true } })]), () => true);
+    assert.deepEqual(p, { restore: [], say: [], notes: ['restart: job give dropped (already tossed)'] });
+});
+
+test('store: heldAtDeposit is on disk before the deposit; a restart after the deposit never deposits again', async () => {
+    const file = tmp('laya-job.json');
+    const { w, saver } = savingWorld(file, [{ name: 'cobblestone', count: 20 }]);
+    w.blocks['4,64,2'] = { name: 'chest' };
+    let atDeposit: JobFile | null = null;
+    w.onDeposit = () => { atDeposit = read(file); };
+    const job = await w.director.startJob({ kind: 'store', item: 'cobblestone', count: 12 }, 'player', {}, 'tester');
+    assert.deepEqual(await w.director.ended(job!), { how: 'done' });
+    const snap = atDeposit as unknown as JobFile;
+    assert.deepEqual(snap.entries[0]?.progress, { heldAtDeposit: 20 }, 'the file had heldAtDeposit when the deposit ran');
+    saver.detach();
+    await w.director.dispose();
+    // kill -9 mid-deposit (the 12 went in): the next process restores the store from that file
+    const again = tmp('laya-job.json');
+    fs.mkdirSync(path.dirname(again), { recursive: true });
+    fs.writeFileSync(again, JSON.stringify(snap));
+    const b = savingWorld(again, [{ name: 'cobblestone', count: 8 }]);
+    b.w.blocks['4,64,2'] = { name: 'chest' };
+    b.w.chests['4,64,2'] = { cobblestone: 12 };
+    const plan = planRestore(loadJobs(again), () => true);
+    assert.equal(plan.restore.length, 1);
+    b.w.director.stack.restore(plan.restore);
+    const top = b.w.director.stack.job()!;
+    await b.w.director.decide('spawn');
+    assert.deepEqual(await b.w.director.ended(top), { how: 'done' });
+    assert.equal(b.w.calls.filter(c => c.what === 'deposit').length, 0, 'never deposited again');
+    assert.deepEqual(b.w.chests['4,64,2'], { cobblestone: 12 });
+    assert.equal(b.w.said.at(-1), 'Successfully put 12 cobblestone in the chest.');
+    await b.w.director.stop();
 });
