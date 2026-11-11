@@ -254,6 +254,9 @@ Measured with the same test world, same seed, LLM off, by `tools/andy-tests` plu
   the harness's own HTTP server), `google-translate-api-x`, `cheerio`, `mineflayer-collectblock`, `mineflayer-auto-eat`,
   `mineflayer-armor-manager` (equip is an actuator), `replicate`, `yargs`.
 - `patches/` move with the new package (`patch-package`).
+- (Phase 2 finding, 2026-11-11) The old bot actually runs mineflayer 4.39.0 + minecraft-data 3.119.0 (since 2026-11-09);
+  the 4.33.0 patch doesn't apply there. minecraft-data 3.97 can't be pinned with today's prismarine packages. Node is 20
+  (the test world launches node@20), not 22. See `bots/andy/logs/game-tests/bot-rebuild-baseline-2026-11-11.md`.
 
 ## 9. Migration
 

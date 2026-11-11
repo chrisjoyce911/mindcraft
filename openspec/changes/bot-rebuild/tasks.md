@@ -1,6 +1,6 @@
 # Tasks: bot-rebuild
 
-Spec only so far: nothing below is started. Each phase's gate must pass before the next one starts. "Suite" =
+Phase 1 and 2 started 2026-11-11 (branch `bot-rebuild`). Each phase's gate must pass before the next one starts. "Suite" =
 `npm run game-test` (tools/andy-tests, 16 scenarios) on the test world with the LLM off; "golden" = the byte tests of
 each model's state text against laya-go's samples.
 
@@ -11,25 +11,38 @@ each model's state text against laya-go's samples.
       laya-go's `skill-models` change (`~/lnkz/laya-go-rules2/openspec/changes/skill-models`, its `skills-spec.md`):
       same question names, answer words, state lines and golden requests. Record differences here; laya-go's game
       definitions win.
-- [ ] 0.2 Freeze the harness contract: record the mindserver messages and full-state shape the suite and MCP use
-      (`test/andy_tests_*` as fixtures).
+- [x] 0.2 Freeze the harness contract: record the mindserver messages and full-state shape the suite and MCP use
+      (`test/andy_tests_*` as fixtures). (2026-11-11: `test/fixtures/harness-contract/` contract.json + a live
+      full-state capture; `bot/test/harness.test.ts` checks the new harness against them.)
 
 ## 1. Baseline (old bot, no code changes)
-- [ ] 1.1 Suite run on `laya-follow` (after fix-round4 merges): save report as the baseline.
-- [ ] 1.2 Record one line of every `laya-*.jsonl` per task as golden log fixtures.
-- [ ] 1.3 Measure: cold start → spawn, RSS at 10 min, `node_modules` size, model latency p50/p95, interrupt → idle,
+- [x] 1.1 Suite run on `laya-follow` (after fix-round4 merges): save report as the baseline. (2026-11-11 22:02: 9/16,
+      the 7 failures all the command model's 300 ms timeout under training load; report
+      `bot-rebuild-baseline-2026-11-11_22-02-52.md`.)
+- [x] 1.2 Record one line of every `laya-*.jsonl` per task as golden log fixtures. (`test/fixtures/laya-logs/`, lines
+      from before the baseline run; chores has its ask line and its run line.)
+- [x] 1.3 Measure: cold start → spawn, RSS at 10 min, `node_modules` size, model latency p50/p95, interrupt → idle,
       restarts per suite. Write `bots/andy/logs/game-tests/bot-rebuild-baseline-<date>.md`.
 
 Done means: a baseline report with every metric in design §7 filled in.
 
 ## 2. Skeleton (`bot/`)
-- [ ] 2.1 `bot/package.json`, `tsconfig` (strict), build/test scripts, dependency rule check in CI, patches carried.
-- [ ] 2.2 `types/` (facts, decisions, jobs, commands, outcomes).
-- [ ] 2.3 `core/` Body, connection, `abort.ts`, `motion.ts` (pathfinder owner, abort = clear goal), BodyLease with
+- [x] 2.1 `bot/package.json`, `tsconfig` (strict), build/test scripts, dependency rule check in CI, patches carried.
+      (No CI workflow in the repo: the rule runs in `npm test` (`scripts/check-deps.mjs`).)
+- [x] 2.2 `types/` (facts, decisions, jobs, commands, outcomes).
+- [x] 2.3 `core/` Body, connection, `abort.ts`, `motion.ts` (pathfinder owner, abort = clear goal), BodyLease with
       the 2 s overrun rule; tests incl. a never-settling actuator.
-- [ ] 2.4 `harness/`: mindserver-compatible socket.io server, full state, `send-message`, legacy `!cmd` parser (the 18
+- [x] 2.4 `harness/`: mindserver-compatible socket.io server, full state, `send-message`, legacy `!cmd` parser (the 18
       command-model commands), minimal status page (Q7).
-- [ ] 2.5 `ANDY_BOT=new|old` in `tools/test-world/bot.js`; `main.ts` spawns and idles.
+- [x] 2.5 `ANDY_BOT=new|old` in `tools/test-world/bot.js`; `main.ts` spawns and idles. (2026-11-11 22:21: started by
+      `ANDY_BOT=new node tools/test-world/bot.js --background`, the same `Bot.start` path as the MCP `bot_start`;
+      `andy_status`, `andy_wait_idle`, `andy_command` and `world_reset` (start-agent + its own reconnect, no process
+      exit) work; `--stop` 252 ms. The MCP server runs from the main checkout, so `bot_start` itself picks the new bot
+      only once this branch is merged and the MCP is started with ANDY_BOT=new.)
+
+Deps note (2026-11-11): minecraft-data 3.97.0 can't be pinned: today's prismarine-chunk 1.41 needs 3.119's version list
+(crash at login). `bot/` runs mineflayer 4.33.0 (+ its patch) with minecraft-data 3.119.0 (the 1.21.6 checksum patch is
+upstream there); Q4 (pin 4.39.0 + a small regenerated patch) is with the user.
 
 Done means: `bot_start` with `ANDY_BOT=new` joins the test world, `andy_status` and `andy_wait_idle` work, the
 lease overrun test passes.
