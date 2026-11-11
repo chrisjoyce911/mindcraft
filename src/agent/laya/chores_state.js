@@ -271,6 +271,16 @@ export const SEED_ITEMS = new Set(['wheat_seeds', 'beetroot_seeds', 'carrot', 'p
 export const isSapling = n => /_sapling$|_propagule$/.test(n || '');
 export const isLog = n => /_(log|stem|wood|hyphae)$/.test(n || '');
 
+// saplingOf: the sapling a log's tree drops (null for logs with none).
+export function saplingOf(log) {
+    const m = /^(oak|birch|spruce|jungle|acacia|dark_oak|cherry|pale_oak|mangrove)_(log|wood)$/.exec(log || '');
+    if (!m) return null;
+    return m[1] === 'mangrove' ? 'mangrove_propagule' : `${m[1]}_sapling`;
+}
+
+// STRING_PER_WOOL: 4 string craft 1 white wool (no sheep needed).
+export const STRING_PER_WOOL = 4;
+
 // The player kit: the four tools, KIT_FOOD cooked food, KIT_TORCHES torches.
 export const KIT_FOOD = 8;
 export const KIT_TORCHES = 16;
@@ -323,7 +333,7 @@ export function unreserved(chestItems, reserved) {
 // haveCounts: the Have/Food line counts from items ([{name, count}],
 // carried plus the home chest less the kit). isFood(name).
 export function haveCounts(items, isFood) {
-    const n = { logs: 0, planks: 0, sticks: 0, cobble: 0, coal: 0, torches: 0, food: 0, raw: 0, wool: 0, seeds: 0, saplings: 0 };
+    const n = { logs: 0, planks: 0, sticks: 0, cobble: 0, coal: 0, torches: 0, food: 0, raw: 0, wool: 0, string: 0, seeds: 0, saplings: 0 };
     for (const { name, count } of items) {
         if (isLog(name)) n.logs += count;
         else if (/_planks$/.test(name)) n.planks += count;
@@ -332,6 +342,7 @@ export function haveCounts(items, isFood) {
         else if (name === 'coal' || name === 'charcoal') n.coal += count;
         else if (name === 'torch') n.torches += count;
         else if (/_wool$/.test(name)) n.wool += count;
+        else if (name === 'string') n.string += count;
         else if (SEED_ITEMS.has(name)) n.seeds += count;
         else if (isSapling(name)) n.saplings += count;
         if (isFood(name) && !NOT_FOOD.has(name)) {
@@ -340,7 +351,8 @@ export function haveCounts(items, isFood) {
         }
     }
     return { wood: n.logs + Math.floor(n.planks / 4), sticks: n.sticks, cobble: n.cobble, coal: n.coal, torches: n.torches,
-        food: n.food, raw: n.raw, wool: n.wool, seeds: n.seeds, saplings: n.saplings };
+        // wool counts what string makes too (4 string → 1 white wool)
+        food: n.food, raw: n.raw, wool: n.wool + Math.floor(n.string / STRING_PER_WOOL), seeds: n.seeds, saplings: n.saplings };
 }
 
 // recentFailed: chores that failed in the last 5 minutes, latest first, no

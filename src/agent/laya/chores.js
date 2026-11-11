@@ -90,14 +90,16 @@ export class Chores {
 }
 
 // The chores setting and its saved state (bots/<name>/laya-chores.json):
-// {on, centreKind, chestItems, chestAt}. settingOn is the settings default.
+// {on, centreKind, chestItems, chestAt, stumps} (stumps: where a felled tree's
+// sapling still goes). settingOn is the settings default.
 export function loadChoresState(path, settingOn) {
     try {
         const j = JSON.parse(readFileSync(path, 'utf8'));
         return { on: typeof j.on === 'boolean' ? j.on : !!settingOn, centreKind: j.centreKind || null,
-            chestItems: Array.isArray(j.chestItems) ? j.chestItems : [], chestAt: j.chestAt || null };
+            chestItems: Array.isArray(j.chestItems) ? j.chestItems : [], chestAt: j.chestAt || null,
+            stumps: Array.isArray(j.stumps) ? j.stumps : [] };
     } catch {
-        return { on: !!settingOn, centreKind: null, chestItems: [], chestAt: null };
+        return { on: !!settingOn, centreKind: null, chestItems: [], chestAt: null, stumps: [] };
     }
 }
 

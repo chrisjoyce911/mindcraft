@@ -212,6 +212,44 @@ export function dropBelow(blockAt, x, y, z, max = 8) {
     return n;
 }
 
+// floorDrop reports whether digging o would drop the bot standing at feet
+// more than maxDrop blocks: o is the block under its feet (the one it
+// stands on) and the air under o (or under a one-block floor below it) is
+// deeper than maxDrop. The bot must step off o before digging it.
+export function floorDrop(blockAt, feet, o, maxDrop = 3) {
+    const f = { x: Math.floor(feet.x), y: Math.floor(feet.y), z: Math.floor(feet.z) };
+    if (o.x !== f.x || o.z !== f.z || o.y !== f.y - 1) return false;
+    return dropBelow(blockAt, o.x, o.y, o.z, maxDrop + 1) > maxDrop;
+}
+
+// hollowUnder: the air under o (or under a one-block floor below it) is
+// deeper than maxDrop, so nobody should stand on o while it is dug.
+export function hollowUnder(blockAt, o, maxDrop = 3) {
+    return dropBelow(blockAt, o.x, o.y, o.z, maxDrop + 1) > maxDrop;
+}
+
+// veinOf: the ore blocks connected to start (faces and edges, 18
+// neighbours) whose name is one of names, start first, at most max, within
+// range of start. blockAt(x, y, z) → {name} | null.
+export function veinOf(blockAt, start, names, { max = 16, range = 6 } = {}) {
+    const key = p => `${p.x},${p.y},${p.z}`;
+    const want = new Set(names);
+    const out = [], seen = new Set([key(start)]), queue = [start];
+    while (queue.length && out.length < max) {
+        const p = queue.shift();
+        if (!want.has(blockAt(p.x, p.y, p.z)?.name)) continue;
+        out.push(p);
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+            if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) === 0 || Math.abs(dx) + Math.abs(dy) + Math.abs(dz) === 3) continue;
+            const q = { x: p.x + dx, y: p.y + dy, z: p.z + dz };
+            if (seen.has(key(q)) || Math.max(Math.abs(q.x - start.x), Math.abs(q.y - start.y), Math.abs(q.z - start.z)) > range) continue;
+            seen.add(key(q));
+            queue.push(q);
+        }
+    }
+    return out;
+}
+
 // moveFeet is where a move leaves the bot's feet.
 export function moveFeet(action, bx, by, bz) {
     const [kind, dir] = action.split(' ');

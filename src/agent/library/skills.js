@@ -7,7 +7,7 @@ import { laya, taskSettings } from "../../models/laya.js";
 import { followWithLaya } from "../laya/follow.js";
 import { runCraft, settle } from "../laya/craft.js";
 import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
-import { mineWithLaya, pickUpDrop } from "../laya/mine.js";
+import { mineWithLaya, pickUpDrop, floorDrop, hollowUnder } from "../laya/mine.js";
 import { ORES as MINE_ORES } from "../laya/mine_state.js";
 import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
@@ -473,10 +473,16 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     // Blocks to ignore safety for, usually next to lava/water
     const unsafeBlocks = ['obsidian'];
 
+    // never the block under the feet with a drop of more than 3 under it
+    // (a cave under a stone or ore floor): the bot would fall in
+    const at = (x, y, z) => bot.blockAt(new Vec3(x, y, z));
     for (let i=0; i<num; i++) {
         if (bot.interrupt_code) break;
         let blocks = world.getNearestBlocksWhere(bot, block => {
             if (!blocktypes.includes(block.name)) {
+                return false;
+            }
+            if (floorDrop(at, bot.entity.position, block.position, MAX_SAFE_DROP)) {
                 return false;
             }
             if (exclude) {
@@ -2429,10 +2435,15 @@ export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) 
             moveTo: async (x, y, z, ms = 4000) => {
                 const goal = new pf.goals.GoalBlock(x, y, z);
                 const timeout = sleep(ms).then(() => { throw new Error('timeout'); });
+                const prev = bot.pathfinder.movements;
                 try {
+                    // never off a drop of more than 3 blocks on the way
+                    bot.pathfinder.setMovements(safeMovements(bot));
                     await Promise.race([bot.pathfinder.goto(goal), timeout]);
                 } catch {
                     bot.pathfinder.setGoal(null);
+                } finally {
+                    if (prev) bot.pathfinder.setMovements(prev);
                 }
                 const p = bot.entity.position;
                 return Math.floor(p.x) === x && Math.floor(p.z) === z && Math.abs(Math.floor(p.y) - y) <= 1;
@@ -2462,30 +2473,52 @@ export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) 
     }
 }
 
-// collectOreAt digs one ore block at o ({x, y, z}) for the Laya mine task
-// and picks up its drop. The way there keeps out of water and lava (they cost
-// a lot to the pathfinder) and never makes fluid flow. It returns true when
-// the drop is in the pack (block broken but drop left lying: false).
-async function collectOreAt(bot, o, names, drop, ms = 30000) {
-    const block = o && bot.blockAt(new Vec3(o.x, o.y, o.z));
-    if (!block || !names.includes(block.name)) return false;
-    const prev = bot.pathfinder.movements;
+// safeMovements: pathfinder moves that never drop more than MAX_SAFE_DROP
+// blocks, jump gaps or wade through fluid (mining, collecting ore).
+export const MAX_SAFE_DROP = 3;
+export function safeMovements(bot) {
     const m = new pf.Movements(bot);
     m.liquidCost = 100;
     m.dontCreateFlow = true;
     m.allowParkour = false;
-    m.maxDropDown = 3;
+    m.maxDropDown = MAX_SAFE_DROP;
     m.infiniteLiquidDropdownDistance = false;
+    return m;
+}
+
+// collectOreAt digs one ore block at o ({x, y, z}) and picks up its drop
+// (the Laya mine task, and a vein seen while gathering stone). The way
+// there keeps out of water and lava and never drops more than 3 blocks;
+// over a hollow (a cave under the ore) it never stands on the ore to dig
+// it. It returns true when the drop is in the pack.
+export async function collectOreAt(bot, o, names, drop, ms = 30000) {
+    const block = o && bot.blockAt(new Vec3(o.x, o.y, o.z));
+    if (!block || !names.includes(block.name)) return false;
+    const prev = bot.pathfinder.movements;
+    const m = safeMovements(bot);
+    const blockAt = (x, y, z) => bot.blockAt(new Vec3(x, y, z));
+    const hollow = hollowUnder(blockAt, o, MAX_SAFE_DROP);
     let timer;
     try {
         bot.pathfinder.setMovements(m);
         const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); });
+        const goal = new pf.goals.GoalLookAtBlock(block.position, bot.world, { reach: 4 });
+        if (hollow) {
+            // a cave under the ore: stand anywhere but on top of it
+            const isEnd = goal.isEnd.bind(goal);
+            goal.isEnd = node => !(node.x === o.x && node.z === o.z && node.y > o.y) && isEnd(node);
+        }
+        const standingOn = () => floorDrop(blockAt, bot.entity.position, o, MAX_SAFE_DROP);
         try {
-            await Promise.race([bot.pathfinder.goto(new pf.goals.GoalLookAtBlock(block.position, bot.world, { reach: 4 })), timeout]);
+            await Promise.race([bot.pathfinder.goto(goal), timeout]);
         } catch {
             bot.pathfinder.setGoal(null);
         }
         if (bot.entity.position.distanceTo(block.position.offset(0.5, 0.5, 0.5)) > 5) return false;
+        if (standingOn()) {
+            log(bot, `Not digging the ${block.name} under my feet at ${o.x} ${o.y} ${o.z}: there is a drop under it.`);
+            return false;
+        }
         await bot.tool.equipForBlock(block);
         if (!block.canHarvest(bot.heldItem ? bot.heldItem.type : null)) return false;
         const count = () => world.getInventoryCounts(bot)[drop] || 0;

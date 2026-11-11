@@ -109,7 +109,7 @@ test('chores state file and on/off words', () => {
     const p = join(dir, 'laya-chores.json');
     assert.equal(loadChoresState(p, true).on, true, 'default from the setting');
     saveChoresState(p, { on: false, centreKind: 'player', chestItems: [{ name: 'torch', count: 3 }] });
-    assert.deepEqual(loadChoresState(p, true), { on: false, centreKind: 'player', chestItems: [{ name: 'torch', count: 3 }], chestAt: null });
+    assert.deepEqual(loadChoresState(p, true), { on: false, centreKind: 'player', chestItems: [{ name: 'torch', count: 3 }], chestAt: null, stumps: [] });
     assert.equal(parseOnOff('"on"'), true);
     assert.equal(parseOnOff('off'), false);
     assert.equal(parseOnOff('maybe'), null);
