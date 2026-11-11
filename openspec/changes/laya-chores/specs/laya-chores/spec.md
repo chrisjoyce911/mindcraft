@@ -119,3 +119,12 @@ than about 2 minutes away, a light chore SHALL come next. With no sword the bot 
 #### Scenario: dusk with no torches
 - **WHEN** it is 1 minute before dusk, the base is unlit and the bot has 2 coal and 4 sticks
 - **THEN** its next chore crafts torches and lights the base
+
+### Requirement: A bed for the player
+When the bot makes its bed it SHALL also make one for the player and place both side by side in the base area (the
+player's bed goes in the home chest when there is no room). The chores sensor SHALL report whether the player's bed
+exists, and the chores model SHALL replace it when it is gone.
+
+#### Scenario: first beds
+- **WHEN** the bot has 6 white wool, planks and a crafting table, and no beds are placed
+- **THEN** it crafts two beds and places them side by side in the base area

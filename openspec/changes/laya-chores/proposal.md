@@ -36,7 +36,7 @@ First day (user, 2026-11-11: food, light and an axe early):
 4. cobblestone ≥ 14 → stone axe, stone pickaxe, furnace placed;
 5. food: hunt to ~half a stack of meat and cook it;
 6. light: torches ≥ 16 (coal, else charcoal from logs), light the base (a torch per 12 blocks, ring the base);
-7. chest placed (becomes the home chest if none) → wool ×3 and a bed → player kit in the home chest (pickaxe, axe,
+7. chest placed (becomes the home chest if none) → wool ×6 and two beds placed side by side (his and the player's) → player kit in the home chest (pickaxe, axe,
    shovel, sword of his best tier, 8 cooked food, 16 torches; upgraded each tier, never taken for his own use);
 8. stock to 64 logs and 64 cobblestone, mining whole coal/copper veins seen; stone sword later.
 Food and light come back first whenever they run short: fewer than 8 food items → food chore next (after an axe);
