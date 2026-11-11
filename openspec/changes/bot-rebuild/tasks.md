@@ -129,7 +129,21 @@ step as expected (4.2); no mode (grep, check:deps, live modes "none", `!setMode`
   pass byte for byte; npm test 181/181. Live: follow, defend (pause → resume of the follow job), home-chest-command
   and home-chest-chat pass, as do come/stay/give/store by hand; the phase-3 four were re-run and pass. Report
   `bots/andy/logs/game-tests/bot-rebuild-4.2-2026-11-12.md`. Eat as a job (`!consume`) still says "can't yet".
-- [ ] 4.3 Persistence: `laya-job.json` (typed), `memory.json` places, `laya-chores.json`, `laya-mines.json` in today's formats; restore paused within 10 min.
+- [x] 4.3 Persistence: `laya-job.json` (typed), `memory.json` places, `laya-chores.json`, `laya-mines.json` in today's formats; restore paused within 10 min.
+  (2026-11-12) `bot/src/home/jobfile.ts` (a typed job_save.js port): the player's jobs on the stack (not chores) go
+  to `laya-job.json` as `{savedAt, entries:[{spec, origin, by, progress, status, startedAt}]}`, atomic, on every stack
+  change and at most every 2 s while a job steps (`JobStack.progressed`, called by the director per step); the file
+  goes when none is left (end, stop, death). The window is the spec's 10 min (the old bot had 15). On every new
+  director (restart or reconnect) the saved jobs come back paused (`JobStack.restore`, startedAt kept, so a stay
+  counts the time down) once the world has loaded (≥ 1 s after spawn and the job's player in sight, ≤ 5 s; the file
+  stays until then) and the director resumes them (resume-paused); andy says the old "carry on" / "lost my job"
+  lines. A give that already tossed is dropped quietly (never tossed twice). An old bot's file reads as lost; the old
+  bot reads ours as no job. `dispose` detaches the saver first, so a torn-down director never touches the file.
+  `home/chores.ts` and `home/mines.ts` are typed stores in today's formats (byte for byte; atomic), not wired until
+  5.2/5.6 (main only logs the chores state). npm test 199/199 (old fix_round4 job save, chores state and mine memory
+  tests ported). Live: kill -9 mid-follow resumes, graceful restart mid-stay, stale, stop/death/come, world_reset,
+  and follow/defend/home-chest ×2 pass; report `bots/andy/logs/game-tests/bot-rebuild-4.3-2026-11-12.md`. For 5.6:
+  a chore must not start before the restore has run (a chore-only stack removes the file).
 
 Done means: follow/come/give/store scenarios pass; a restart test (kill mid-follow) resumes.
 

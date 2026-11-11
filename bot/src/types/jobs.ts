@@ -39,3 +39,14 @@ export interface JobStepper {
     /** Called once when this run of the job ends (done, failed, paused, replaced or stopped). */
     close?(): void;
 }
+
+/**
+ * A job as bots/<name>/laya-job.json keeps it (design §5.5; 4.3). by and startedAt are kept too: the end lines
+ * name the player, and stay measures from startedAt (the time andy was down counts toward the stay).
+ */
+export interface SavedJob {
+    spec: JobSpec; origin: JobOrigin; by?: string; progress: unknown;
+    status: 'running' | 'paused'; startedAt: number;
+}
+/** laya-job.json: the player's jobs on the stack, bottom first, and when they were saved. */
+export interface JobFile { savedAt: number; entries: SavedJob[] }

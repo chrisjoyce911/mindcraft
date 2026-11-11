@@ -125,6 +125,9 @@ export class Director {
     }
 
     async dispose(): Promise<void> {
+        // first: nothing this director does while it is torn down may rewrite or remove the saved job (4.3)
+        this.stack.onChange = null;
+        this.stack.onProgress = null;
         if (this.timer) clearInterval(this.timer);
         this.timer = null;
         this.generation++;
@@ -343,6 +346,7 @@ export class Director {
                     if (!f) return null;
                     const r = await runner.step(f, signal);
                     if (r.how === 'end') return r.say !== undefined ? { end: r.end, say: r.say } : { end: r.end };
+                    if (gen === this.generation) this.stack.progressed();
                 }
                 return null;
             } finally {

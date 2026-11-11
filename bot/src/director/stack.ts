@@ -1,7 +1,8 @@
 // The JobStack (a typed port of the old bot's director.js JobStack). It holds jobs only: the running
 // safety activity is the director's `current`, and the job under it is marked paused (Last interrupted).
-// A player's new job replaces the top job; stop and death clear it. onChange lets 4.3 persist it.
-import type { JobEnd, JobOrigin, JobSpec, JobState } from '../types/index.js';
+// A player's new job replaces the top job; stop and death clear it. onChange and onProgress let 4.3 persist it
+// (home/jobfile.ts), and restore puts a saved stack back after a restart.
+import type { JobEnd, JobOrigin, JobSpec, JobState, SavedJob } from '../types/index.js';
 import { itemWord, JOB_KINDS, type DirectorJobKind, type JobView, type Last } from '../models/director/index.js';
 
 /** A job on the stack; left() is how many are left (from the runner's progress), null when it can't say. */
@@ -54,6 +55,8 @@ export class JobStack {
     last: Last = 'none';
     /** Called after any change (4.3 saves the player's job). */
     onChange: ((s: JobStack) => void) | null = null;
+    /** Called after a job stepped: its progress may have changed with no stack change (4.3 saves it, throttled). */
+    onProgress: ((s: JobStack) => void) | null = null;
 
     constructor(private readonly now: () => number = Date.now) {}
 
@@ -107,6 +110,24 @@ export class JobStack {
         this.items.splice(i, 1);
         this.changed();
     }
+
+    /**
+     * restore: a saved stack after a restart (bottom first). Every job comes back paused, with new ids and its
+     * spec, by, startedAt and progress; Last is interrupted, so the director resumes it (rule resume-paused).
+     */
+    restore(saved: readonly SavedJob[]): JobEntry[] {
+        const t = this.now();
+        this.items = saved.map(s => ({
+            id: `j${nextId++}`, spec: s.spec, origin: s.origin, ...(s.by ? { by: s.by } : {}),
+            progress: s.progress ?? {}, status: 'paused' as const, startedAt: s.startedAt, pausedAt: t,
+        }));
+        if (this.items.length) this.last = 'interrupted';
+        this.changed();
+        return [...this.items];
+    }
+
+    /** progressed: the running job stepped (its progress may have changed). */
+    progressed(): void { try { this.onProgress?.(this); } catch { /* never stops the bot */ } }
 
     /** clear: stop or death. */
     clear(): void { this.items = []; this.last = 'none'; this.changed(); }

@@ -19,6 +19,8 @@ import type { Timing } from './director/activities.js';
 import type { Command } from './types/index.js';
 import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 import { PlaceStore } from './home/places.js';
+import { JobSaver, RESTORE_MAX_MS, RESTORE_MIN_MS, loadJobs, planRestore, readJobs, waitsFor } from './home/jobfile.js';
+import { loadChoresState } from './home/chores.js';
 import { makeRunner, FOLLOW_DEFAULTS, type FollowSettings, type JobDeps } from './jobs/index.js';
 import { isFollowPrompt } from './models/follow/index.js';
 import { handleChat } from './command/handle.js';
@@ -138,6 +140,13 @@ async function main() {
 
     const say = (text: string) => { body.say(text); harness.output(text); };
 
+    // 4.3: the player's job survives a restart (bots/<name>/laya-job.json); the chores state reads in today's
+    // format (nothing turns chores on yet: 5.6)
+    const jobFile = path.join(botDir, 'laya-job.json');
+    const saver = new JobSaver(jobFile, { onError: e => log(`[laya] saving the job failed: ${String(e)}`) });
+    const chores = loadChoresState(path.join(botDir, 'laya-chores.json'), !!settings.chores);
+    log(`[laya] chores state: ${chores.on ? 'on' : 'off'}`);
+
     const handle = (from: string, message: string) => {
         if (!message || from === name) return;
         if (onlyChatWith.length && !onlyChatWith.includes(from)) return;
@@ -193,6 +202,30 @@ async function main() {
         }
     };
 
+    /**
+     * restoreWhenReady: every new director (a restart, or a reconnect in this process) takes the saved job back,
+     * once the world around andy has loaded: at least RESTORE_MIN_MS after the spawn and the job's player in sight
+     * (at most RESTORE_MAX_MS). Until then the file stays as it is, so a kill meanwhile loses nothing. A player's new
+     * command meanwhile has replaced the file (the saver), and death or stop removed it: then nothing comes back.
+     */
+    const restoreWhenReady = (d: Director) => {
+        const t0 = Date.now();
+        const who = waitsFor(readJobs(jobFile));
+        const check = () => {
+            if (director !== d || !body.bot || !body.inGame) return;
+            const bot = body.bot, waited = Date.now() - t0;
+            const seen = who.every(n => !!bot.players[n]?.entity);
+            if (waited < RESTORE_MIN_MS || (!seen && waited < RESTORE_MAX_MS)) { setTimeout(check, 250).unref(); return; }
+            if (d.stack.depth > 0) return;
+            const plan = planRestore(loadJobs(jobFile), j => makeRunner({ id: 'probe', ...j }, jobDeps) !== null);
+            for (const n of plan.notes) log(`[laya] ${n}`);
+            if (plan.restore.length) d.stack.restore(plan.restore);
+            for (const t of plan.say) say(t);
+            if (plan.restore.length) d.event('spawn');
+        };
+        check();
+    };
+
     const places = () => placeStore.all();
     // 3.3: the sensors read Facts; 3.4: the director decides from them
     let sensors: Sensors | null = null;
@@ -234,6 +267,8 @@ async function main() {
             // a hit on andy or a player is decided at once (the sensors' own listener ran first)
             bot.on('entityHurt', (e: { type?: string }) => { if (e === bot.entity || e.type === 'player') director?.event('hurt'); });
             bot.on('spawn', () => director?.event('spawn'));
+            saver.attach(director.stack);
+            restoreWhenReady(director);
             director.start();
             director.event('spawn');
         }
@@ -249,6 +284,8 @@ async function main() {
         director?.event('death');
     });
     body.on('end', () => {
+        // the saved job stays as it was: the next director (after the reconnect) takes it back
+        saver.flush(); saver.detach();
         void director?.dispose(); director = null;
         detachSensors?.(); detachSensors = null; sensors = null;
         void lease.release();
@@ -264,6 +301,8 @@ async function main() {
     const shutdown = async () => {
         stopping = true;
         clearInterval(metrics);
+        // a graceful restart restores the job too: the file is left as it is
+        saver.flush(); saver.detach();
         await director?.dispose();
         await lease.release();
         body.disconnect();
