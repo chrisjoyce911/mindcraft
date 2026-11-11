@@ -13,6 +13,7 @@ export * from './render.js';
 export * from './questions.js';
 export * from './rules.js';
 export * from './answer.js';
+export * from './situation.js';
 
 /** answer: the action; target: the mob index (-1 none) and targetWord its option; weapon null: none. */
 export interface DefendDecision extends Decision<DefendAction, DefendRule> {

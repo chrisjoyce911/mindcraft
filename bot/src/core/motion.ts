@@ -16,6 +16,9 @@ export interface GoToOptions { timeoutMs?: number }
 export class Motion {
     /** how many times the goal was cleared by an abort (tests) */
     cleared = 0;
+    private inFlight = 0;
+    /** moving: a goTo is in flight (the stuck watch counts only then). */
+    get moving(): boolean { return this.inFlight > 0; }
     constructor(private readonly bot: MotionBot, private readonly defaultTimeoutMs = 60000) {}
 
     /** stop: clear the goal and controls now (the lease's body reset uses this too). */
@@ -29,9 +32,10 @@ export class Motion {
     goTo(goal: unknown, signal: AbortSignal, opts: GoToOptions = {}): Promise<Outcome> {
         if (signal.aborted) return Promise.resolve(fail('cancelled'));
         const t = withTimeout(opts.timeoutMs ?? this.defaultTimeoutMs, signal);
+        this.inFlight++;
         return new Promise<Outcome>(resolve => {
             let done = false;
-            const finish = (o: Outcome) => { if (done) return; done = true; t.dispose(); t.signal.removeEventListener('abort', onAbort); resolve(o); };
+            const finish = (o: Outcome) => { if (done) return; done = true; this.inFlight--; t.dispose(); t.signal.removeEventListener('abort', onAbort); resolve(o); };
             const onAbort = () => { if (done) return; this.stop(); finish(timedOut(t.signal) ? fail('timeout') : fail('cancelled')); };
             t.signal.addEventListener('abort', onAbort, { once: true });
             this.bot.pathfinder.goto(goal).then(

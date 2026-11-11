@@ -23,13 +23,16 @@ test('abort while pathing: goal cleared once, goTo resolves cancelled within 250
     const { bot, calls } = fakeBot();
     const m = new Motion(bot);
     const c = new AbortController();
+    assert.equal(m.moving, false);
     const p = m.goTo({}, c.signal);
+    assert.equal(m.moving, true, 'a goTo in flight (the stuck watch counts)');
     await new Promise(r => setTimeout(r, 20));
     const t0 = Date.now();
     c.abort();
     const o = await p;
     assert.ok(Date.now() - t0 < 250);
     assert.deepEqual(o, { ok: false, reason: 'cancelled' });
+    assert.equal(m.moving, false);
     assert.equal(calls.setGoalNull, 1);
     assert.equal(calls.stopDigging, 1);
     assert.equal(calls.clear, 1);

@@ -10,6 +10,7 @@ import { loadSettings } from './core/settings.js';
 import { startHarness } from './harness/server.js';
 import { fullState } from './harness/state.js';
 import { containsLegacyCommand, parseLegacy } from './harness/legacy.js';
+import { Sensors, factsLine, sensorBot } from './sensors/index.js';
 import type { Command, Places } from './types/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -79,12 +80,20 @@ async function main() {
     };
 
     const places = () => loadPlaces(path.join(botDir, 'memory.json'));
+    // 3.3: the sensors read Facts; nothing decides from them yet (the director loop is 3.4)
+    let sensors: Sensors | null = null;
+    let detachSensors: (() => void) | null = null;
+    const facts = (): string | null => {
+        if (!sensors || !body.inGame) return null;
+        try { return factsLine(sensors.read()); } catch (e) { return `facts error: ${String(e)}`; }
+    };
     const activity = () => ({ idle: lease.isFree, label: lease.isFree ? 'Idle' : lease.holderName ?? 'Acting' });
 
     const harness = await startHarness(settings.mindserver_port, {
         name,
         inGame: () => body.inGame,
         state: () => (body.bot && body.inGame ? fullState(body.bot, name, activity(), places()) : null),
+        facts,
         settings: () => settings,
         message: handle,
         start: () => { stopping = false; body.connect(); },
@@ -94,12 +103,17 @@ async function main() {
     body.on('state', () => harness.statusChanged());
     body.on('chat', (from: string, message: string) => handle(from, message));
     body.on('spawn', () => {
+        if (body.bot && !sensors) {
+            sensors = new Sensors(sensorBot(body.bot), { places });
+            detachSensors = sensors.attach();
+        }
         log(`[metrics] spawned ${Date.now() - t0} ms after start (login ${body.logins})`);
         fs.appendFileSync(path.join(botDir, 'logs', 'bot-metrics.jsonl'), JSON.stringify({
             time: new Date().toISOString(), event: 'spawn', ms: Date.now() - t0, logins: body.logins, rssMB: Math.round(process.memoryUsage().rss / 1048576),
         }) + '\n');
     });
     body.on('end', () => {
+        detachSensors?.(); detachSensors = null; sensors = null;
         void lease.release();
         if (!stopping) setTimeout(() => { if (!stopping && body.state === 'offline') body.connect(); }, 5000);
     });

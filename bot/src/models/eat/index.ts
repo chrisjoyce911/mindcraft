@@ -12,6 +12,7 @@ export * from './render.js';
 export * from './questions.js';
 export * from './rules.js';
 export * from './answer.js';
+export * from './situation.js';
 
 /** answer: the food to eat, or none. */
 export interface EatDecision extends Decision<FoodName | typeof NONE, EatRule> {

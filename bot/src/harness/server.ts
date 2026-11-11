@@ -9,6 +9,8 @@ export interface AgentLink {
     inGame(): boolean;
     /** the full state, or null when not in game */
     state(): unknown | null;
+    /** the sensors' facts as one line (status page only), or null */
+    facts?(): string | null;
     settings(): unknown;
     /** a message as if `from` said it */
     message(from: string, message: string): void;
@@ -22,7 +24,7 @@ export function startHarness(port: number, agent: AgentLink, log: (m: string) =>
     const server = http.createServer((req, res) => {
         if (req.url === '/state.json') {
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ agent: agent.name, inGame: agent.inGame(), state: agent.state() }));
+            res.end(JSON.stringify({ agent: agent.name, inGame: agent.inGame(), state: agent.state(), facts: agent.facts?.() ?? null }));
             return;
         }
         if (req.url === '/' || req.url === '/index.html') {
@@ -89,11 +91,12 @@ const STATUS_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 @media (prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--card:#1c1c1e}}
 body{background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif;margin:16px}
 .card{background:var(--card);border-radius:8px;padding:12px;margin:8px 0}h1{font-size:18px}.m{color:var(--mut)}pre{white-space:pre-wrap;margin:0}
-</style></head><body><h1>__AGENT__</h1><div id="s" class="card m">connecting…</div><div class="card"><pre id="inv"></pre></div>
+</style></head><body><h1>__AGENT__</h1><div id="s" class="card m">connecting…</div><div id="f" class="card m"></div><div class="card"><pre id="inv"></pre></div>
 <script>
 async function t(){try{const r=await (await fetch('/state.json')).json();const s=r.state;
 if(!r.inGame||!s){document.getElementById('s').textContent='not in game';return}
 const g=s.gameplay,p=g.position;document.getElementById('s').textContent=
 (s.action.isIdle?'Idle':s.action.current)+' · health '+g.health+' food '+g.hunger+' · '+p.x+' '+p.y+' '+p.z+' · '+g.timeLabel;
+document.getElementById('f').textContent=r.facts?'facts: '+r.facts:'';
 document.getElementById('inv').textContent=JSON.stringify({inventory:s.inventory.counts,places:s.places,nearby:s.nearby},null,1)}catch(e){document.getElementById('s').textContent='bot not reachable'}}
 t();setInterval(t,1000)</script></body></html>`;

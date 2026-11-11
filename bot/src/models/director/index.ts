@@ -12,6 +12,7 @@ export * from './render.js';
 export * from './questions.js';
 export * from './rules.js';
 export * from './answer.js';
+export * from './situation.js';
 
 export interface DirectorDecision extends Decision<Activity, DirectorRule> {
     /** The rules' own answer (differs from `answer` when the model decided otherwise). */

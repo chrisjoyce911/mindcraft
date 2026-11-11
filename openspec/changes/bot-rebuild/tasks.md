@@ -60,7 +60,17 @@ lease overrun test passes.
   all 9 and 13 rules). Every fallback carries `why` (no-answer, low-confidence, disagree, veto + `veto`,
   nothing-to-defend, not-hungry, malformed). laya-go HEAD's eat/defend prompts equal the old JS (no drift). The
   bot readers (`situation(bot, …)`, `armedOf`, `armorPoints`, `dangerOf`, defend's armour slots) move to 3.3.
-- [ ] 3.3 Sensors: vitals, attacks (fix-round4's `attacks.js`), danger, light/time, player, pack, home, stuck.
+- [x] 3.3 Sensors: vitals, attacks (fix-round4's `attacks.js`), danger, light/time, player, pack, home, stuck.
+  `bot/src/sensors/` (bot, attacks, hurt, mobs, vitals, danger, light, player, pack, home, index) give one typed
+  `Facts` per tick (`Sensors.read()`, cached 250 ms); `core/stuck.ts` counts only while `Motion.moving` (a goTo in
+  flight), 20 s / obsidian 40 s, never acts. Attacks is an exact port (15 s attacker, 5 s Me/Player, blame 4, fusing
+  creeper within 5). `mobKind` moved to sensors (render re-exports it; goldens unchanged). Facts → situation adapters
+  in `models/{director,eat,defend}/situation.ts`, ported as the old callers fed them: eat danger = a hostile within 8;
+  defend sees only attackers within 18, night = timeOfDay ≥ 13000 (mineflayer isDay), player within 8. Old tests
+  ported (fix_round4 attacks, director helpers, homeState, pack homeDistance/countHostiles) plus new; adapters render
+  the eat/defend/director v1.3 goldens from a fake world. Live smoke (test world): hostiles/nearest, night, Player
+  line via blame (5 s), lava → fire. Found: **any damage kicks the new bot** (`invalid_player_movement`, also with
+  sensors off — body/mineflayer 4.33 physics, not 3.3); 3.4's defend needs it fixed (Q4's mineflayer 4.39 pin?).
 - [ ] 3.4 Director loop, JobStack, priorities, activities defend/flee/eat/heal/escape; defend-only-attackers.
 - [ ] 3.5 Logs: `laya-director/eat/defend.jsonl` identical in format to the fixtures (1.2).
 

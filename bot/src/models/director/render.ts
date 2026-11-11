@@ -15,7 +15,8 @@
 //   Danger none
 //   Last none
 
-import type { Armed, Danger, MobKind } from '../../types/facts.js';
+import type { Armed, Danger } from '../../types/facts.js';
+import { mobKind, NEAREST_KINDS } from '../../sensors/mobs.js';
 import { ORES, type Ore } from '../../types/jobs.js';
 import type { DirectorPrompt } from '../../types/decisions.js';
 
@@ -26,8 +27,8 @@ export type DirectorJobKind = (typeof JOB_KINDS)[number];
 export const LASTS = ['none', 'done', 'failed', 'interrupted', 'blocked'] as const;
 export type Last = (typeof LASTS)[number];
 export const DANGERS = ['none', 'fluid', 'fall', 'drowning', 'fire'] as const satisfies readonly Danger[];
-/** The mob kinds the Nearest, Me and Player lines name; anything else is `other`. */
-export const NEAREST_KINDS = ['zombie', 'skeleton', 'creeper', 'spider'] as const;
+/** mobKind and NEAREST_KINDS live in sensors/mobs.ts (the sensors use them too). */
+export { mobKind, NEAREST_KINDS };
 
 export const PLAYER_REACH = 24; // the Player line's reach (v1.2)
 export const RANGED_REACH = 16; // flee-ranged's reach (v1.2)
@@ -67,12 +68,6 @@ export interface DirectorSituation {
 }
 
 const NONE = 'none';
-
-/** mobKind is a mob's name as the state's Nearest/By kinds name it (strays and bogged are skeletons, v1.2), else other. */
-export function mobKind(name: string | null | undefined): MobKind {
-    if (name === 'stray' || name === 'bogged') return 'skeleton';
-    return (NEAREST_KINDS as readonly string[]).includes(name ?? '') ? (name as MobKind) : 'other';
-}
 
 /** cap rounds n and clamps it to 0…c (laya-go's caps). */
 export const cap = (n: number, c: number): number => Math.max(0, Math.min(c, Math.round(n)));
