@@ -151,6 +151,10 @@ step as expected (4.2); no mode (grep, check:deps, live modes "none", `!setMode`
   its job.
 
 Done means: follow/come/give/store scenarios pass; a restart test (kill mid-follow) resumes.
+Gate passed 2026-11-12 (03:24 AEST, HEAD 03bddc6, no code change): `bot` npm test 202/202, harness 38/38; new
+`rebuild` scenarios `come`, `give`, `store` (not in `full`); follow, come, give, store, defend, home-chest-command and
+home-chest-chat pass twice each (training held); kill -9 mid-follow ×2 → "job follow restored", "I'll carry on with
+it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-tests/bot-rebuild-phase4-2026-11-12.md`.
 
 ## 5. Work jobs (one at a time, gate after each)
 - [ ] 5.1 craft + gather (craft model, recipes from minecraft-data).

@@ -404,6 +404,250 @@
       ]
     },
     {
+      "name": "come",
+      "tags": [
+        "rebuild",
+        "follow"
+      ],
+      "timeout": 60000,
+      "grace": 2000,
+      "requires": [
+        "command"
+      ],
+      "description": "Tester stands 10 blocks east of andy and chats \"andy come here\" (command model: come → goToPlayer, reply \"On my way.\"); andy walks over once and says \"You have reached tester.\", ending within 3 blocks.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 10
+          }
+        }
+      ],
+      "action": [
+        {
+          "say": "andy come here"
+        },
+        {
+          "waitFor": {
+            "action": "goToPlayer"
+          },
+          "timeout": 30000
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "On my way"
+        },
+        {
+          "type": "reply",
+          "match": "You have reached {tester}"
+        },
+        {
+          "type": "actionSeen",
+          "match": "goToPlayer"
+        },
+        {
+          "type": "near",
+          "max": 3
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "give",
+      "tags": [
+        "rebuild",
+        "follow"
+      ],
+      "timeout": 60000,
+      "grace": 2000,
+      "requires": [
+        "command"
+      ],
+      "description": "Andy holds 5 coal, tester 4 blocks east chats \"andy give me 3 coal\" (command model: give → givePlayer); andy tosses exactly 3 (never twice), keeps 2, says \"tester received coal.\", and tester's pack has 3 coal.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 4
+          }
+        },
+        {
+          "cmd": "/clear {andy} coal"
+        },
+        {
+          "cmd": "/clear {tester} coal"
+        },
+        {
+          "cmd": "/give {andy} coal 5"
+        },
+        {
+          "wait": 1500,
+          "note": "the before snapshot must see the 5 coal (andy's state lags the /give)"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy give me 3 coal"
+        },
+        {
+          "waitReply": "received coal|never received|only have|too close|do not have",
+          "timeout": 40000
+        },
+        {
+          "wait": 1500
+        },
+        {
+          "cmd": "/clear {tester} coal 0",
+          "note": "count 0 only counts: the server replies \"Found 3 matching item(s)\""
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "{tester} received coal"
+        },
+        {
+          "type": "actionSeen",
+          "match": "givePlayer"
+        },
+        {
+          "type": "inventory",
+          "item": "coal",
+          "min": -3,
+          "max": -3
+        },
+        {
+          "type": "serverReply",
+          "match": "Found 3 "
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/clear {andy} coal"
+        },
+        {
+          "cmd": "/clear {tester} coal"
+        }
+      ]
+    },
+    {
+      "name": "store",
+      "tags": [
+        "rebuild",
+        "home"
+      ],
+      "timeout": 90000,
+      "grace": 3000,
+      "requires": [
+        "command"
+      ],
+      "description": "A chest 3 blocks east of andy; andy holds 10 dirt, 20 cobblestone and a stone pickaxe. Tester chats \"andy store everything\" (command model: store, no item → one putInChest per stack, tools kept); the chest gains exactly 10 dirt and 20 cobblestone, andy says \"Successfully put\" and keeps the pickaxe. The chest is removed afterwards.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} air"
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} chest"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} dirt 10"
+        },
+        {
+          "cmd": "/give {andy} cobblestone 20"
+        },
+        {
+          "cmd": "/give {andy} stone_pickaxe"
+        },
+        {
+          "wait": 1500,
+          "note": "the before snapshot must see the given items"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy store everything"
+        },
+        {
+          "waitReply": "Successfully put 20 cobblestone|Could not|Nothing to store|do not have",
+          "timeout": 30000,
+          "note": "not waitFor action: both deposits can finish inside one state poll"
+        }
+      ],
+      "checks": [
+        {
+          "type": "chest",
+          "at": "{x+3} {y} {z}",
+          "item": "dirt",
+          "min": 10,
+          "max": 10,
+          "delta": true
+        },
+        {
+          "type": "chest",
+          "at": "{x+3} {y} {z}",
+          "item": "cobblestone",
+          "min": 20,
+          "max": 20,
+          "delta": true
+        },
+        {
+          "type": "reply",
+          "match": "Successfully put 10 dirt"
+        },
+        {
+          "type": "reply",
+          "match": "Successfully put 20 cobblestone"
+        },
+        {
+          "type": "inventory",
+          "item": "stone_pickaxe",
+          "min": 0,
+          "max": 0
+        },
+        {
+          "type": "inventory",
+          "item": "dirt",
+          "min": -10,
+          "max": -10
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} air"
+        }
+      ]
+    },
+    {
       "name": "farm-water",
       "tags": [
         "full",
