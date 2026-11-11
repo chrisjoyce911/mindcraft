@@ -21,7 +21,7 @@ import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 import { PlaceStore } from './home/places.js';
 import { JobSaver, RESTORE_MAX_MS, RESTORE_MIN_MS, loadJobs, planRestore, readJobs, waitsFor } from './home/jobfile.js';
 import { loadChoresState } from './home/chores.js';
-import { makeRunner, FOLLOW_DEFAULTS, type FollowSettings, type JobDeps } from './jobs/index.js';
+import { makeRunner, FOLLOW_DEFAULTS, CRAFT_DEFAULTS, type CraftSettings, type FollowSettings, type JobDeps } from './jobs/index.js';
 import { isFollowPrompt } from './models/follow/index.js';
 import { handleChat } from './command/handle.js';
 import { COMMAND_DEFAULTS, promptOf as commandPromptOf, type CommandOptions } from './models/command/index.js';
@@ -88,6 +88,17 @@ function followOf(settings: Record<string, unknown>, model: FollowSettings['mode
     };
 }
 
+/** The craft task's settings (decision_models.tasks.craft; the old craft.js DEFAULTS). enabled false: the task is off. */
+function craftOf(settings: Record<string, unknown>, model: CraftSettings['model']): CraftSettings {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.craft ?? {};
+    const num = (k: 'min_confidence' | 'max_steps') => {
+        const v = t[k];
+        return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : CRAFT_DEFAULTS[k];
+    };
+    return { enabled: t.enabled === true, min_confidence: num('min_confidence'), max_steps: num('max_steps'), log_steps: t.log_steps !== false, model };
+}
+
 async function main() {
     const t0 = Date.now();
     const settings = await loadSettings(REPO_ROOT, process.argv.slice(2), process.env);
@@ -135,6 +146,8 @@ async function main() {
         places: placeStore,
         follow: () => followOf(settings, enabled('follow') ? laya : null, laya.promptFor('follow')),
         followLog: line => jsonl.write('follow', line),
+        craft: () => craftOf(settings, enabled('craft') ? laya : null),
+        craftLog: line => jsonl.write('craft', line),
         note: text => log(`[laya] ${text}`),
         checkpoint: () => saver.save(),
     };

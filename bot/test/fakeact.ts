@@ -50,7 +50,7 @@ export interface World {
     players: Record<string, ActEntity>;
     /** Blocks by "x,y,z" (blockAt, findBlocks); everything else is null. */
     blocks: Record<string, ActBlock>;
-    /** What was put into containers ("x,y,z" → item → count). */
+    /** What the containers hold ("x,y,z" → item → count): deposits go in, withdrawals come out. */
     chests: Record<string, Record<string, number>>;
     /** Items tossed. */
     tossed: ActItem[];
@@ -67,6 +67,15 @@ export interface World {
     openFails?: boolean;
     /** called on each moveUntil (a follow step): a test moves andy into the column, or not. */
     onStep?: (goal: unknown) => void;
+    /** Crafting recipes by result name (recipesFor, craft): one craft's result, needs and whether a table is needed. */
+    recipeBook: Record<string, { result: number; needs: ActItem[]; table?: boolean }>;
+    /** A craft takes this long (Infinity: never settles). */
+    craftMs: number;
+    /** A dig takes this long (Infinity: never settles); a dug block becomes this item in the pack (else its name). */
+    digMs: number;
+    drops: Record<string, string>;
+    /** The held item (equip). */
+    held(): ActItem | null;
 }
 
 const wait = (ms: number, signal?: AbortSignal) => new Promise<boolean>(r => {
@@ -85,6 +94,18 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
     });
     const key = (p: { x: number; y: number; z: number }) => `${p.x},${p.y},${p.z}`;
     let held: ActItem | null = null;
+    w.held = () => held;
+    const addItem = (name: string, count: number) => {
+        const it = w.items.find(i => i.name === name);
+        if (it) it.count += count; else w.items.push({ name, count });
+    };
+    const takeItem = (name: string, count: number) => {
+        const it = w.items.find(i => i.name === name);
+        if (!it || it.count < count) throw new Error(`not enough ${name}`);
+        it.count -= count;
+        if (!it.count) w.items.splice(w.items.indexOf(it), 1);
+    };
+    w.recipeBook = {}; w.craftMs = 0; w.digMs = 0; w.drops = {};
     const bot: ActBot = {
         get entity() { return { position: w.facts.pos }; },
         get entities() { return w.entities; },
@@ -120,6 +141,13 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
             if (w.openFails) throw new Error('locked');
             const box = (w.chests[key(p)] ??= {});
             return {
+                items: () => Object.entries(box).filter(([, n]) => n > 0).map(([name, count]) => ({ name, count })),
+                withdraw: async (name, count) => {
+                    rec('withdraw', `${name} ${count}`);
+                    if ((box[name] ?? 0) < count) throw new Error(`not enough ${name} in the chest`);
+                    box[name]! -= count;
+                    addItem(name, count);
+                },
                 deposit: async (name, count) => {
                     rec('deposit', `${name} ${count}`);
                     w.onDeposit?.();
@@ -152,6 +180,43 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
             await wait(Math.min(ms, 30), signal);
             return false;
         },
+        hasRecipe: name => !!w.recipeBook[name],
+        recipesFor: (name, table) => {
+            const r = w.recipeBook[name];
+            if (!r || (r.table && table === null)) return [];
+            if (!r.needs.every(n => w.items.filter(i => i.name === n.name).reduce((s, i) => s + i.count, 0) >= n.count)) return [];
+            return [{ result: r.result, needs: r.needs, ref: name }];
+        },
+        craft: async (recipe, table) => {
+            rec('craft', `${String(recipe.ref)}${table ? ' at table' : ''}`);
+            if (!Number.isFinite(w.craftMs)) return new Promise<void>(() => {});
+            if (w.craftMs) await wait(w.craftMs);
+            for (const n of recipe.needs) takeItem(n.name, n.count);
+            addItem(String(recipe.ref), recipe.result);
+        },
+        dig: async p => {
+            rec('dig', key(p));
+            if (!Number.isFinite(w.digMs)) return new Promise<void>(() => {});
+            if (w.digMs) await wait(w.digMs);
+            const b = w.blocks[key(p)];
+            if (!b) throw new Error('nothing there');
+            delete w.blocks[key(p)];
+            addItem(w.drops[b.name] ?? b.name, 1);
+        },
+        stopDigging: () => rec('stopDigging'),
+        canHarvest: () => true,
+        bestTool: () => null,
+        placeBlock: async (against, face) => {
+            rec('place', `${key(against)} ${key(face)}`);
+            if (!held) throw new Error('nothing held');
+            const at = { x: against.x + face.x, y: against.y + face.y, z: against.z + face.z };
+            takeItem(held.name, 1);
+            w.blocks[key(at)] = { name: held.name, boundingBox: 'block' };
+        },
+        openFurnace: async () => { throw new Error('no furnace in the fake'); },
+        blockNames: test => [...new Set(Object.values(w.blocks).map(b => b.name))].filter(test),
+        isFood: name => ['bread', 'cooked_beef', 'apple', 'beef'].includes(name),
+        planksFor: log => (log.endsWith('_log') ? log.replace(/_log$/, '_planks') : null),
     };
     const motion = {
         moveFor: async (goal: unknown, ms: number, signal: AbortSignal): Promise<Outcome> => {
@@ -176,6 +241,7 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
         xz: (x: number, z: number): Goal => ({ xz: [x, z] }),
         near: (p: { x: number }, range: number): Goal => ({ near: p.x, range }),
         invert: (g: Goal): Goal => ({ invert: g }),
+        lookAt: (p: { x: number; y: number; z: number }): Goal => ({ lookAt: key(p) }),
     };
     w.act = { bot, motion, goals };
     w.addMob = m => {

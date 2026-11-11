@@ -251,6 +251,47 @@
       ]
     },
     {
+      "name": "gather-logs",
+      "tags": [
+        "rebuild",
+        "craft"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "Andy with only a wooden axe is asked in chat for 4 logs: the craft loop gathers them from the nearest tree (any wood) and picks them up.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_axe 1"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy get 4 logs"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "/_log$/",
+          "min": 4
+        },
+        {
+          "type": "idle"
+        }
+      ]
+    },
+    {
       "name": "home-chest-sign",
       "tags": [
         "full",

@@ -1,5 +1,5 @@
-// The jobs (4.2: follow, come, stay, give, store, home). makeRunner builds a job's runner; null for the kinds
-// that arrive later (mine, farm, craft, gather, hunt: 5.x; eat as a job: not yet).
+// The jobs (4.2: follow, come, stay, give, store, home; 5.1: craft, gather). makeRunner builds a job's runner; null
+// for the kinds that arrive later (mine, farm, hunt: 5.x; eat as a job: not yet).
 import type { JobState, JobStepper } from '../types/index.js';
 import type { JobDeps, JobOf } from './deps.js';
 import { followRunner } from './follow.js';
@@ -8,9 +8,12 @@ import { stayRunner } from './stay.js';
 import { giveRunner } from './give.js';
 import { storeRunner } from './store.js';
 import { homeRunner } from './home.js';
+import { craftRunner } from './craft.js';
 
 export * from './deps.js';
 export { summary, newCounters, followRunner, type FollowCounters, type FollowStepper } from './follow.js';
+export { craftRunner, craftStep, makeItem, type CraftWorld, type CraftProgress, type CraftRunContext } from './craft.js';
+export { jobFailedMessage } from './message.js';
 
 export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
     const s = job.spec;
@@ -21,6 +24,8 @@ export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
         case 'give': return giveRunner(job as JobOf<'give'>, deps);
         case 'store': return storeRunner(job as JobOf<'store'>, deps);
         case 'home': return homeRunner(job as JobOf<'home'>, deps);
+        case 'craft': return craftRunner(job as JobOf<'craft'>, deps);
+        case 'gather': return craftRunner(job as JobOf<'gather'>, deps);
         default: return null;
     }
 }

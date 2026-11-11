@@ -336,6 +336,7 @@ export class Director {
     private async runJob(job: JobEntry): Promise<boolean> {
         const runner = this.deps.runners?.(job) ?? null;
         if (!runner) return false;
+        if (runner.left) job.left = () => runner.left!();
         this.stack.resumed(job);
         const id = ++this.seq;
         const gen = this.generation;

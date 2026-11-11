@@ -163,7 +163,22 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
   the place blockUpdate wait 5000 → 500 ms. A clean `npm ci` in a scratch copy applies all 4 patches. `bot/test/deps.test.ts`
   guards the versions, both hunks and the dig times through mineflayer's digging plugin (fails with the patch reversed);
   npm test 206/206. No live check: no dig/place path in `bot/` yet (5.2/5.5 gates exercise it).
-- [ ] 5.1 craft + gather (craft model, recipes from minecraft-data).
+- [x] 5.1 craft + gather (craft model, recipes from minecraft-data).
+  (2026-11-12) `bot/src/models/craft/` is the craft model (laya-go prompt v2): typed item table, state, questions,
+  answer, rules (check, plan, ingredientFromChest), item names (`layaItem`, `realName`; planks from minecraft-data's
+  recipes) and `decideCraftStep` in the old decision order. `bot/src/jobs/craft.ts` runs craft and gather jobs (one
+  model step per job step; target fixed at the start, so a resumed job makes nothing twice; every old fix: chest read
+  once, re-read once per failed take, what a take/store moved from the pack, store 64 = all, goal-carried, a failed
+  extra step after the goal is done, placed chest known empty; `left()` for the Job line; a take/store checkpoints
+  `moving` first and is counted on the next step after a pause or kill). Legacy `!craftRecipe` / `!collectBlocks` run
+  one actuator call. New actuators: craft (one craft at a time + settle; a carried table placed and picked up again),
+  collect/dig (floorDrop, liquids only as sources, an abort ends the collect), gather, smelt, place, chest
+  read/withdraw; `home/kit.ts` keeps the player kit out of every chest read and take. `laya-craft.jsonl` in the old
+  shape (live line + `branches/craft.jsonl` from `tools/laya-logs/record-craft.mjs`, byte for byte); `jobFailedMessage`
+  ported. ITEMS checked against minecraft-data 1.21.6 recipes. npm test 246/246. Live: craft-wooden-pickaxe,
+  craft-stone-pickaxe, craft-furnace and the new `gather-logs` pass twice; smelt and home-chest-kit by hand; follow,
+  come, give, store, eat, defend-fight, flee-creeper pass. Report `bots/andy/logs/game-tests/bot-rebuild-5.1-2026-11-12.md`.
+  `makeItem` (jobs/craft.ts) is the craft loop for 5.2/5.3 to call; a chore `purpose` ends on a gather answer (5.6 wires it).
 - [ ] 5.2 mine (mine model v2, mine plan, floor/drop checks, veins, torches, unload at home, mine memory).
 - [ ] 5.3 farm (farm model v2, water, pond, seeds, unload).
 - [ ] 5.4 hunt.

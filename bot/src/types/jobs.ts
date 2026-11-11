@@ -38,6 +38,8 @@ export interface JobStepper {
     step(facts: Facts, signal: AbortSignal): Promise<StepResult>;
     /** Called once when this run of the job ends (done, failed, paused, replaced or stopped). */
     close?(): void;
+    /** How many are left (the director's Job line), null when it can't say. */
+    left?(): number | null;
 }
 
 /**

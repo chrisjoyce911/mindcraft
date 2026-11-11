@@ -8,12 +8,37 @@ import type { GoToOptions } from '../core/motion.js';
 
 export interface ActEntity { id: number; name?: string | undefined; username?: string | undefined; position: Vec3Like; height?: number; isValid?: boolean }
 export interface ActItem { name: string; count: number }
-/** A block as the actuators and the follow state read it (a mineflayer Block fits). */
-export interface ActBlock { name: string; boundingBox?: string; getProperties?: () => Record<string, unknown> }
-/** An open container (a chest): deposit by item name, close. */
+/** A block as the actuators and the follow state read it (a mineflayer Block fits). metadata 0: a liquid's source. */
+export interface ActBlock { name: string; boundingBox?: string; metadata?: number; getProperties?: () => Record<string, unknown> }
+/** An open container (a chest): its items, deposit and withdraw by item name, close. */
 export interface ActContainer {
+    /** The container's own slots' items (not andy's inventory). */
+    items(): ActItem[];
     deposit(name: string, count: number): Promise<void>;
+    withdraw(name: string, count: number): Promise<void>;
     close(): void;
+}
+/** An open furnace: its three slots, put and take, close. */
+export interface ActFurnace {
+    input(): ActItem | null;
+    fuel(): ActItem | null;
+    output(): ActItem | null;
+    putFuel(name: string, count: number): Promise<void>;
+    putInput(name: string, count: number): Promise<void>;
+    /** Takes the output stack; resolves with what was taken (null: nothing). */
+    takeOutput(): Promise<ActItem | null>;
+    takeInput(): Promise<void>;
+    takeFuel(): Promise<void>;
+    close(): void;
+}
+/** A crafting recipe andy has the ingredients for (bot.recipesFor through minecraft-data): one craft's result and needs. */
+export interface ActRecipe {
+    /** How many one craft makes. */
+    result: number;
+    /** What one craft uses. */
+    needs: ActItem[];
+    /** The live recipe (opaque to the actuators). */
+    readonly ref: unknown;
 }
 export type Hand = 'hand' | 'off-hand';
 export type Control = 'jump' | 'forward' | 'back' | 'sprint';
@@ -47,6 +72,29 @@ export interface ActBot {
     toss(name: string, count: number): Promise<number>;
     /** Resolves true when `player` picks up an item within ms, false after ms or on abort. */
     waitCollect(player: string, ms: number, signal: AbortSignal): Promise<boolean>;
+    /** minecraft-data: the item has a crafting recipe. */
+    hasRecipe(name: string): boolean;
+    /** The recipes for name andy has the ingredients for: without a table (null), with the table at p, or with any table ('any'). */
+    recipesFor(name: string, table: Vec3Like | 'any' | null): ActRecipe[];
+    /** Craft a recipe once (at the table at p, or in the inventory grid: null). */
+    craft(recipe: ActRecipe, table: Vec3Like | null): Promise<void>;
+    /** Dig the block at p (with the held item); rejects when it can't. */
+    dig(p: Vec3Like): Promise<void>;
+    stopDigging(): void;
+    /** The held item can harvest the block at p (it drops). */
+    canHarvest(p: Vec3Like): boolean;
+    /** The carried item that digs the block at p fastest (the patched digTime), or null: the hand is as good. */
+    bestTool(p: Vec3Like): string | null;
+    /** Place the held block against the block at `against`, on its `face` side. */
+    placeBlock(against: Vec3Like, face: Vec3Like): Promise<void>;
+    /** Open the furnace block at p (rejects when it won't open). */
+    openFurnace(p: Vec3Like): Promise<ActFurnace>;
+    /** minecraft-data's block names that pass test (e.g. every *_log). */
+    blockNames(test: (name: string) => boolean): string[];
+    /** minecraft-data's foods. */
+    isFood(name: string): boolean;
+    /** The planks a log crafts into (minecraft-data's recipes), or null. */
+    planksFor(log: string): string | null;
 }
 
 /** The pathfinder goals the actuators use (opaque to them). */
@@ -57,6 +105,8 @@ export interface Goals {
     xz(x: number, z: number): Goal;
     near(p: Vec3Like, range: number): Goal;
     invert(g: Goal): Goal;
+    /** Somewhere the block at p is in reach and in sight (to dig it). */
+    lookAt(p: Vec3Like): Goal;
 }
 
 /** What actuators need of Motion (core/motion.ts satisfies it). */
@@ -109,10 +159,16 @@ export function actBot(bot: Bot): ActBot {
             if (!block) throw new Error('no block there');
             const c = await bot.openContainer(block);
             return {
+                items: () => c.containerItems().map(i => ({ name: i.name, count: i.count })),
                 deposit: async (name, count) => {
                     const id = bot.registry.itemsByName[name]?.id;
                     if (id === undefined) throw new Error(`unknown item ${name}`);
                     await c.deposit(id, null, count);
+                },
+                withdraw: async (name, count) => {
+                    const id = bot.registry.itemsByName[name]?.id;
+                    if (id === undefined) throw new Error(`unknown item ${name}`);
+                    await c.withdraw(id, null, count);
                 },
                 close: () => c.close(),
             };
@@ -137,6 +193,92 @@ export function actBot(bot: Bot): ActBot {
             signal.addEventListener('abort', onAbort, { once: true });
             bot.on('playerCollect', onCollect as never);
         }),
+        hasRecipe: name => {
+            const id = bot.registry.itemsByName[name]?.id;
+            return id !== undefined && ((bot.registry as unknown as { recipes: Record<number, unknown[]> }).recipes[id]?.length ?? 0) > 0;
+        },
+        recipesFor: (name, table) => {
+            const id = bot.registry.itemsByName[name]?.id;
+            if (id === undefined) return [];
+            const t = table === null ? null : table === 'any' ? true : bot.blockAt(v(table));
+            if (table !== null && !t) return [];
+            return bot.recipesFor(id, null, 1, t as never).map(r => ({
+                result: r.result.count,
+                needs: r.delta.filter(d => d.count < 0).map(d => ({ name: bot.registry.items[d.id]?.name ?? String(d.id), count: -d.count })),
+                ref: r,
+            }));
+        },
+        craft: async (recipe, table) => {
+            const t = table ? bot.blockAt(v(table)) : null;
+            if (table && !t) throw new Error('no crafting table there');
+            await bot.craft(recipe.ref as never, 1, (t ?? undefined) as never);
+        },
+        dig: async p => {
+            const b = bot.blockAt(v(p));
+            if (!b) throw new Error('no block there');
+            await bot.dig(b, true);
+        },
+        stopDigging: () => bot.stopDigging(),
+        canHarvest: p => {
+            const b = bot.blockAt(v(p));
+            return !!b && b.canHarvest(bot.heldItem ? bot.heldItem.type : null);
+        },
+        bestTool: p => {
+            const b = bot.blockAt(v(p));
+            if (!b) return null;
+            // the patched bot.digTime's material fix (1.21 names some stone after the wooden-tool tag)
+            if ((b as unknown as { material?: string }).material === 'incorrect_for_wooden_tool') (b as unknown as { material: string }).material = 'mineable/pickaxe';
+            const creative = bot.game.gameMode === 'creative';
+            const time = (type: number | null) => b.digTime(type, creative, !!(bot.entity as unknown as { isInWater?: boolean }).isInWater, !bot.entity.onGround, [], bot.entity.effects as never);
+            let best: string | null = null, bestTime = time(null);
+            for (const it of bot.inventory.items()) {
+                const t = time(it.type);
+                if (t < bestTime && b.canHarvest(it.type)) { best = it.name; bestTime = t; }
+            }
+            // a block the hand can't harvest: any tool that can
+            if (!best && !b.canHarvest(null)) best = bot.inventory.items().find(it => b.canHarvest(it.type))?.name ?? null;
+            return best;
+        },
+        placeBlock: async (against, face) => {
+            const b = bot.blockAt(v(against));
+            if (!b) throw new Error('nothing to place against');
+            await bot.placeBlock(b, v(face));
+        },
+        openFurnace: async p => {
+            const block = bot.blockAt(v(p));
+            if (!block) throw new Error('no block there');
+            const f = await bot.openFurnace(block);
+            const item = (i: { name: string; count: number } | null) => (i ? { name: i.name, count: i.count } : null);
+            const id = (name: string) => {
+                const n = bot.registry.itemsByName[name]?.id;
+                if (n === undefined) throw new Error(`unknown item ${name}`);
+                return n;
+            };
+            return {
+                input: () => item(f.inputItem()),
+                fuel: () => item(f.fuelItem()),
+                output: () => item(f.outputItem()),
+                putFuel: (name, count) => f.putFuel(id(name), null, count),
+                putInput: (name, count) => f.putInput(id(name), null, count),
+                takeOutput: async () => item(await f.takeOutput()),
+                takeInput: async () => { await f.takeInput(); },
+                takeFuel: async () => { await f.takeFuel(); },
+                close: () => f.close(),
+            };
+        },
+        blockNames: test => Object.keys(bot.registry.blocksByName).filter(test),
+        isFood: name => Object.hasOwn((bot.registry as unknown as { foodsByName?: Record<string, unknown> }).foodsByName ?? {}, name),
+        planksFor: log => {
+            const logId = bot.registry.itemsByName[log]?.id;
+            if (logId === undefined) return null;
+            const recipes = (bot.registry as unknown as { recipes: Record<number, { ingredients?: number[] }[]> }).recipes;
+            for (const name of Object.keys(bot.registry.itemsByName)) {
+                if (!name.endsWith('_planks')) continue;
+                const id = bot.registry.itemsByName[name]!.id;
+                if ((recipes[id] ?? []).some(r => r.ingredients?.includes(logId))) return name;
+            }
+            return null;
+        },
     };
 }
 
@@ -149,5 +291,6 @@ export function realGoals(bot: Bot): Goals {
         xz: (x, z) => new G.GoalXZ(x, z),
         near: (p, range) => new G.GoalNear(p.x, p.y, p.z, range),
         invert: g => new G.GoalInvert(g as never),
+        lookAt: p => new G.GoalLookAtBlock(v(p), bot.world, { reach: 4.5 }),
     };
 }

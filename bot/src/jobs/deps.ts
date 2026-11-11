@@ -2,7 +2,7 @@
 import type { JobSpec, JobState, JobStepper, ModelDecider } from '../types/index.js';
 import type { Act } from '../actuators/bot.js';
 import type { PlaceBook } from '../home/places.js';
-import type { FollowLine } from '../log/jsonl.js';
+import type { CraftLine, FollowLine } from '../log/jsonl.js';
 import type { FollowPrompt } from '../models/follow/index.js';
 
 /** decision_models.tasks.follow (the old follow.js DEFAULTS' keys); model null: the task is off. */
@@ -19,6 +19,16 @@ export const FOLLOW_DEFAULTS: Omit<FollowSettings, 'model'> = {
     step_ms: 250, fallback_ms: 4000, stuck_ms: 1500, max_waits: 2, log_steps: true, prompt: 'v1',
 };
 
+/** decision_models.tasks.craft (the old craft.js DEFAULTS' keys); enabled false: the task is off. model null: rules only. */
+export interface CraftSettings {
+    enabled: boolean;
+    min_confidence: number;
+    max_steps: number;
+    log_steps: boolean;
+    model: ModelDecider | null;
+}
+export const CRAFT_DEFAULTS: Omit<CraftSettings, 'model' | 'enabled'> = { min_confidence: 0.3, max_steps: 40, log_steps: true };
+
 export interface JobDeps {
     /** The actuator context, or null when not in game. */
     act(): Act | null;
@@ -27,6 +37,10 @@ export interface JobDeps {
     follow(): FollowSettings;
     /** Writes a laya-follow.jsonl line. */
     followLog(line: FollowLine): void;
+    /** The craft task's settings now (missing: the task is off). */
+    craft?: () => CraftSettings;
+    /** Writes a laya-craft.jsonl line. */
+    craftLog?: (line: CraftLine) => void;
     /** The console. */
     note(text: string): void;
     /**

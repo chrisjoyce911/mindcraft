@@ -1,4 +1,4 @@
-// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl and laya-follow.jsonl,
+// The decision logs (design §5.6): laya-director.jsonl, laya-eat.jsonl, laya-defend.jsonl, laya-command.jsonl, laya-follow.jsonl and laya-craft.jsonl,
 // one JSON line per decision, in the old bot's format: the same fields in the same order with the same value
 // formats (src/agent/laya/{director,eat,defend,command}.js; test/fixtures/laya-logs pins them, bot/test/logs.test.ts checks
 // them byte for byte). The line builders are pure; JsonlLog appends `{time, ...line}` and never throws.
@@ -43,7 +43,18 @@ export interface FollowLogInput {
     reason?: FollowFallback;
 }
 
-export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow'] as const;
+/** A craft step as the craft job logs it (models/craft CraftEntry fits entry; rule is the rules' step). */
+export interface CraftLogInput {
+    goal: string;
+    state: string;
+    entry?: { action: string; item: string; count: number; p: number; ms: number; source?: 'rules' };
+    outcome: CraftOutcome;
+    reason?: string;
+    rule?: { action: string; item: string; count: number };
+}
+export type CraftOutcome = 'did' | 'failed' | 'fallback' | 'done' | 'stop';
+
+export const LOG_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft'] as const;
 export type LogTask = (typeof LOG_TASKS)[number];
 
 /** The director's line: the old Director.tick logDecision entry (no `acted`: that's the console's). */
@@ -83,6 +94,16 @@ export interface CommandLine {
 export interface FollowLine {
     state: string; move?: string; p?: number; hazard?: number; ms?: number; veto?: string;
     outcome: 'stepped' | 'wait' | 'fallback'; reason?: FollowFallback;
+}
+
+/**
+ * The craft step line: the old craft.js logStep entry ({goal, state, action, item, count, p, ms, [source],
+ * outcome, [reason], [rule]}). action…ms are the model's words (or the rules' done/none/1 with p 0 and source
+ * rules), also on the did/failed line after a fallback; rule is the step the rules did instead.
+ */
+export interface CraftLine {
+    goal: string; state: string; action?: string; item?: string; count?: number; p?: number; ms?: number; source?: 'rules';
+    outcome: CraftOutcome; reason?: string; rule?: { action: string; item: string; count: number };
 }
 
 /** The lease's stop-overrun line (design §4) shares the director's file. */
@@ -154,6 +175,18 @@ export function followLine(i: FollowLogInput): FollowLine {
     };
 }
 
+/** craftLine: the line for one craft step (the job writes it only when log_steps). */
+export function craftLine(i: CraftLogInput): CraftLine {
+    const e = i.entry;
+    return {
+        goal: i.goal, state: i.state,
+        ...(e ? { action: e.action, item: e.item, count: e.count, p: e.p, ms: e.ms, ...(e.source ? { source: e.source } : {}) } : {}),
+        outcome: i.outcome,
+        ...(i.reason ? { reason: i.reason } : {}),
+        ...(i.rule ? { rule: { action: i.rule.action, item: i.rule.item, count: i.rule.count } } : {}),
+    };
+}
+
 /** stamp: the line as written, `time` first (the old `{ time, ...entry }`). */
 export function stamp(line: object, time: Date = new Date()): string {
     return JSON.stringify({ time: time.toISOString(), ...line });
@@ -166,7 +199,7 @@ export class JsonlLog {
 
     file(task: LogTask): string { return path.join(this.dir, `laya-${task}.jsonl`); }
 
-    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | StopOverrunLine | null): void {
+    write(task: LogTask, line: DirectorLine | EatLine | DefendLine | CommandLine | FollowLine | CraftLine | StopOverrunLine | null): void {
         if (!line) return;
         try {
             if (!this.made) { fs.mkdirSync(this.dir, { recursive: true }); this.made = true; }
