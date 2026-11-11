@@ -1129,6 +1129,493 @@
           "cmd": "/effect clear {andy}"
         }
       ]
+    },
+    {
+      "name": "chores-idle-start",
+      "tags": [
+        "chores"
+      ],
+      "timeout": 150000,
+      "description": "Chores on and nothing to do: within 5 s of being idle andy asks for a chore (laya-chores.jsonl, rules until a chores model is served) and runs it as a job of kind chore.",
+      "setup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        }
+      ],
+      "action": [
+        {
+          "andy": "!stop"
+        },
+        {
+          "waitIdle": {
+            "timeout": 15000,
+            "grace": 0,
+            "settle": 500
+          }
+        },
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "waitLog": {
+            "task": "chores",
+            "match": {
+              "event": "ask"
+            }
+          },
+          "timeout": 5000
+        },
+        {
+          "waitFor": {
+            "action": "chore"
+          },
+          "timeout": 5000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ask"
+          }
+        },
+        {
+          "type": "actionSeen",
+          "match": "chore"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "chores-command-interrupt",
+      "tags": [
+        "chores"
+      ],
+      "timeout": 150000,
+      "description": "Andy is doing a chore; tester says \"andy come here\" 10 blocks away. The chore stops at once and he comes (goToPlayer within 3 s, including the command model), and no chore starts while the player's job runs.",
+      "setup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 10
+          }
+        },
+        {
+          "andy": "!layaChores(\"on\")"
+        }
+      ],
+      "action": [
+        {
+          "waitFor": {
+            "action": "chore"
+          },
+          "timeout": 30000
+        },
+        {
+          "say": "andy come here"
+        },
+        {
+          "waitFor": {
+            "action": "goToPlayer"
+          },
+          "timeout": 3000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "actionSeen",
+          "match": "chore"
+        },
+        {
+          "type": "actionSeen",
+          "match": "goToPlayer"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "chores-defend-player",
+      "tags": [
+        "chores",
+        "defend"
+      ],
+      "timeout": 150000,
+      "description": "Andy is doing a chore; tester (survival, resistance II so it survives) stands 12 blocks away and a husk is summoned beside tester. The director answers defend (rule defend-player, v1.2), andy goes to tester and kills the husk, then goes back to chores.",
+      "setup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "site": "base"
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "tp": {
+            "dx": 12
+          }
+        },
+        {
+          "cmd": "/gamemode survival {tester}"
+        },
+        {
+          "cmd": "/effect give {tester} resistance 120 1 true"
+        },
+        {
+          "cmd": "/effect give {tester} regeneration 120 1 true"
+        },
+        {
+          "andy": "!layaChores(\"on\")"
+        }
+      ],
+      "action": [
+        {
+          "waitFor": {
+            "action": "chore"
+          },
+          "timeout": 30000
+        },
+        {
+          "cmd": "/execute at {tester} run summon husk ~1 ~ ~"
+        },
+        {
+          "waitLog": {
+            "task": "director",
+            "match": {
+              "rule": "defend-player"
+            }
+          },
+          "timeout": 20000
+        },
+        {
+          "waitFor": {
+            "entity": "husk",
+            "present": false
+          },
+          "timeout": 90000
+        },
+        {
+          "waitFor": {
+            "action": "chore"
+          },
+          "timeout": 30000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "director",
+          "match": {
+            "rule": "defend-player"
+          }
+        },
+        {
+          "type": "noEntity",
+          "entity": "husk"
+        },
+        {
+          "type": "actionSeen",
+          "match": "defend|attack|laya_defending|self_defense"
+        },
+        {
+          "type": "actionSeen",
+          "match": "chore",
+          "final": true
+        }
+      ],
+      "cleanup": [
+        {
+          "cmd": "/gamemode creative {tester}"
+        },
+        {
+          "cmd": "/kill @e[type=husk,distance=..64]"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "chores-no-trees",
+      "tags": [
+        "chores"
+      ],
+      "timeout": 300000,
+      "description": "Every log within about 30 blocks of andy (the base's chest is his centre, 8 blocks off) is removed and he has no wood. His chore is gather_logs with Near trees 97 (or 193): he says he's going further for wood and comes back with logs. The leaves go too (decaying leaves would drop saplings, and replanting comes first in the spec).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-34} {x-14} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-34} {x-14} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-13} {x-14} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-13} {x-14} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z+8} {x-14} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z+8} {x-14} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-34} {x+7} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-34} {x+7} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-13} {x+7} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-13} {x+7} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z+8} {x+7} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z+8} {x+7} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-34} {x+28} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-34} {x+28} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-13} {x+28} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-13} {x+28} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z+8} {x+28} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z+8} {x+28} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..64]"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "waitLog": {
+            "task": "chores",
+            "match": {
+              "event": "ask",
+              "answer": "gather_logs"
+            }
+          },
+          "timeout": 120000,
+          "idleFail": false
+        },
+        {
+          "waitReply": "going further",
+          "timeout": 30000
+        },
+        {
+          "waitFor": {
+            "item": "oak_log",
+            "min": 1
+          },
+          "timeout": 120000,
+          "optional": true
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ask",
+            "answer": "gather_logs",
+            "state": "/Near trees (97|193)/"
+          }
+        },
+        {
+          "type": "reply",
+          "match": "going further"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "chores-first-day",
+      "tags": [
+        "chores",
+        "slow"
+      ],
+      "timeout": 1500000,
+      "description": "A fresh reset, andy with nothing, the daylight cycle on from sunrise: one Minecraft day (20 minutes) of chores. The report shows how far he got (table, tools, farm, furnace, torches, chest, beds, kit); the checks ask only for the first steps (a table and wooden tools).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/time set 0"
+        },
+        {
+          "cmd": "/gamerule doDaylightCycle true"
+        },
+        {
+          "cmd": "/difficulty easy"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "wait": 1200000
+        },
+        {
+          "snapshot": "day-end"
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ended",
+            "chore": "place_table",
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ended",
+            "chore": "craft_wood_tools",
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "cmd": "/gamerule doDaylightCycle false"
+        },
+        {
+          "cmd": "/time set 1000"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
     }
   ]
 }

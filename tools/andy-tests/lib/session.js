@@ -270,6 +270,7 @@ export class Session {
             const t0 = this.now();
             try {
                 const mind = await this.ensureMind();
+                await this.deps.forgetAgent?.(); // nothing saved from the old world
                 out.andy = await mind.restartAgent({ timeout: andyTimeoutMs, sleep: this.sleep });
             } catch (e) {
                 out.andy = { inGame: false, error: e.message };

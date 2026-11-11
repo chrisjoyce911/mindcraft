@@ -67,7 +67,7 @@ test('timeout: andy still busy fails the idle check', async () => {
     assert.equal(r.status, 'fail');
     assert.match(r.reason, /still busy at the timeout \(action:layaMine\)/);
     assert.ok(r.ms >= 20000 && r.ms < 30000);
-    assert.deepEqual(world.sent[0], { message: '!layaMine("coal", 5)', from: 'tester' });
+    assert.deepEqual(world.sent.filter(s => !/^!layaChores/.test(s.message))[0], { message: '!layaMine("coal", 5)', from: 'tester' });
 });
 
 test('waiting for idle rides over a short idle while a job resumes', async () => {
@@ -100,7 +100,7 @@ test('busy andy gets !stop before the test', async () => {
     const t = one({ name: 'x', action: [{ andy: '!inventory' }], checks: [] });
     const r = await runTest(session, t, { defaults });
     assert.equal(r.status, 'pass', r.reason);
-    assert.deepEqual(world.sent.map(s => s.message), ['!stop', '!inventory']);
+    assert.deepEqual(world.sent.map(s => s.message), ['!layaChores("off")', '!stop', '!inventory']);
 });
 
 test('steps: waitReply, waitFor, snapshot, repeat, chest delta, cleanup after failure', async () => {
@@ -147,7 +147,8 @@ test('runSuite summarises and stops when the mindserver is gone', async () => {
         { name: 'd', action: [{ andy: '!inventory' }], checks: [] },
     ] })).tests;
     let n = 0;
-    world.onMessage = () => { if (++n === 2) session.mind.send = () => { throw new Error('Mindserver not reachable at http://localhost:8090'); }; };
+    // each test sends !layaChores, then its !inventory
+    world.onMessage = () => { if (++n === 4) session.mind.send = () => { throw new Error('Mindserver not reachable at http://localhost:8090'); }; };
     const seen = [];
     const out = await runSuite(session, tests, { defaults, report, onResult: r => seen.push(r.status) });
     assert.deepEqual(seen, ['pass', 'fail', 'error', 'error']);

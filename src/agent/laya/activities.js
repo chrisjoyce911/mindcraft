@@ -1,4 +1,4 @@
-// The director's own activities (eat, heal, unload): the agent runs them as
+// The director's own activities (eat, heal, unload, and defend-player and flee-ranged): the agent runs them as
 // its action ("director:<activity>"). Every wait here checks stopped() at
 // least every STEP_MS, so a mode taking over (laya_defending, unstuck, ...),
 // !stop or the director answering something else ends the activity at once
@@ -62,6 +62,13 @@ export async function performActivity(activity, deps) {
     if (activity === 'unload') {
         if (stopped()) return 'stopped';
         await deps.unload?.();
+        return stopped() ? 'stopped' : 'done';
+    }
+    // defend (v1.2 defend-player: the player's attacker) and flee (v1.2
+    // flee-ranged: away from a skeleton out of the modes' reach)
+    if (activity === 'defend' || activity === 'flee') {
+        if (stopped()) return 'stopped';
+        await deps[activity]?.();
         return stopped() ? 'stopped' : 'done';
     }
     return 'done';

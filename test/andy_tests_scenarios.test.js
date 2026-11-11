@@ -17,7 +17,8 @@ test('the suite file loads, in the planned order, with quick and full tags', () 
         'farm-water', 'farm-no-water', 'farm-bucket', 'mine-coal', 'mine-iron-staircase', 'unload-home-chest', 'defend', 'eat']) assert.ok(names.includes(n), n);
     assert.equal(names[0], 'setup-world');
     assert.ok(names.indexOf('home-chest-sign') < names.indexOf('home-chest-command'), 'the sign test needs no saved home chest');
-    assert.equal(select(tests, { tag: 'full' }).length, tests.length);
+    // every test is in full except the chores ones (chores on: run with --tag chores)
+    assert.equal(select(tests, { tag: 'full' }).length, tests.filter(t => !t.tags.includes('chores')).length);
     const quick = select(tests, { tag: 'quick' }).map(t => t.name);
     assert.ok(quick.length >= 5 && !quick.includes('mine-coal') && !quick.includes('farm-water'));
     for (const t of tests.filter(t => t.tags.includes('slow'))) assert.ok(t.timeout >= 600000, `${t.name} is slow and needs a long timeout`);

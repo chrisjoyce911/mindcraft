@@ -22,7 +22,7 @@ export const DEFAULTS = {
     mine_count: 4,
     craft_count: 1,
     farm_max: 640,         // the most a farm count asks for
-    prompt: 'v1',          // v2: the farm command and crops (a command v2 model); v2.1: animal drops (hunt)
+    prompt: 'v1',          // v2: the farm command and crops (a command v2 model); v2.1: animal drops (hunt); v2.2: chores_on/off
     no_llm: false,         // true: reply with a canned line instead of asking the LLM
     log_decisions: true,
 };
@@ -126,6 +126,12 @@ export function plan(r, ctx) {
             return run(['!stay(-1)'], "I'll stay here.");
         case 'inventory':
             return run(['!inventory']);
+        case 'chores_on': // v2.2: "andy do your chores"
+            if (!has('!layaChores')) return { kind: 'llm', reason: 'no-chores-command' };
+            return run(['!layaChores("on")']);
+        case 'chores_off': // v2.2: "andy take a break"
+            if (!has('!layaChores')) return { kind: 'llm', reason: 'no-chores-command' };
+            return run(['!layaChores("off")']);
         case 'gather': {
             if (item === NONE) {
                 const d = dropIn(ctx.message);

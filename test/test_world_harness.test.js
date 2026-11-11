@@ -138,13 +138,16 @@ test('the site step does nothing on another world; the test runs where andy is',
 
 test('every scenario starts at a site (after an optional world reset), and the file still validates', () => {
     const { tests } = loadScenarios(SCENARIOS);
-    const first = t => t.setup.find(s => !s.reset);
+    // a chores test may first stop andy's own chore, so the site teleport lands
+    const quiet = s => s.reset || s.andy === '!layaChores("off")' || s.andy === '!stop';
+    const first = t => t.setup.find(s => !quiet(s));
     for (const t of tests) assert.ok(first(t)?.site, t.name);
     for (const t of tests) assert.ok(t.setup.findIndex(s => s.reset) <= 0, `${t.name}: a reset comes first`);
     assert.equal(first(tests.find(t => t.name === 'farm-water')).site, 'farm');
     assert.equal(first(tests.find(t => t.name === 'farm-no-water')).site, 'dry');
     assert.equal(first(tests.find(t => t.name === 'mine-coal')).site, 'mine');
-    assert.deepEqual(tests.filter(t => t.setup[0]?.reset).map(t => t.name), ['home-chest-sign', 'mine-coal', 'mine-iron-staircase', 'unload-home-chest']);
+    assert.deepEqual(tests.filter(t => t.setup[0]?.reset).map(t => t.name), ['home-chest-sign', 'mine-coal', 'mine-iron-staircase', 'unload-home-chest',
+        'chores-no-trees', 'chores-first-day']);
 });
 
 test('MCP world tools: start switches to the test world, reset restarts andy, bot start/stop', async () => {
