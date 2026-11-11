@@ -157,6 +157,12 @@ home-chest-chat pass twice each (training held); kill -9 mid-follow ×2 → "job
 it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-tests/bot-rebuild-phase4-2026-11-12.md`.
 
 ## 5. Work jobs (one at a time, gate after each)
+- [x] 5.0 Pin mineflayer 4.39.0 (2026-11-12): `bot/` on mineflayer 4.39.0 + minecraft-data 3.119.0 (override; one copy, also
+  under mineflayer-pvp's mineflayer-utils → mineflayer 2.41.0, which we don't load). `bot/patches/mineflayer+4.39.0.patch` has two
+  hunks: digTime maps `incorrect_for_wooden_tool` → `mineable/pickaxe` (stone/iron pickaxe on ore no longer timed as a hand), and
+  the place blockUpdate wait 5000 → 500 ms. A clean `npm ci` in a scratch copy applies all 4 patches. `bot/test/deps.test.ts`
+  guards the versions, both hunks and the dig times through mineflayer's digging plugin (fails with the patch reversed);
+  npm test 206/206. No live check: no dig/place path in `bot/` yet (5.2/5.5 gates exercise it).
 - [ ] 5.1 craft + gather (craft model, recipes from minecraft-data).
 - [ ] 5.2 mine (mine model v2, mine plan, floor/drop checks, veins, torches, unload at home, mine memory).
 - [ ] 5.3 farm (farm model v2, water, pond, seeds, unload).
