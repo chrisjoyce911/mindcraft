@@ -7,7 +7,8 @@
 //   collect  pick up the food drops (within 16);
 //   search   widen the search square (49 → 97 → 193) around the run's start; nothing moves;
 //   done     the run ends done;  give_up: failed no_source.
-// Bounds: maxSkillSteps(goal) steps (timeout) and the same step on the same state STUCK_REPEATS times (stuck). An
+// Bounds: maxSkillSteps(goal) steps (timeout) and the same step on the same state STUCK_REPEATS times without a
+// kill between (stuck); an animal an attack or approach failed on is left out from then on (progress skipMobs). An
 // abort mid-step counts nothing: the job resumes and decides again. Progress (start, search, steps, kills) is kept in
 // laya-job.json, so a resumed run keeps its search and counts. Items a collect left lying (unreachable) are left out
 // of Drops from then on (progress skip).
@@ -17,7 +18,7 @@ import { widerSearch, type Search } from '../models/skill/index.js';
 import { clampHave, dropsSeen, groundOf, huntAnimals, isHuntFood, nearestTo, preyOf, type Creature, type GroundItem, type XZ } from '../sensors/skills.js';
 import type { JobDeps, JobOf } from './deps.js';
 import { jobFailedMessage } from './message.js';
-import { collectAndSkip, maxSkillSteps, repeated, skillDone, skillFailed, skillLogger, skillSettings, type Repeat } from './skill.js';
+import { collectAndSkip, maxSkillSteps, repeated, skillDone, skillFailed, skillLogger, skillSettings, skipSource, worked, type Repeat } from './skill.js';
 import { skillWorld } from './skillWorld.js';
 
 /** What the hunt skill needs of the world (skillWorld builds it from the actuators; tests pass fakes). */
@@ -44,6 +45,8 @@ export interface HuntFoodProgress {
     repeat?: Repeat;
     /** Ground items a collect couldn't pick up: left out of Drops. */
     skip?: number[];
+    /** Animals an attack or approach failed on (unreachable): left out of Animals (entity ids, cleared on a restore). */
+    skipMobs?: number[];
 }
 
 /** huntFoodStep: one step of the hunt skill. */
@@ -59,11 +62,12 @@ export async function huntFoodStep(job: JobOf<'huntFood'>, w: HuntFoodWorld, dep
     p.kills ??= 0;
     const failed = (reason: Parameters<typeof skillFailed>[0]) => skillFailed(reason, jobFailedMessage(spec, reason));
     const ground = () => w.ground().filter(g => !(p.skip ?? []).includes(g.id));
+    const creatures = () => w.creatures().filter(c => !(p.skipMobs ?? []).includes(c.id));
     const near = () => groundOf(w.me(), ground(), n => isHuntFood(n, w.isFood), PICKUP);
     const have = () => w.items().filter(i => isHuntFood(i.name, w.isFood)).reduce((n, i) => n + i.count, 0) + (spec.chest ?? 0);
     const sit: HuntSituation = {
         goal: clampHave(Math.max(1, spec.goal)), have: clampHave(have()), search: p.search,
-        animals: huntAnimals(me, p.origin, p.search, w.creatures()),
+        animals: huntAnimals(me, p.origin, p.search, creatures()),
         drops: dropsSeen(me, ground(), n => isHuntFood(n, w.isFood)),
     };
     if (p.steps >= maxSkillSteps(spec.goal) && sit.have < sit.goal) return failed('timeout');
@@ -88,11 +92,13 @@ export async function huntFoodStep(job: JobOf<'huntFood'>, w: HuntFoodWorld, dep
         case 'search': p.search = widerSearch(p.search)!; break;
         case 'collect': await collectAndSkip(p, near, w.collect, signal); break;
         case 'attack': case 'approach': {
-            const c = nearestTo(me, preyOf(step.target, p.origin, p.search, w.creatures()));
+            const c = nearestTo(me, preyOf(step.target, p.origin, p.search, creatures()));
             if (!c) { o = { ok: false, reason: 'no-block', detail: `no ${step.target}` }; break; }
-            if (step.action === 'approach') { o = await w.approach(c.position, signal); break; }
-            o = await w.kill(c, signal);
-            if (o.ok) { p.kills++; await collectAndSkip(p, near, w.collect, signal); }
+            o = step.action === 'approach' ? await w.approach(c.position, signal) : await w.kill(c, signal);
+            if (signal.aborted || (!o.ok && o.reason === 'cancelled')) break;
+            // an animal andy couldn't reach or kill is left out from now on (the old bot's skip), so the next is tried
+            if (!o.ok) { p.skipMobs = skipSource(p.skipMobs, c.id); break; }
+            if (step.action === 'attack') { p.kills++; worked(p); await collectAndSkip(p, near, w.collect, signal); }
             break;
         }
     }

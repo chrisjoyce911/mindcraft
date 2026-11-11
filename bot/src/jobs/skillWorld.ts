@@ -7,12 +7,15 @@ import { killEntity } from '../actuators/hunt.js';
 import { digAt, pickupNearby, REACH_TIMEOUT_MS } from '../actuators/collect.js';
 import { goNear } from '../actuators/approach.js';
 import { hold } from '../actuators/equip.js';
-import { placeAt } from '../actuators/place.js';
-import { wait } from '../actuators/settle.js';
+import { placeAt, takeBack } from '../actuators/place.js';
+import { withdraw } from '../actuators/chest.js';
+import { HOME_PLACE, isChest } from '../home/chest.js';
+import { chestItemsForUse } from '../home/kit.js';
+import { settle, wait } from '../actuators/settle.js';
 import { baseCentre } from '../home/centre.js';
 import type { PlaceBook } from '../home/places.js';
 import type { Search } from '../models/skill/index.js';
-import { inSearch, isLog, type Creature, type GroundItem, type Tree, type XZ } from '../sensors/skills.js';
+import { inSearch, isLog, isPlaceItemName, type Creature, type GroundItem, type Tree, type XZ } from '../sensors/skills.js';
 import type { HuntFoodWorld } from './huntFood.js';
 import type { GatherSkillWorld } from './gatherSkill.js';
 import type { PlaceWorld } from './place.js';
@@ -23,6 +26,8 @@ export const DROP_WAIT_MS = 500;
 export const COLLECT_RANGE = 16;
 /** Approaching stops this near. */
 export const APPROACH_RANGE = 2;
+/** Grass is dug from this near (the old getSeeds' goNear 3). */
+export const GRASS_REACH = 3;
 /** Logs and grass are looked for at most this many. */
 export const FIND_MAX = 1024;
 const SHEARED = 0x10;
@@ -45,7 +50,7 @@ function findIn(a: Act, names: readonly string[], origin: XZ, search: Search): V
 
 const centre = (p: Vec3Like) => ({ x: p.x + 0.5, y: p.y + 0.5, z: p.z + 0.5 });
 
-export function skillWorld(a: Act, places?: PlaceBook): HuntFoodWorld & GatherSkillWorld & PlaceWorld {
+export function skillWorld(a: Act, places?: PlaceBook, note: (text: string) => void = () => {}): HuntFoodWorld & GatherSkillWorld & PlaceWorld {
     const collect = async (signal: AbortSignal) => {
         if (!(await wait(DROP_WAIT_MS, signal))) return 0;
         return pickupNearby(a, signal, COLLECT_RANGE);
@@ -91,7 +96,9 @@ export function skillWorld(a: Act, places?: PlaceBook): HuntFoodWorld & GatherSk
             return dug > 0 ? { ok: true } : { ok: false, reason: 'unreachable', detail: 'no log of the tree dug' };
         },
         dig: async (p, signal) => {
-            const reach = await a.motion.goTo(a.goals.lookAt(p), signal, { timeoutMs: REACH_TIMEOUT_MS });
+            // grass has no collision box, so a look-at goal is never met (the pathfinder times out deciding): go
+            // within GRASS_REACH as the old getSeeds did, then dig
+            const reach = await goNear(a, p, GRASS_REACH, signal);
             if (!reach.ok) return reach;
             const o = await digAt(a, p, signal);
             if (!o.ok) return o;
@@ -111,13 +118,19 @@ export function skillWorld(a: Act, places?: PlaceBook): HuntFoodWorld & GatherSk
             await collect(signal);
             return { ok: true };
         },
-        carried: (item: PlaceItem) => {
-            const names = a.bot.items().map(i => i.name);
-            switch (item) {
-                case 'bed': return names.find(n => n.endsWith('_bed')) ?? null;
-                case 'saplings': return names.find(n => n.endsWith('_sapling')) ?? null;
-                default: return names.includes(item) ? item : null;
-            }
+        carried: (item: PlaceItem) => a.bot.items().map(i => i.name).find(n => isPlaceItemName(item, n)) ?? null,
+        fetch: async (item: PlaceItem, signal) => {
+            const h = places?.recall(HOME_PLACE);
+            if (!h) return null;
+            const at = { x: Math.floor(h[0]), y: Math.floor(h[1]), z: Math.floor(h[2]) };
+            const b = a.bot.blockAt(at.x, at.y, at.z);
+            if (b && !isChest(b)) return null; // the home chest is gone
+            const r = await withdraw(a, at, items => {
+                const usable = chestItemsForUse(items, true, n => a.bot.isFood(n)).find(i => i.count > 0 && isPlaceItemName(item, i.name));
+                return usable ? { name: usable.name, count: 1 } : { why: `no ${item} in the home chest` };
+            }, signal);
+            if (!r.ok) note(`place skill: no ${item} from the home chest: ${r.why ?? `${r.outcome.ok ? '' : r.outcome.reason}${!r.outcome.ok && r.outcome.detail ? ` (${r.outcome.detail})` : ''}`}`);
+            return r.ok ? r.name : null;
         },
         centre: () => baseCentre(places ?? { all: () => ({}), recall: () => null, remember: () => {}, forget: () => {} }, a.bot.entity.position),
         blockAt: (x, y, z) => a.bot.blockAt(x, y, z),
@@ -129,14 +142,25 @@ export function skillWorld(a: Act, places?: PlaceBook): HuntFoodWorld & GatherSk
                 await a.motion.goTo(a.goals.invert(a.goals.near(centre(p), STAND_OFF + 1)), signal, { timeoutMs: 5000 });
                 if (signal.aborted) return { ok: false, reason: 'cancelled' };
             }
-            // a bed faces the way andy looks: stand west of the cell, so the head goes on the east one
+            // a bed faces the way andy looks: stand west of the cell, so the head goes on the east one; a failed walk
+            // there would place it facing some other way, onto a cell the rules never read
             if (item === 'bed') {
-                await a.motion.goTo(a.goals.near({ x: p.x - 2, y: p.y, z: p.z }, 1), signal, { timeoutMs: 10000 });
-                if (signal.aborted) return { ok: false, reason: 'cancelled' };
+                const west = await a.motion.goTo(a.goals.near({ x: p.x - 2, y: p.y, z: p.z }, 1), signal, { timeoutMs: 10000 });
+                if (signal.aborted || (!west.ok && west.reason === 'cancelled')) return { ok: false, reason: 'cancelled' };
+                if (!west.ok) return { ok: false, reason: 'unreachable', detail: `west of the bed cell: ${west.reason}` };
             }
             const ok = await placeAt(a, name, p, 'bottom', signal);
             if (signal.aborted) return { ok: false, reason: 'cancelled' };
-            return ok ? { ok: true } : { ok: false, reason: 'error', detail: `${name} not placed` };
+            if (!ok) return { ok: false, reason: 'error', detail: `${name} not placed` };
+            // the head must be on the east cell; else take the bed back (it is never left wrong or thrown away)
+            // (the head is its own block update: wait for it a moment)
+            if (item === 'bed' && !(await settle(() => a.bot.blockAt(p.x + 1, p.y, p.z)?.name === name, { ms: 1000, quiet: 0, signal }))) {
+                if (signal.aborted) return { ok: false, reason: 'cancelled' };
+                const head = ([['W', -1, 0], ['N', 0, -1], ['S', 0, 1]] as const).find(([, dx, dz]) => a.bot.blockAt(p.x + dx, p.y, p.z + dz)?.name === name)?.[0] ?? 'none';
+                const back = await takeBack(a, p, name, signal);
+                return { ok: false, reason: 'error', detail: `the bed's head is not east (${head})${back ? ', taken back' : ', could not take it back'}` };
+            }
+            return { ok: true };
         },
     };
 }

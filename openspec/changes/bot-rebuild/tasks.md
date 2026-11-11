@@ -239,8 +239,18 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
   per skill (state, options, rules, harmful), sensor and loop tests; npm test 455/455. Live: 4 skill scenarios ≥ 2×
   each, gate 9/9 with the regression set, !stop, defend mid-gather and kill -9 resume by hand. Report
   `bots/andy/logs/game-tests/bot-rebuild-5.5-2026-11-12.md`. The served hunt v1 model never answers done (keeps
-  hunting past the goal): the tasks stay off in settings.js until laya-go fixes it. Left for 5.6: chores calls the
-  jobs (purpose chore, chest counts), the real base centre, the director's Job words for the new kinds.
+  hunting past the goal): the tasks stay off in settings.js until laya-go fixes it.
+  Review fixes (2026-11-12): the place grid's floor range is ±1 (solid at head height and a drop of 2 are `#`); the
+  stuck count starts again after a cut, shear or kill that worked, and seeds get 16 steps per item (live: 8 seeds in
+  111 steps); a tree, grass or animal an act failed on is left out of Source/Animals (positions kept, entity ids
+  cleared on a restore); a bed re-reads its east cell, fails stuck when the walk west fails, and is taken back unless
+  its head is east; place takes a missing item from the home chest (not the kit; live: a bed from the chest, facing
+  east); seeds dig from within 3 (a look-at goal on grass never ends); takeBack waits for the drop's pickup delay; placeAt
+  digs leaf litter, petals and flowers first (a torch on a leaf-litter cell failed). npm test 460/460; gate 8/9: the
+  4 skill scenarios and the regressions pass except craft-furnace, where the served craft model now answers
+  `gather log` with cobblestone and a table (p 0.84; for laya-go, not this change).
+  Left for 5.6: chores calls the jobs (purpose chore, chest counts), the real base centre, the director's Job words
+  for the new kinds, and the gather skill recording stumps (chores state `stumps`) for replanting.
 - [ ] 5.6 chores v2 (skills-spec v1 §1): Carry/Chest/Made/Kit, Last from the run lines; answers map 1:1 to skill jobs
       or rules actuators (cook, store, sleep, ask, rest). Chores v1.1 stays available as the stopgap until v2 is
       served.

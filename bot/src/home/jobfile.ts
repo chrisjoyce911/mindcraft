@@ -212,6 +212,16 @@ export class JobSaver {
 }
 
 /** What to do with the saved jobs after a restart: which go back on the stack, what andy says, the console lines. */
+/**
+ * forgetIds: a restored job's progress without the entity ids it kept (the skill jobs' skip and skipMobs): after a
+ * restart the server hands out new ids, so an old id could hide an unrelated new item or animal. Positions stay.
+ */
+export function forgetIds(progress: unknown): unknown {
+    if (!progress || typeof progress !== 'object' || Array.isArray(progress)) return progress;
+    const { skip: _skip, skipMobs: _mobs, ...rest } = progress as Record<string, unknown>;
+    return rest;
+}
+
 export interface RestorePlan { restore: SavedJob[]; say: string[]; notes: string[] }
 
 /**
@@ -232,7 +242,7 @@ export function planRestore(loaded: LoadedJobs | null, canRun: (j: SavedJob) => 
         if (j.spec.kind === 'give' && p && typeof p === 'object' && (p.tossed || p.tossing)) {
             plan.notes.push(`restart: job give dropped (already tossed)`);
         } else if (loaded.fresh && canRun(j)) {
-            plan.restore.push(j);
+            plan.restore.push(j.spec.kind === 'huntFood' || j.spec.kind === 'gatherSkill' ? { ...j, progress: forgetIds(j.progress) } : j);
             plan.notes.push(`restart: job ${j.spec.kind} restored`);
         } else {
             plan.notes.push(`restart: job ${j.spec.kind} lost (${loaded.fresh ? 'no runner' : `saved ${Math.round((now - loaded.savedAt) / 1000)} s ago`})`);

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    CELL_TABLE, LIT_OFFSETS, columnCell, dirOf, dropsSeen, gatherCount, gridOffsets, huntAnimals, inSearch, litPoints, placeGrid,
+    CELL_TABLE, FLOOR_RANGE, LIT_OFFSETS, columnCell, dirOf, dropsSeen, gatherCount, gridOffsets, huntAnimals, inSearch, litPoints, placeGrid,
     seenOf, treesOf, type Creature, type GridBlock,
 } from '../src/sensors/skills.js';
 
@@ -87,6 +87,9 @@ test('grid cells: floors by surface and light, the CELL_TABLE things, walls, dro
         '14,64,0': B('oak_leaves'), '15,64,0': B('stone'), '15,65,0': B('stone'), '15,66,0': B('stone'),
         '16,64,0': B('short_grass', 'empty'), '17,63,0': B('air', 'empty'), '17,62,0': B('air', 'empty'), '17,61,0': B('air', 'empty'), '17,60,0': B('air', 'empty'),
         '18,64,0': B('stone'), '19,64,0': B('oak_fence'),
+        '20,64,0': B('air', 'empty'), '20,65,0': B('stone'),
+        '21,63,0': B('air', 'empty'), '21,62,0': B('air', 'empty'), '21,61,0': B('stone'),
+        '22,63,0': B('air', 'empty'), '22,62,0': B('stone'),
     });
     const cell = (x: number) => columnCell(at, x, 0, 64).cell;
     assert.deepEqual(columnCell(at, 0, 0, 64), { cell: '.', feet: 64 });
@@ -96,6 +99,10 @@ test('grid cells: floors by surface and light, the CELL_TABLE things, walls, dro
     assert.deepEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(cell).join(''), '~f=CTFBtss##'); // a trunk is s, leaves and a wall #
     assert.equal(cell(16), '.'); // looked through the grass
     assert.equal(cell(17), '#'); // a drop: no floor within 2 below
+    assert.equal(FLOOR_RANGE, 1);
+    assert.equal(cell(20), '#'); // solid at head height (cy+1): a wall, not a 2-block step
+    assert.equal(cell(21), '#'); // a drop of 2 (floor at cy-3)
+    assert.deepEqual(columnCell(at, 22, 0, 64), { cell: ':', feet: 63 }); // a drop of 1 is a floor
     assert.deepEqual(columnCell(at, 18, 0, 64), { cell: ':', feet: 65 }); // a step up
     assert.equal(cell(19), '#');
     assert.equal(columnCell(at, 99, 0, 64).cell, '#'); // not loaded

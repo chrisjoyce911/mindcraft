@@ -59,6 +59,9 @@ export async function placeStation(a: Act, name: string, signal: AbortSignal, ra
     return placed ? { ok: true, at: spot } : { ok: false, outcome: fail('error', `${name} not placed`) };
 }
 
+/** The wait after digging a placed block before picking it up (the item's pickup delay). */
+export const TAKE_BACK_WAIT_MS = 600;
+
 /** takeBack digs a station andy placed and picks it up; false when it couldn't (then it stays where it is). */
 export async function takeBack(a: Act, at: Vec3Like, name: string, signal: AbortSignal): Promise<boolean> {
     if (a.bot.blockAt(at.x, at.y, at.z)?.name !== name) return false;
@@ -70,6 +73,8 @@ export async function takeBack(a: Act, at: Vec3Like, name: string, signal: Abort
     await hold(a.bot, a.bot.bestTool(at));
     const dug = await digAt(a, at, signal);
     if (!dug.ok) return false;
+    // a broken block's item can't be picked up for about 10 ticks: walking to it at once finds it still lying there
+    if (!(await wait(TAKE_BACK_WAIT_MS, signal))) return false;
     await pickupNearby(a, signal);
     return settle(() => a.bot.items().filter(i => i.name === name).reduce((n, i) => n + i.count, 0) > before, { ms: 1000, quiet: 0, signal });
 }
@@ -87,10 +92,13 @@ const SIDE: Readonly<Record<PlaceOn, Vec3Like>> = {
 const REPLACEABLE = new Set(['air', 'cave_air', 'water', 'lava', 'grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern',
     'seagrass', 'tall_seagrass', 'bubble_column']);
 /**
- * Fluid-cell plants a place digs first (the old placeBlock broke a target in the way, then waited 200 ms): kelp is
- * not replaceable. Anything else in the way (an ore, stone) is never dug for a place.
+ * Plants a place digs first (the old placeBlock broke a target in the way, then waited 200 ms): kelp in a fluid cell,
+ * and the floor plants the place grid looks through that vanilla won't place over (leaf litter, petals, flowers).
+ * Anything else in the way (an ore, stone) is never dug for a place.
  */
-const DIG_FIRST = new Set(['kelp', 'kelp_plant']);
+export const DIG_FIRST = new Set(['kelp', 'kelp_plant', 'leaf_litter', 'pink_petals', 'wildflowers',
+    'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip',
+    'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'torchflower', 'open_eyeblossom', 'closed_eyeblossom']);
 
 /** placed: the block at the target is what placing item makes (a torch on a wall is a wall_torch). */
 const placedAs = (item: string, name: string | undefined) => !!name && (name === item || name === item.replace('torch', 'wall_torch'));

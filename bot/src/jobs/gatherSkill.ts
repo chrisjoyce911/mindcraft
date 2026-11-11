@@ -9,8 +9,10 @@
 //   search   widen the search square;   done: ends done;   give_up: failed full (no free slot) or no_source.
 // Sources: logs → trees (a log with leaves beside it, by column: sensors treesOf); seeds → short/tall grass; wool →
 // adult sheep (unsheared ones when shears are carried: a sheared sheep can't be shorn again); saplings → sapling items
-// on the ground (the source is the drops). Never tosses anything. Bounds, resume and the skipped (unreachable) ground
-// items as the hunt skill.
+// on the ground (the source is the drops). Never tosses anything. Resume and the skipped (unreachable) ground items as
+// the hunt skill. A tree, grass or sheep an act failed on is left out of Source from then on (progress skipAt,
+// skipMobs). A cut, shear or kill that worked starts the stuck count again (a cut grass mostly drops no seed); seeds
+// get SEED_STEPS_PER_ITEM steps per item (gatherSteps).
 import type { JobStepper, Outcome, StepResult, Vec3Like } from '../types/index.js';
 import { decideGatherStep, PICKUP, type GatherGoal, type GatherSituation } from '../models/gather/index.js';
 import { UNSEEN, widerSearch, type Search } from '../models/skill/index.js';
@@ -20,7 +22,10 @@ import {
 } from '../sensors/skills.js';
 import type { JobDeps, JobOf } from './deps.js';
 import { jobFailedMessage } from './message.js';
-import { collectAndSkip, maxSkillSteps, repeated, skillDone, skillFailed, skillLogger, skillSettings, type Repeat } from './skill.js';
+import {
+    collectAndSkip, maxSkillSteps, posKey, repeated, SEED_STEPS_PER_ITEM, skillDone, skillFailed, skillLogger, skillSettings, skipSource,
+    STEPS_PER_ITEM, worked, type Repeat,
+} from './skill.js';
 import { skillWorld } from './skillWorld.js';
 
 /** What the gather skill needs of the world (skillWorld builds it from the actuators; tests pass fakes). */
@@ -53,16 +58,25 @@ export interface GatherSkillProgress {
     repeat?: Repeat;
     /** Ground items a collect couldn't pick up: left out of Drops (and of the saplings source). */
     skip?: number[];
+    /** Trees (base) and grass an act failed on (unreachable): left out of Source ("x,y,z"; kept on a restore). */
+    skipAt?: string[];
+    /** Sheep a shear, kill or approach failed on: left out of Source (entity ids, cleared on a restore). */
+    skipMobs?: number[];
 }
+
+/** The gather run's step bound: seeds drop about 1 cut in 8, so seeds get more steps per item. */
+export const gatherSteps = (goal: GatherGoal, n: number): number => maxSkillSteps(n, goal === 'seeds' ? SEED_STEPS_PER_ITEM : STEPS_PER_ITEM);
 
 const shears = (items: readonly { name: string }[]) => items.some(i => i.name === 'shears');
 
 /** sources: the goal's sources in the search (positions, and the things themselves for the act). */
-function sources(goal: GatherGoal, w: GatherSkillWorld, ground: () => GroundItem[], origin: XZ, search: Search, withShears: boolean): { at: Vec3Like; tree?: Tree; creature?: Creature }[] {
+function sources(goal: GatherGoal, w: GatherSkillWorld, ground: () => GroundItem[], creatures: () => Creature[], skipAt: readonly string[],
+    origin: XZ, search: Search, withShears: boolean): { at: Vec3Like; tree?: Tree; creature?: Creature }[] {
+    const kept = (p: Vec3Like) => !skipAt.includes(posKey(p));
     switch (goal) {
-        case 'logs': return treesOf(w.logs(origin, search), p => w.leavesBeside(p)).filter(t => inSearch(origin, t.base, search)).map(t => ({ at: t.base, tree: t }));
-        case 'seeds': return w.grass(origin, search).filter(p => inSearch(origin, p, search)).map(p => ({ at: p }));
-        case 'wool': return w.creatures().filter(c => c.name === 'sheep' && !c.baby && (!withShears || !c.sheared) && inSearch(origin, c.position, search))
+        case 'logs': return treesOf(w.logs(origin, search), p => w.leavesBeside(p)).filter(t => inSearch(origin, t.base, search) && kept(t.base)).map(t => ({ at: t.base, tree: t }));
+        case 'seeds': return w.grass(origin, search).filter(p => inSearch(origin, p, search) && kept(p)).map(p => ({ at: p }));
+        case 'wool': return creatures().filter(c => c.name === 'sheep' && !c.baby && (!withShears || !c.sheared) && inSearch(origin, c.position, search))
             .map(c => ({ at: c.position, creature: c }));
         case 'saplings': return ground().filter(i => gatherItem('saplings', i.item) && inSearch(origin, i.position, search)).map(i => ({ at: i.position }));
     }
@@ -82,16 +96,17 @@ export async function gatherSkillStep(job: JobOf<'gatherSkill'>, w: GatherSkillW
     const items = w.items();
     const withShears = shears(items);
     const ground = () => w.ground().filter(g => !(p.skip ?? []).includes(g.id));
+    const creatures = () => w.creatures().filter(c => !(p.skipMobs ?? []).includes(c.id));
     // what a collect is for: the goal's drops within reach (saplings: the source, which is the drops)
     const near8 = () => groundOf(w.me(), ground(), n => gatherDrop(goal, n), PICKUP);
-    const src = sources(goal, w, ground, p.origin, p.search, withShears);
+    const src = sources(goal, w, ground, creatures, p.skipAt ?? [], p.origin, p.search, withShears);
     const sit: GatherSituation = {
         goal, want: clampHave(Math.max(1, spec.goal)), have: clampHave(gatherCount(goal, items) + (spec.chest ?? 0)),
         source: seenOf(me, src.map(x => x.at)),
         drops: goal === 'saplings' ? { ...UNSEEN } : dropsSeen(me, ground(), n => gatherDrop(goal, n)),
         shears: withShears, free: clampFree(w.free()), search: p.search,
     };
-    if (p.steps >= maxSkillSteps(spec.goal) && sit.have < sit.want) return failed('timeout');
+    if (p.steps >= gatherSteps(goal, spec.goal) && sit.have < sit.want) return failed('timeout');
     const d = await decideGatherStep(sit, s.model, s.min_confidence);
     if (signal.aborted) return { how: 'more' };
     const line = { purpose: job.origin, goal: `${goal} ${sit.want}`, ...d };
@@ -112,23 +127,38 @@ export async function gatherSkillStep(job: JobOf<'gatherSkill'>, w: GatherSkillW
     const near = nearestTo(me, src.map(x => ({ ...x, position: x.at })));
     const none: Outcome = { ok: false, reason: 'no-block', detail: `no ${goal} source` };
     let o: Outcome = { ok: true };
+    // the source the act is on (a failed act leaves it out from now on: the old gatherLogs/getSeeds' continue)
+    let on: { at?: Vec3Like; mob?: number } | null = null;
     switch (a) {
         case 'search': p.search = widerSearch(p.search)!; break;
         case 'collect': await collectAndSkip(p, near8, w.collect, signal); break;
-        case 'approach': o = near ? await w.approach(near.at, signal) : none; break;
+        case 'approach':
+            on = near ? (near.creature ? { mob: near.creature.id } : { at: near.at }) : null;
+            o = near ? await w.approach(near.at, signal) : none;
+            break;
         case 'cut':
-            if (goal === 'logs') o = near?.tree ? await w.fell(near.tree, signal) : none;
-            else if (goal === 'seeds') o = near ? await w.dig(near.at, signal) : none;
+            if (goal === 'logs') { on = near?.tree ? { at: near.tree.base } : null; o = near?.tree ? await w.fell(near.tree, signal) : none; }
+            else if (goal === 'seeds') { on = near ? { at: near.at } : null; o = near ? await w.dig(near.at, signal) : none; }
             else o = { ok: false, reason: 'error', detail: `cut for ${goal}` };
             break;
-        case 'shear': o = near?.creature && withShears ? await w.shear(near.creature, signal) : none; break;
+        case 'shear':
+            on = near?.creature && withShears ? { mob: near.creature.id } : null;
+            o = near?.creature && withShears ? await w.shear(near.creature, signal) : none;
+            break;
         case 'kill': {
             // a kill takes any adult sheep (rules v1 kill only without shears, leaving two)
-            const c = nearestTo(me, w.creatures().filter(c => c.name === 'sheep' && !c.baby && inSearch(p.origin!, c.position, p.search!)));
+            const c = nearestTo(me, creatures().filter(c => c.name === 'sheep' && !c.baby && inSearch(p.origin!, c.position, p.search!)));
+            on = c ? { mob: c.id } : null;
             o = c ? await w.kill(c, signal) : none;
             if (o.ok) await collectAndSkip(p, near8, w.collect, signal);
             break;
         }
+    }
+    if (!signal.aborted && on && !(!o.ok && o.reason === 'cancelled')) {
+        if (!o.ok) {
+            if (on.at) p.skipAt = skipSource(p.skipAt, posKey(on.at));
+            if (on.mob !== undefined) p.skipMobs = skipSource(p.skipMobs, on.mob);
+        } else if (a === 'cut' || a === 'shear' || a === 'kill') worked(p);
     }
     if (signal.aborted || (!o.ok && o.reason === 'cancelled')) return { how: 'more' };
     p.steps++;

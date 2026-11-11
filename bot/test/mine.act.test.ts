@@ -105,7 +105,7 @@ test('collectOreAt: every goTo it makes is safe, the drop fetch too', async () =
     for (const g of goals as { opts?: { safe?: boolean } }[]) assert.equal(g.opts?.safe, true, `safe: ${JSON.stringify(g)}`);
 });
 
-test('placeAt: a block into a seagrass or bubble column cell (replaced), and into kelp (dug first)', async () => {
+test('placeAt: a block into a seagrass or bubble column cell (replaced), and into kelp or leaf litter (dug first)', async () => {
     const { w } = oreWorld();
     w.items.push({ name: 'cobblestone', count: 3 });
     w.blocks['0,64,1'] = { name: 'seagrass', boundingBox: 'empty' };
@@ -121,6 +121,12 @@ test('placeAt: a block into a seagrass or bubble column cell (replaced), and int
     assert.equal(await placeAt(w.act, 'cobblestone', { x: -1, y: 64, z: 1 }, 'bottom', new AbortController().signal), true);
     assert.ok(w.calls.some(c => c.what === 'dig' && c.arg === '-1,64,1'), 'the kelp dug');
     assert.equal(w.blocks['-1,64,1']?.name, 'cobblestone');
+    // leaf litter on a floor cell (5.5 place skill): vanilla won't place over it, so it is dug first
+    w.act.bot.dig = async p => { await dig(p); w.blocks[`${p.x},${p.y},${p.z}`] = { name: 'air', boundingBox: 'empty' }; };
+    w.items.push({ name: 'cobblestone', count: 1 });
+    w.blocks['0,64,1'] = { name: 'leaf_litter', boundingBox: 'empty' };
+    assert.equal(await placeAt(w.act, 'cobblestone', { x: 0, y: 64, z: 1 }, 'bottom', new AbortController().signal), true);
+    assert.ok(w.calls.some(c => c.what === 'dig' && c.arg === '0,64,1'), 'the leaf litter dug');
 });
 
 test('placeAt: a torch on the wall (against it) or on the floor; a block into lava', async () => {

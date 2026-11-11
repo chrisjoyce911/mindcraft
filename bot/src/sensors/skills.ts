@@ -101,6 +101,14 @@ export function gatherItem(goal: GatherGoal, name: string): boolean {
     }
 }
 /** gatherDrop: a ground item is the goal's drop (logs: logs only). */
+/** isPlaceItemName: a carried or chest item is the place item (a bed: any colour; saplings: any kind, the propagule too). */
+export function isPlaceItemName(item: PlaceItem, name: string): boolean {
+    switch (item) {
+        case 'bed': return name.endsWith('_bed');
+        case 'saplings': return gatherItem('saplings', name);
+        default: return name === item;
+    }
+}
 export const gatherDrop = (goal: GatherGoal, name: string): boolean => goal === 'logs' ? isLog(name) : gatherItem(goal, name);
 
 /** isLog: a log or stem (not stripped wood blocks' "wood"). */
@@ -200,8 +208,11 @@ const PASSABLE = new Set(['air', 'cave_air', 'void_air', 'short_grass', 'grass',
 const passable = (b: GridBlock): boolean => PASSABLE.has(b.name) || (b.boundingBox === 'empty' && !CELL_TABLE.some(r => r.test(b.name)));
 /** A cell is dark when the block light where one stands is below 8 (chores' darkSpot). */
 export const DARK_BELOW = 8;
-/** How far up and down from the centre's feet height a floor is looked for. */
-export const FLOOR_RANGE = 2;
+/**
+ * How far up and down from the centre's feet height a floor is looked for: a step up of 1 or a drop of 1 (spec
+ * v1 §4: '#' is solid at head height or a drop > 1). The scan runs cy+1 … cy−2, so a solid block at cy+1 is a wall.
+ */
+export const FLOOR_RANGE = 1;
 
 /** A column's cell and, for a floor, the y of the cell one stands in (where the item goes). */
 export interface ColumnCell { cell: Cell; feet: number | null }

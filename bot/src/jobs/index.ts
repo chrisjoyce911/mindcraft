@@ -28,10 +28,10 @@ export { farmWorld } from './farmWorld.js';
 export { huntRunner, huntStep, maxTries, type HuntWorld, type HuntProgress, type HuntRunContext } from './hunt.js';
 export { huntWorld } from './huntWorld.js';
 export { huntFoodRunner, huntFoodStep, type HuntFoodWorld, type HuntFoodProgress } from './huntFood.js';
-export { gatherSkillRunner, gatherSkillStep, type GatherSkillWorld, type GatherSkillProgress } from './gatherSkill.js';
+export { gatherSkillRunner, gatherSkillStep, gatherSteps, type GatherSkillWorld, type GatherSkillProgress } from './gatherSkill.js';
 export { placeRunner, placeStep, type PlaceWorld } from './place.js';
 export { skillWorld } from './skillWorld.js';
-export { STUCK_REPEATS, maxSkillSteps } from './skill.js';
+export { STUCK_REPEATS, SEED_STEPS_PER_ITEM, STEPS_PER_ITEM, maxSkillSteps } from './skill.js';
 
 export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
     const s = job.spec;
