@@ -211,7 +211,17 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
   farm-water, farm-no-water, farm-bucket 4/4 in runs 5–8 (7, 8 on the final code); regression 9/9; kill -9 resume (10 → 21 harvested),
   !stop, defend interrupt and unload keeping 16 seeds by hand. Report `bots/andy/logs/game-tests/bot-rebuild-5.3-2026-11-12.md`.
   The minutes goal (`!layaFarm(minutes)`, chores tend_farm) is 5.6's.
-- [ ] 5.4 hunt.
+- [x] 5.4 hunt.
+  (2026-11-12) `bot/src/jobs/hunt.ts`: `huntStep`, one old huntUntil iteration per job step (the drop's count reached →
+  done "Hunted N cow: I have n beef."; attack (item null) after one kill → done "Successfully killed pig."; count*3+4
+  tries → failed; none within 24 → pick up, then done or failed 'none near' / "Could not find any X to attack."); an
+  abort mid-kill counts nothing, a failed kill counts a try. Progress `{target, kills, tries}`: target fixed on the
+  first step and checkpointed, so a resumed hunt adds no more. `actuators/hunt.ts`: `nearestMob` (HUNT_RANGE 24) and
+  `killEntity` (loops fight() with the signal, not pvp; 30 s ceiling; a strike gap), `jobs/huntWorld.ts` (pickup
+  after each kill). No model (the hunt skill model is 5.5). Old huntUntil test ported + resume/abort/attack/wool/
+  timeout/director/jobfile tests; npm test 423/423. Live: hunt-beef, hunt-none-near, attack-legacy 3/3 twice; regression
+  7/7; kill -9 resume (target 6 kept, ended at 8), !stop and defend interrupt by hand. Report
+  `bots/andy/logs/game-tests/bot-rebuild-5.4-2026-11-12.md`. Not ported: the water-mob self_preservation pause.
 - [ ] 5.5 hunt, gather and place skill jobs (design §11, skills-spec v1 §2–4): renderer, questions, typed answer, rules v1, golden test, a
       game scenario each. They run on rules v1 until laya-go serves the models.
 - [ ] 5.6 chores v2 (skills-spec v1 §1): Carry/Chest/Made/Kit, Last from the run lines; answers map 1:1 to skill jobs

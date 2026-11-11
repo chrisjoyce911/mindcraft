@@ -2195,6 +2195,249 @@
           "cmd": "/kill @e[type=item,distance=..32]"
         }
       ]
+    },
+    {
+      "name": "hunt-beef",
+      "tags": [
+        "rebuild",
+        "hunt"
+      ],
+      "requires": [
+        "command"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "Five cows near andy (iron sword, nothing else); chat \"andy get 2 beef\". The command model routes it to hunt cow beef 2: andy kills cows one at a time and picks up the drops until he has 2 more beef, then frees the body.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z}"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z+2}"
+        },
+        {
+          "cmd": "/summon cow {x+6} {y} {z-2}"
+        },
+        {
+          "cmd": "/summon cow {x-4} {y} {z+3}"
+        },
+        {
+          "cmd": "/summon cow {x-5} {y} {z-3}"
+        },
+        {
+          "waitFor": {
+            "entity": "cow"
+          },
+          "timeout": 10000,
+          "optional": true
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "say": "andy get 2 beef"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "beef",
+          "min": 2
+        },
+        {
+          "type": "actionSeen",
+          "match": "hunt|attack",
+          "after": "start"
+        },
+        {
+          "type": "reply",
+          "match": "couldn't hunt",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy} beef"
+        }
+      ]
+    },
+    {
+      "name": "hunt-none-near",
+      "tags": [
+        "rebuild",
+        "hunt"
+      ],
+      "requires": [
+        "command"
+      ],
+      "timeout": 90000,
+      "description": "No cow within 64 blocks; chat \"andy get 2 beef\": the hunt finds none near and says the old line (\"I couldn't hunt for 2 beef: none near.\"), then andy is idle.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy get 2 beef"
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "couldn't hunt for 2 beef: none near"
+        },
+        {
+          "type": "inventory",
+          "item": "beef",
+          "max": 0
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "attack-legacy",
+      "tags": [
+        "rebuild",
+        "hunt"
+      ],
+      "timeout": 90000,
+      "description": "One pig 4 blocks east of andy (iron sword); !attack(\"pig\") kills it (one kill only) and andy ends idle.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=pig,distance=..64]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/summon pig {x+4} {y} {z}"
+        },
+        {
+          "waitFor": {
+            "entity": "pig"
+          },
+          "timeout": 10000,
+          "optional": true
+        }
+      ],
+      "action": [
+        {
+          "andy": "!attack(\"pig\")"
+        },
+        {
+          "waitFor": {
+            "entity": "pig",
+            "present": false
+          },
+          "timeout": 60000
+        },
+        {
+          "wait": 3000
+        },
+        {
+          "cmd": "/execute positioned {x} {y} {z} if entity @e[type=pig,distance=..48]",
+          "replyMs": 800
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "Successfully killed pig"
+        },
+        {
+          "type": "noEntity",
+          "entity": "pig"
+        },
+        {
+          "type": "serverReply",
+          "match": "Test failed",
+          "note": "no pig within 48 blocks: it died"
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=pig,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        }
+      ]
     }
   ]
 }
