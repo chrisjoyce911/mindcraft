@@ -1,7 +1,7 @@
 // Collect one ore block (the old skills.collectOreAt): path to where it is in reach and in sight with the safe
 // movements (out of water and lava, never off a drop of more than 3), over a hollow never standing on top of it;
 // never dig it from on top when there is a drop under it; the best tool that can harvest it; dig; then make sure
-// its drop reached the pack (pickUpDrop: wait, fetch the item left lying, up to 3 times). Also dig one block of a
+// its drop reached the pack (pickUpDrop: wait, fetch the item left lying with the safe movements, up to 3 times). Also dig one block of a
 // mine step (the old mine dig dep) and walk to a mine cell (the old moveTo dep: GoalBlock, safe movements).
 import type { Vec3Like } from '../types/index.js';
 import { floorDrop, hollowUnder, MAX_SAFE_DROP, pickUpDrop } from '../models/mine/geometry.js';
@@ -52,7 +52,8 @@ export async function collectOreAt(a: Act, o: Vec3Like, names: readonly string[]
             }
             return best;
         },
-        fetch: item => a.motion.goTo(a.goals.near(item.position, 0.5), signal, { timeoutMs: FETCH_TIMEOUT_MS }),
+        // the fetch keeps the safe movements too (the old collectOreAt swapped them back only after pickUpDrop)
+        fetch: item => a.motion.goTo(a.goals.near(item.position, 0.5), signal, { timeoutMs: FETCH_TIMEOUT_MS, safe: true }),
         sleep: t => wait(t, signal),
     });
     if (signal.aborted) return { ok: got, cancelled: true };

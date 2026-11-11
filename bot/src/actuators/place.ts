@@ -7,7 +7,7 @@ import type { Act } from './bot.js';
 import { goNear } from './approach.js';
 import { hold } from './equip.js';
 import { digAt, pickupNearby } from './collect.js';
-import { settle } from './settle.js';
+import { settle, wait } from './settle.js';
 
 export const PLACE_RANGE = 8;
 export const PLACE_TIMEOUT_MS = 3000;
@@ -80,8 +80,17 @@ const SIDE: Readonly<Record<PlaceOn, Vec3Like>> = {
     top: { x: 0, y: 1, z: 0 }, bottom: { x: 0, y: -1, z: 0 },
     north: { x: 0, y: 0, z: -1 }, south: { x: 0, y: 0, z: 1 }, east: { x: 1, y: 0, z: 0 }, west: { x: -1, y: 0, z: 0 },
 };
-/** Blocks a place may replace and can't be placed against (the old skills.placeBlock's empty blocks). */
-const REPLACEABLE = new Set(['air', 'cave_air', 'water', 'lava', 'grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern']);
+/**
+ * Blocks a place may replace and can't be placed against: the old skills.placeBlock's empty blocks, plus the water
+ * plants and bubble column vanilla replaces (cellOf counts them as water, so the mine's block-fluid picks them).
+ */
+const REPLACEABLE = new Set(['air', 'cave_air', 'water', 'lava', 'grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern',
+    'seagrass', 'tall_seagrass', 'bubble_column']);
+/**
+ * Fluid-cell plants a place digs first (the old placeBlock broke a target in the way, then waited 200 ms): kelp is
+ * not replaceable. Anything else in the way (an ore, stone) is never dug for a place.
+ */
+const DIG_FIRST = new Set(['kelp', 'kelp_plant']);
 
 /** placed: the block at the target is what placing item makes (a torch on a wall is a wall_torch). */
 const placedAs = (item: string, name: string | undefined) => !!name && (name === item || name === item.replace('torch', 'wall_torch'));
@@ -94,7 +103,18 @@ const placedAs = (item: string, name: string | undefined) => !!name && (name ===
  */
 export async function placeAt(a: Act, item: string, p: Vec3Like, on: PlaceOn, signal: AbortSignal): Promise<boolean> {
     if (!a.bot.items().some(i => i.name === item)) return false;
-    const target = a.bot.blockAt(p.x, p.y, p.z);
+    let target = a.bot.blockAt(p.x, p.y, p.z);
+    if (target && DIG_FIRST.has(target.name)) {
+        if (dist(a.bot.entity.position, centre(p)) > REACH) {
+            const o = await goNear(a, p, 4, signal);
+            if (!o.ok) return false;
+        }
+        const dug = await digAt(a, p, signal);
+        if (signal.aborted || !dug.ok) return false;
+        if (!(await wait(200, signal))) return false;
+        target = a.bot.blockAt(p.x, p.y, p.z);
+        if (!target) return false;
+    }
     if (!target || !REPLACEABLE.has(target.name)) return false;
     const sides = [SIDE[on], ...Object.values(SIDE).filter(d => d !== SIDE[on])];
     let against: Vec3Like | null = null, face: Vec3Like | null = null;

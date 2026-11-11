@@ -86,6 +86,43 @@ test('collectOreAt: a drop that never reaches the pack is a failure, and says so
     assert.equal(r.message, "Broke iron_ore but couldn't pick up the raw_iron.");
 });
 
+test('collectOreAt: every goTo it makes is safe, the drop fetch too', async () => {
+    const { w, goals } = oreWorld();
+    // the drop is left lying out of the pickup's reach: the pack only gets it when andy walks to it (the fetch)
+    w.act.bot.dig = async p => {
+        delete w.blocks[`${p.x},${p.y},${p.z}`];
+        w.entities.drop = { id: 9001, name: 'item', position: { x: 3.5, y: 64, z: 0.5 } };
+    };
+    const goTo = w.act.motion.goTo;
+    w.act.motion.goTo = async (g, s, opts) => {
+        const o = await goTo(g, s, opts);
+        if (goals.length > 1 && w.entities.drop) { delete w.entities.drop; w.items.push({ name: 'raw_iron', count: 1 }); }
+        return o;
+    };
+    const r = await collectOreAt(w.act, { x: 2, y: 64, z: 0 }, ['iron_ore'], 'raw_iron', new AbortController().signal);
+    assert.deepEqual(r, { ok: true, cancelled: false });
+    assert.equal(goals.length, 2, 'the reach and the fetch');
+    for (const g of goals as { opts?: { safe?: boolean } }[]) assert.equal(g.opts?.safe, true, `safe: ${JSON.stringify(g)}`);
+});
+
+test('placeAt: a block into a seagrass or bubble column cell (replaced), and into kelp (dug first)', async () => {
+    const { w } = oreWorld();
+    w.items.push({ name: 'cobblestone', count: 3 });
+    w.blocks['0,64,1'] = { name: 'seagrass', boundingBox: 'empty' };
+    assert.equal(await placeAt(w.act, 'cobblestone', { x: 0, y: 64, z: 1 }, 'bottom', new AbortController().signal), true);
+    assert.equal(w.blocks['0,64,1']?.name, 'cobblestone');
+    w.blocks['1,64,1'] = { name: 'bubble_column', boundingBox: 'empty' };
+    assert.equal(await placeAt(w.act, 'cobblestone', { x: 1, y: 64, z: 1 }, 'bottom', new AbortController().signal), true);
+    assert.equal(w.blocks['1,64,1']?.name, 'cobblestone');
+    // kelp isn't replaceable: dug first, the water stays, then the block goes in
+    w.blocks['-1,64,1'] = { name: 'kelp_plant', boundingBox: 'empty' };
+    const dig = w.act.bot.dig;
+    w.act.bot.dig = async p => { await dig(p); w.blocks[`${p.x},${p.y},${p.z}`] = { name: 'water', boundingBox: 'empty' }; };
+    assert.equal(await placeAt(w.act, 'cobblestone', { x: -1, y: 64, z: 1 }, 'bottom', new AbortController().signal), true);
+    assert.ok(w.calls.some(c => c.what === 'dig' && c.arg === '-1,64,1'), 'the kelp dug');
+    assert.equal(w.blocks['-1,64,1']?.name, 'cobblestone');
+});
+
 test('placeAt: a torch on the wall (against it) or on the floor; a block into lava', async () => {
     const { w } = oreWorld();
     w.items.push({ name: 'torch', count: 3 }, { name: 'cobblestone', count: 2 });
