@@ -12,11 +12,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LOG_TASKS, type LogTask } from './jsonl.js';
 
-/** A task with a decision log: the new bot's eight plus the old bot's chores (laya-chores.jsonl). */
-export type CorrectionTask = LogTask | 'chores';
-export const CORRECTION_TASKS: readonly CorrectionTask[] = [...LOG_TASKS, 'chores'];
+/**
+ * A task with a decision log: the new bot's eight plus the old bot's chores (laya-chores.jsonl). Its own list, not
+ * jsonl.ts's LOG_TASKS, so the tool stands on its own while a task's log is still being added there.
+ */
+export const CORRECTION_TASKS = ['director', 'eat', 'defend', 'command', 'follow', 'craft', 'mine', 'farm', 'chores'] as const;
+export type CorrectionTask = (typeof CORRECTION_TASKS)[number];
 export const isCorrectionTask = (s: string): s is CorrectionTask => (CORRECTION_TASKS as readonly string[]).includes(s);
 
 /** Each task's question names (bot/src/models/<task>/questions.ts; chores: v1.1's Chore, v2's Skill and Target). */
@@ -95,9 +97,15 @@ const byOf = (a: Answers, source?: string): AnsweredBy =>
 export function answeredOf(task: CorrectionTask, line: Line): { answered: Answers; by: AnsweredBy } {
     const source = str(line.source);
     switch (task) {
-        case 'director':
+        case 'director': {
+            // a fallback line (why) keeps the model's word in `model`; `answer` is then the rules' word
+            const said = str(line.model);
+            if (said !== undefined) return model({ Activity: said });
+            const answered = pick(line, { Activity: 'answer' });
+            return { answered, by: byOf(answered, source) };
+        }
         case 'chores': {
-            const answered = pick(line, task === 'director' ? { Activity: 'answer' } : { Chore: 'answer' });
+            const answered = pick(line, { Chore: 'answer' });
             return { answered, by: byOf(answered, source) };
         }
         case 'eat': return model(pick(line, { Eat: 'eat', Food: 'food' }));
@@ -116,17 +124,20 @@ export function answeredOf(task: CorrectionTask, line: Line): { answered: Answer
             return model(pick(line, { Action: 'model', Hazard: 'hazard', Unload: 'unload' }));
         }
         case 'farm': {
+            // The model's words come first, whatever the source: banned (its answer "action target" the job had
+            // banned; action… are then the rules' or a dry pond) or model_action (a v1 unsure answer).
             const unload = pick(line, { Unload: 'unload' });
-            if (source === undefined) return model(unload);
-            if (source === 'low-confidence') return model({ ...pick(line, { Action: 'model_action' }), ...unload });
-            if (source === 'banned') {
-                // banned is the model's answer ("action target") the job had banned; action… are the rules' instead.
-                const [action, ...target] = (str(line.banned) ?? '').split(' ');
+            const banned = str(line.banned);
+            if (banned !== undefined) {
+                const [action, ...target] = banned.split(' ');
                 const a: Answers = { ...unload };
                 if (action) a.Action = action;
                 if (target.length) a.Target = target.join(' ');
                 return model(a);
             }
+            if (str(line.model_action) !== undefined) return model({ ...pick(line, { Action: 'model_action' }), ...unload });
+            if (source === undefined || source === 'low-confidence') return model(unload);
+            // A dry line after a sure model wait carries no model words: the pond step taken, by rules, is all it says.
             const answered = { ...pick(line, { Action: 'action', Target: 'target', Item: 'item' }), ...unload };
             return { answered, by: Object.keys(answered).length === 0 ? 'none' : source === 'model' ? 'model' : 'rules' };
         }

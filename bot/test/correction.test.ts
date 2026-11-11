@@ -84,15 +84,45 @@ test('correction: a mine veto line keeps the model\'s step, not the rules\'', ()
     assert.equal(got.by, 'model');
 });
 
+// Farm branch lines (as 5.3's branches/farm.jsonl writes them), inline so the test stands without that fixture.
+const farm = (fields: Record<string, unknown>): string =>
+    JSON.stringify({ time: '2026-11-11T20:26:23.152Z', state: 'Farm.\nCrop wheat', p: 0.9, ms: 3, ...fields });
+
 test('correction: farm low-confidence and banned lines carry the model\'s words', () => {
-    const br = lines('branches/farm.jsonl');
-    const low = correctionCase('farm', br.find(l => l.includes('"source":"low-confidence"'))!, { Action: 'wait' });
+    const low = correctionCase('farm', farm({ model_action: 'harvest', p: 0.3, action: 'wait', target: 'none', item: 'none', source: 'low-confidence' }), { Action: 'wait' });
     assert.deepEqual(low.answered, { Action: 'harvest' });
     assert.equal(low.by, 'model');
-    const banned = correctionCase('farm', br.find(l => l.includes('"source":"banned"'))!, { Action: 'harvest' });
+    const banned = correctionCase('farm', farm({ banned: 'till E0 S0', action: 'harvest', target: 'W2 N1', item: 'none', source: 'banned' }), { Action: 'harvest' });
     assert.deepEqual(banned.answered, { Action: 'till', Target: 'E0 S0' });
-    const dry = correctionCase('farm', br.find(l => l.includes('"source":"dry"'))!, { Action: 'find_water' });
+    assert.equal(banned.by, 'model');
+});
+
+test('correction: a farm dry line is the rules\' pond, unless it carries the model\'s banned or unsure answer', () => {
+    const dry = correctionCase('farm', farm({ action: 'pond', target: 'E0 N1', item: 'water_bucket', source: 'dry' }), { Action: 'find_water' });
+    assert.deepEqual(dry.answered, { Action: 'pond', Target: 'E0 N1', Item: 'water_bucket' });
     assert.equal(dry.by, 'rules');
+    const banned = correctionCase('farm', farm({ banned: 'pond W1 N1', action: 'pond', target: 'W1 S0', item: 'water_bucket', source: 'dry' }), { Target: 'W1 S0' });
+    assert.deepEqual(banned.answered, { Action: 'pond', Target: 'W1 N1' });
+    assert.equal(banned.by, 'model');
+    const unsure = correctionCase('farm', farm({ model_action: 'wait', p: 0.3, action: 'pond', target: 'E0 N1', item: 'water_bucket', source: 'dry' }), { Action: 'pond' });
+    assert.deepEqual(unsure.answered, { Action: 'wait' });
+    assert.equal(unsure.by, 'model');
+});
+
+test('correction: a director fallback line carries the model\'s word; one with no answer is the rules\'', () => {
+    const ls = lines('branches/director.jsonl');
+    const got = correctionCase('director', ls[2]!, { Activity: 'continue' });
+    assert.deepEqual(got.answered, { Activity: 'defend' });
+    assert.equal(got.by, 'model');
+    assert.match(got.job.note, /: defend → continue$/);
+    const runCase = JSON.parse(runCli(['--task', 'director', '--log', path.join(FIX, 'branches/director.jsonl'), '--line', '3',
+        '--right', 'Activity=continue'])) as { answered: Answers; source: string };
+    assert.deepEqual(runCase.answered, { Activity: 'defend' });
+    assert.equal(runCase.source, 'test/fixtures/laya-logs/branches/director.jsonl:3');
+    const noAnswer = JSON.stringify({ ...(JSON.parse(ls[2]!) as Record<string, unknown>), why: 'no-answer', model: undefined, p: undefined });
+    const r = correctionCase('director', noAnswer, { Activity: 'eat' });
+    assert.deepEqual(r.answered, { Activity: 'continue' });
+    assert.equal(r.by, 'rules');
 });
 
 test('correction: errors', () => {
