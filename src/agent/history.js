@@ -1,6 +1,8 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { NPCData } from './npc/data.js';
 import settings from './settings.js';
+import { llmOn } from './llm_gate.js';
+import { scrubMemory } from './memory_scrub.js';
 
 
 export class History {
@@ -31,8 +33,9 @@ export class History {
     }
 
     async summarizeMemories(turns) {
+        if (!llmOn(settings)) return; // settings.llm off: no memory summaries (the old memory stays)
         console.log("Storing memories...");
-        this.memory = await this.agent.prompter.promptMemSaving(turns);
+        this.memory = scrubMemory(await this.agent.prompter.promptMemSaving(turns));
 
         if (this.memory.length > 500) {
             this.memory = this.memory.slice(0, 500);
@@ -87,7 +90,8 @@ export class History {
                 self_prompting_state: this.agent.self_prompter.state,
                 self_prompt: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.prompt,
                 taskStart: this.agent.task.taskStartTime,
-                last_sender: this.agent.last_sender
+                last_sender: this.agent.last_sender,
+                places: this.agent.memory_bank?.getJson?.() || {}
             };
             writeFileSync(this.memory_fp, JSON.stringify(data, null, 2));
             console.log('Saved memory to:', this.memory_fp);

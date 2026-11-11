@@ -1,0 +1,101 @@
+{
+ "agentsStatus": [
+  {
+   "name": "andy",
+   "in_game": true,
+   "viewerPort": 3000,
+   "socket_connected": true
+  }
+ ],
+ "stateUpdate": {
+  "andy": {
+   "name": "andy",
+   "gameplay": {
+    "position": {
+     "x": 166.5,
+     "y": 70,
+     "z": 169.5
+    },
+    "dimension": "overworld",
+    "gamemode": "survival",
+    "health": 20,
+    "hunger": 20,
+    "biome": "forest",
+    "weather": "Clear",
+    "timeOfDay": 1000,
+    "timeLabel": "Morning"
+   },
+   "action": {
+    "current": "Stopped",
+    "kind": "stopped",
+    "isIdle": true
+   },
+   "surroundings": {
+    "below": "grass_block",
+    "legs": "air",
+    "head": "air",
+    "firstBlockAboveHead": "none"
+   },
+   "inventory": {
+    "counts": {},
+    "stacksUsed": 0,
+    "totalSlots": 46,
+    "equipment": {
+     "helmet": null,
+     "chestplate": null,
+     "leggings": null,
+     "boots": null,
+     "mainHand": null
+    }
+   },
+   "nearby": {
+    "humanPlayers": [
+     "tester"
+    ],
+    "botPlayers": [],
+    "entityTypes": [
+     "cow"
+    ]
+   },
+   "modes": {
+    "summary": "Agent Modes:\n- self_preservation(ON)\n- unstuck(ON)\n- laya_defending(ON)\n- cowardice(OFF)\n- self_defense(ON)\n- laya_eating(ON)\n- hunting(OFF)\n- item_collecting(ON)\n- torch_placing(ON)\n- elbow_room(ON)\n- idle_staring(ON)\n- cheat(OFF)"
+   },
+   "places": {}
+  }
+ },
+ "settingsKeys": [
+  "allow_insecure_coding",
+  "allow_vision",
+  "auth",
+  "auto_open_ui",
+  "base_profile",
+  "block_place_delay",
+  "blocked_actions",
+  "chat_bot_messages",
+  "chat_ingame",
+  "chores",
+  "code_timeout_mins",
+  "decision_models",
+  "host",
+  "init_message",
+  "language",
+  "llm",
+  "load_memory",
+  "log_all_prompts",
+  "max_commands",
+  "max_messages",
+  "mindserver_port",
+  "minecraft_version",
+  "narrate_behavior",
+  "num_examples",
+  "only_chat_with",
+  "port",
+  "profile",
+  "profiles",
+  "relevant_docs_count",
+  "render_bot_view",
+  "show_command_syntax",
+  "spawn_timeout",
+  "speak"
+ ]
+}

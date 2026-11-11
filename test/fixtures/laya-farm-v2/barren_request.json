@@ -1,0 +1,42 @@
+{
+  "questions": {
+    "Action": {
+      "criteria": [
+        "harvest",
+        "plant",
+        "till",
+        "water",
+        "pond",
+        "bone_meal",
+        "breed",
+        "find_water",
+        "wait"
+      ],
+      "instructions": "What should I do next on the farm?",
+      "type": "choice"
+    },
+    "Item": {
+      "criteria": [
+        "hoe",
+        "wheat_seeds",
+        "none"
+      ],
+      "instructions": "Which item should I use?",
+      "type": "choice"
+    },
+    "Target": {
+      "criteria": [
+        "E0 N1",
+        "none"
+      ],
+      "instructions": "Which cell or animals?",
+      "type": "choice"
+    },
+    "Unload": {
+      "criteria": null,
+      "instructions": "I should go and empty my pack into the home chest now.",
+      "type": "noul"
+    }
+  },
+  "state": "Farm.\nCrop wheat\nPack 30 Home none Health 20 Food 20 Hostiles 0 Valuables 0\nCarry hoe x1 wheat_seeds x1\nAnimals none\nXXLLLLLLL\nXXLLLLLLL\nXLLLLLLLL\nLLLLLLLXL\nLLLLLLLLL\nLLLLLLLXL\nLLLLLLLLL\nLLLLLLLLL\nLLLLLLLLL"
+}

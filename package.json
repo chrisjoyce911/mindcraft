@@ -45,7 +45,20 @@
         "postinstall": "patch-package",
         "start": "node main.js",
         "reinstall": "npm run clean:modules && npm install",
-        "clean:modules": "node -e \"const fs=require('fs');const p=require('path');['node_modules','package-lock.json'].forEach(f=>{if(fs.existsSync(f)){if(fs.lstatSync(f).isDirectory()){fs.rmSync(f,{recursive:true,force:true});}else{fs.unlinkSync(f);}}});\""
+        "clean:modules": "node -e \"const fs=require('fs');const p=require('path');['node_modules','package-lock.json'].forEach(f=>{if(fs.existsSync(f)){if(fs.lstatSync(f).isDirectory()){fs.rmSync(f,{recursive:true,force:true});}else{fs.unlinkSync(f);}}});\"",
+        "test": "node --test test/",
+        "laya:check": "node src/models/laya_check.js",
+        "game-test": "node tools/andy-tests/cli.js",
+        "game-test:mcp": "node tools/andy-tests/mcp.js",
+        "game-test:compare": "node tools/andy-tests/compare.js",
+        "world:start": "node tools/test-world/world.js start",
+        "world:stop": "node tools/test-world/world.js stop",
+        "world:reset": "node tools/test-world/world.js reset",
+        "world:status": "node tools/test-world/world.js status",
+        "world:template": "node tools/test-world/world.js template",
+        "world:sites": "node tools/test-world/world.js sites",
+        "world:rcon": "node tools/test-world/world.js rcon",
+        "world:bot": "node tools/test-world/bot.js"
     },
     "devDependencies": {
         "patch-package": "^8.0.0"

@@ -1,11 +1,11 @@
 const settings = {
-    "minecraft_version": "auto", // or specific version like "1.21.6"
+    "minecraft_version": "1.21.6", // or specific version like "1.21.6"
     "host": "127.0.0.1", // or "localhost", "your.ip.address.here"
     "port": 55916, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 
     // the mindserver manages all agents and hosts the UI
-    "mindserver_port": 8080,
+    "mindserver_port": 8090,
     "auto_open_ui": true, // opens UI in browser on startup
     
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
@@ -28,6 +28,7 @@ const settings = {
 
     "load_memory": false, // load memory from previous session
     "init_message": "Respond with hello world and your name", // sends to all on spawn
+    "llm": true, // false: the chat LLM is never asked (player chat goes to the Laya command model only; src/agent/llm_gate.js)
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
     "speak": false,
@@ -57,6 +58,112 @@ const settings = {
     "block_place_delay": 0, // delay between placing blocks (ms) if using newAction. helps avoid bot being kicked by anti-cheat mechanisms on servers.
   
     "log_all_prompts": false, // log ALL prompts to file
+
+    // Laya decision models: small local models that answer typed questions in milliseconds.
+    // Servers speak the decisions API (golaya serve from laya-go, or MLX-Serve). Each task
+    // names the server and model that answer one kind of decision; swapping models is a
+    // settings change. Check with: npm run laya:check
+    "decision_models": {
+        "servers": {
+            "golaya": { "url": "http://127.0.0.1:11235" }, // laya-go: golaya serve -dir data/laya-go
+            "mlx": { "url": "http://127.0.0.1:11234" }     // MLX-Serve, e.g. aac6fef/laya-mlx (share the model for LAN use)
+        },
+        "tasks": {
+            "follow": {
+                "enabled": false,      // off: !followPlayer uses the pathfinder as before
+                "server": "golaya",
+                "model": "follow-a",   // "" uses the server's only decision model
+                "prompt": "v1",        // the follow prompt the model was trained on: v1 (follow-a), v2 with mobs (follow-m)
+                "timeout_ms": 300,
+                "min_confidence": 0.4,
+                "step_ms": 250,        // a decision every quarter second
+                "fallback_ms": 4000,   // how long to use the pathfinder after a fallback
+                "log_steps": true      // bots/<name>/logs/laya-follow.jsonl: each step's state, answer and outcome
+            },
+            "eat": {
+                "enabled": false,      // off: mineflayer-auto-eat eats as before
+                "server": "golaya",
+                "model": "eat-a",
+                "timeout_ms": 300,
+                "min_confidence": 0.5,
+                "check_ms": 2000,      // how often to ask
+                "fallback_ms": 10000,  // auto-eat runs this long after a fallback
+                "log_steps": true      // bots/<name>/logs/laya-eat.jsonl
+            },
+            "defend": {
+                "enabled": false,      // off: the self_defense, cowardice and self_preservation modes fight as before
+                "server": "golaya",
+                "model": "defend-a",
+                "timeout_ms": 300,
+                "min_confidence": 0.4,
+                "step_ms": 400,        // pause between decisions while mobs are active
+                "fallback_ms": 8000,   // the ordinary modes defend this long after a fallback
+                "quiet_ms": 3000,      // after "ignore", wait this long before engaging again
+                "log_steps": true      // bots/<name>/logs/laya-defend.jsonl
+            },
+            "craft": {
+                "enabled": false,      // off: !layaCraft and !layaGather say the task is off
+                "server": "golaya",
+                "model": "craft-b",    // a craft prompt v2 model
+                "timeout_ms": 2000,
+                "min_confidence": 0.3, // a step less sure than this stops the run
+                "max_steps": 40,       // most steps one !layaCraft takes
+                "log_steps": true      // bots/<name>/logs/laya-craft.jsonl
+            },
+            "mine": {
+                "enabled": false,      // off: !layaMine collects the nearest ore blocks
+                "server": "golaya",
+                "model": "mine-p",     // a mine prompt v2 model (mine-a is v1)
+                "prompt": "v2",        // v2 follows the mine plan below and unloads at home; v1 roams (mine-a)
+                "timeout_ms": 300,
+                "min_confidence": 0.4,
+                "max_steps": 2000,     // steps before giving up (300 suits v1)
+                "max_failures": 4,     // failed steps in a row before giving up
+                "torch_batch": 4,      // torches crafted when they run out
+                "main_length": 32,     // v2 plan: main tunnel length at each level
+                "branch_every": 3,     // a branch each side every 3 blocks of the main tunnel
+                "branch_length": 16,   // each branch's length
+                "level_gap": 4,        // the staircase goes this far down between levels
+                "next_shaft": 40,      // below the ore's band, a new column this far to the right climbs back up
+                "keep_blocks": 32,     // throwaway blocks kept when emptying the pack into the home chest ("home_chest" place)
+                "log_steps": true      // bots/<name>/logs/laya-mine.jsonl
+            },
+            "command": {
+                "enabled": false,      // off: every player message goes to the LLM as before
+                "server": "golaya",
+                "model": "command-a",
+                "prompt": "v1",        // v2 adds the farm command and crops: use it with a command v2 model
+                "timeout_ms": 500,
+                "min_confidence": 0.6, // Command's top probability needed to act without the LLM
+                "addressed_min": 0.5,  // less sure the message is for me: the LLM decides
+                "ignore_below": 0.15,  // surely for someone else: ignored
+                "no_llm": false,       // true: chat and unsure messages get a short canned reply, no LLM
+                "log_decisions": true  // bots/<name>/logs/laya-command.jsonl
+            },
+            "farm": {
+                "enabled": false,      // off: !layaFarm says so and does nothing
+                "server": "golaya",
+                "model": "farm-a",     // farm-a is a prompt v1 model: with v2 use a v2 model (or the v2 rules decide when it isn't sure)
+                "prompt": "v2",        // v2 adds the crop, the pack line and Unload (home chest), pond and find_water; v1 for farm-a
+                "timeout_ms": 300,
+                "min_confidence": 0.5,
+                "step_ms": 500,        // pause between steps that do nothing
+                "max_steps": 400,      // the most steps of a timed !layaFarm(minutes); a count or "until stopped" has no limit
+                "wait_limit": 20,      // waits in a row with nothing growing before it stops
+                "water_radius": 64,    // how far it looks for water when there's none to farm with
+                "keep_seeds": 16,      // seeds of each kind kept when emptying the pack into the home chest ("home_chest" place)
+                "log_steps": true      // bots/<name>/logs/laya-farm.jsonl
+            },
+            "director": {
+                "enabled": false,      // off: the director's rules decide (src/agent/laya/director.js); on: the served model
+                "server": "golaya",
+                "model": "director",
+                "prompt": "v1",        // the shared director spec's state text
+                "timeout_ms": 300,
+                "min_confidence": 0.5  // a less sure answer: the rules decide
+            }
+        }
+    },
 };
 
 export default settings;

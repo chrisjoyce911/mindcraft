@@ -101,7 +101,9 @@ export function getFullState(agent) {
         },
         modes: {
             summary: bot.modes.getMiniDocs()
-        }
+        },
+        // remembered places ({name: [x, y, z]}), e.g. home_chest
+        places: { ...(agent.memory_bank?.getJson?.() || {}) }
     };
 
     return state;

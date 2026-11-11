@@ -1,0 +1,25 @@
+{
+  "questions": {
+    "Hazard": {
+      "criteria": null,
+      "instructions": "A hazard is next to me.",
+      "type": "noul"
+    },
+    "Move": {
+      "criteria": [
+        "N",
+        "NE",
+        "E",
+        "SE",
+        "S",
+        "SW",
+        "W",
+        "NW",
+        "wait"
+      ],
+      "instructions": "Which way should I step?",
+      "type": "choice"
+    }
+  },
+  "state": "Follow.\nPlayer E12 N3\n?????????\n???001122\n???0WW011\n???0WW001\n???0000!0\n???00D000\n???00D001\n???000002\n?????????"
+}

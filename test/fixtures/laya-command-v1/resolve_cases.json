@@ -1,0 +1,8966 @@
+{
+ "commands": [
+  "follow",
+  "come",
+  "stop",
+  "stay",
+  "gather",
+  "craft",
+  "mine",
+  "give",
+  "attack",
+  "store",
+  "eat",
+  "inventory",
+  "chat"
+ ],
+ "counts": [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "12",
+  "16",
+  "20",
+  "24",
+  "32",
+  "48",
+  "64",
+  "all",
+  "any"
+ ],
+ "items": [
+  "wood",
+  "planks",
+  "stick",
+  "stone",
+  "coal",
+  "charcoal",
+  "iron",
+  "gold",
+  "copper",
+  "diamond",
+  "emerald",
+  "redstone",
+  "lapis",
+  "sand",
+  "glass",
+  "dirt",
+  "gravel",
+  "flint",
+  "torch",
+  "table",
+  "furnace",
+  "chest",
+  "ladder",
+  "bucket",
+  "shield",
+  "shears",
+  "bowl",
+  "food",
+  "bread",
+  "apple",
+  "meat",
+  "string",
+  "arrow",
+  "bone",
+  "wheat",
+  "seeds",
+  "wool",
+  "pickaxe",
+  "axe",
+  "sword",
+  "shovel",
+  "hoe",
+  "helmet",
+  "chestplate",
+  "leggings",
+  "boots",
+  "zombie",
+  "skeleton",
+  "spider",
+  "creeper",
+  "witch",
+  "husk",
+  "cave_spider",
+  "stray",
+  "drowned",
+  "enderman",
+  "slime",
+  "cow",
+  "pig",
+  "sheep",
+  "chicken",
+  "none"
+ ],
+ "normalize": {
+  "  hey\tbob\n": "hey bob",
+  "Andy, get me 10 LOGS!!": "andy get me 10 logs",
+  "aaaa abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde": "aaaa abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde abcde",
+  "cave_spider’s here": "cave_spiders here",
+  "iron-pick (the good one)": "iron pick the good one",
+  "what's   in your  inv?": "whats in your inv",
+  "él está aquí": "l est aqu"
+ },
+ "resolve": [
+  {
+   "command": "mine",
+   "item": "redstone",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 12
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 20
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 1
+    }
+   ],
+   "want": "redstone"
+  },
+  {
+   "command": "stop",
+   "item": "copper",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 10
+    },
+    {
+     "Item": "oak_log",
+     "Count": 12
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 14
+    },
+    {
+     "Item": "charcoal",
+     "Count": 13
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "torch",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 20
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 13
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "inventory",
+   "item": "cow",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 3
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "chest",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 18
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "bone",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 17
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "seeds",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "golden_apple",
+     "Count": 2
+    },
+    {
+     "Item": "red_wool",
+     "Count": 18
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 19
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "sword",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 10
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "diamond",
+     "Count": 16
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "glass",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 3
+    },
+    {
+     "Item": "torch",
+     "Count": 4
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "shield",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 3
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "attack",
+   "item": "pig",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 13
+    },
+    {
+     "Item": "bread",
+     "Count": 18
+    },
+    {
+     "Item": "charcoal",
+     "Count": 2
+    }
+   ],
+   "want": "pig"
+  },
+  {
+   "command": "craft",
+   "item": "creeper",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 2
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "bone",
+   "tier": "diamond",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "zombie",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 7
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 1
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 16
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "wood",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 13
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 1
+    },
+    {
+     "Item": "stone",
+     "Count": 7
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 17
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 17
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "cave_spider",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 16
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "gold",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 16
+    },
+    {
+     "Item": "red_wool",
+     "Count": 7
+    },
+    {
+     "Item": "stone",
+     "Count": 15
+    },
+    {
+     "Item": "coal",
+     "Count": 4
+    },
+    {
+     "Item": "coal",
+     "Count": 11
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 13
+    }
+   ],
+   "want": "raw_gold"
+  },
+  {
+   "command": "attack",
+   "item": "torch",
+   "tier": "wooden",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "mine",
+   "item": "string",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 9
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 13
+    },
+    {
+     "Item": "red_wool",
+     "Count": 20
+    },
+    {
+     "Item": "torch",
+     "Count": 18
+    }
+   ],
+   "want": "string"
+  },
+  {
+   "command": "eat",
+   "item": "cave_spider",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 11
+    },
+    {
+     "Item": "oak_log",
+     "Count": 18
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "table",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "golden_apple",
+     "Count": 20
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 5
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 17
+    }
+   ],
+   "want": "crafting_table"
+  },
+  {
+   "command": "stop",
+   "item": "enderman",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 4
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "torch",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 20
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 17
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 12
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 19
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 6
+    },
+    {
+     "Item": "white_wool",
+     "Count": 7
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "spider",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "golden_apple",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stop",
+   "item": "lapis",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 15
+    },
+    {
+     "Item": "oak_log",
+     "Count": 19
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 13
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 10
+    },
+    {
+     "Item": "torch",
+     "Count": 3
+    },
+    {
+     "Item": "carrot",
+     "Count": 3
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "mine",
+   "item": "spider",
+   "tier": "none",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "follow",
+   "item": "chest",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 15
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "come",
+   "item": "chest",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 11
+    },
+    {
+     "Item": "red_wool",
+     "Count": 6
+    },
+    {
+     "Item": "birch_log",
+     "Count": 6
+    },
+    {
+     "Item": "red_wool",
+     "Count": 7
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 17
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 17
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "chest",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 9
+    }
+   ],
+   "want": "chest"
+  },
+  {
+   "command": "attack",
+   "item": "zombie",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 16
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 9
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 16
+    }
+   ],
+   "want": "zombie"
+  },
+  {
+   "command": "store",
+   "item": "helmet",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 8
+    },
+    {
+     "Item": "birch_log",
+     "Count": 7
+    },
+    {
+     "Item": "diamond",
+     "Count": 14
+    },
+    {
+     "Item": "dirt",
+     "Count": 1
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 16
+    },
+    {
+     "Item": "carrot",
+     "Count": 19
+    },
+    {
+     "Item": "birch_log",
+     "Count": 6
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "attack",
+   "item": "boots",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 11
+    },
+    {
+     "Item": "apple",
+     "Count": 11
+    },
+    {
+     "Item": "coal",
+     "Count": 11
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 7
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 16
+    },
+    {
+     "Item": "apple",
+     "Count": 20
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "bread",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 9
+    },
+    {
+     "Item": "diamond",
+     "Count": 20
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 20
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 1
+    },
+    {
+     "Item": "stick",
+     "Count": 1
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 4
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "furnace",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 9
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 4
+    },
+    {
+     "Item": "diamond",
+     "Count": 2
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 19
+    },
+    {
+     "Item": "sand",
+     "Count": 3
+    },
+    {
+     "Item": "stone",
+     "Count": 16
+    },
+    {
+     "Item": "coal",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "inventory",
+   "item": "boots",
+   "tier": "none",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "chicken",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "stick",
+     "Count": 8
+    },
+    {
+     "Item": "dirt",
+     "Count": 10
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 11
+    },
+    {
+     "Item": "porkchop",
+     "Count": 10
+    },
+    {
+     "Item": "red_wool",
+     "Count": 20
+    },
+    {
+     "Item": "porkchop",
+     "Count": 17
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "pig",
+   "tier": "diamond",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "arrow",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 18
+    },
+    {
+     "Item": "birch_log",
+     "Count": 13
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 2
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "apple",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 12
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 18
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 17
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 19
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 18
+    },
+    {
+     "Item": "diamond",
+     "Count": 11
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stop",
+   "item": "diamond",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 20
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stay",
+   "item": "pig",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 13
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "come",
+   "item": "sand",
+   "tier": "iron",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "stay",
+   "item": "cave_spider",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 14
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 15
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "dirt",
+     "Count": 9
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 18
+    },
+    {
+     "Item": "stone",
+     "Count": 13
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "cow",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 20
+    },
+    {
+     "Item": "charcoal",
+     "Count": 14
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 14
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 8
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 12
+    },
+    {
+     "Item": "apple",
+     "Count": 13
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "follow",
+   "item": "arrow",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 15
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 12
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 19
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stop",
+   "item": "drowned",
+   "tier": "wooden",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "none",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 19
+    },
+    {
+     "Item": "coal",
+     "Count": 11
+    },
+    {
+     "Item": "stick",
+     "Count": 19
+    },
+    {
+     "Item": "torch",
+     "Count": 5
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 15
+    },
+    {
+     "Item": "birch_log",
+     "Count": 5
+    },
+    {
+     "Item": "bread",
+     "Count": 18
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "dirt",
+   "tier": "stone",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "stay",
+   "item": "sand",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 7
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 13
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 2
+    },
+    {
+     "Item": "charcoal",
+     "Count": 13
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 4
+    },
+    {
+     "Item": "carrot",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "lapis",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 18
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 2
+    },
+    {
+     "Item": "sand",
+     "Count": 13
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 14
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 16
+    },
+    {
+     "Item": "oak_log",
+     "Count": 2
+    }
+   ],
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "stop",
+   "item": "shield",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 20
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 20
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 12
+    },
+    {
+     "Item": "porkchop",
+     "Count": 14
+    },
+    {
+     "Item": "dirt",
+     "Count": 12
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "wheat",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 6
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 4
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 9
+    },
+    {
+     "Item": "charcoal",
+     "Count": 3
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 1
+    },
+    {
+     "Item": "porkchop",
+     "Count": 4
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stop",
+   "item": "bread",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 3
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "bowl",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 15
+    },
+    {
+     "Item": "bread",
+     "Count": 19
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 17
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 14
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "mine",
+   "item": "chicken",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 4
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 4
+    },
+    {
+     "Item": "diamond",
+     "Count": 3
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 19
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "axe",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 6
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "wood",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 13
+    },
+    {
+     "Item": "porkchop",
+     "Count": 15
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 1
+    },
+    {
+     "Item": "coal",
+     "Count": 20
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 4
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "inventory",
+   "item": "chestplate",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 7
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 18
+    },
+    {
+     "Item": "birch_log",
+     "Count": 1
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 13
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 13
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 6
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stay",
+   "item": "chestplate",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 5
+    },
+    {
+     "Item": "bread",
+     "Count": 15
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 14
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "follow",
+   "item": "chestplate",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 3
+    },
+    {
+     "Item": "carrot",
+     "Count": 4
+    },
+    {
+     "Item": "stick",
+     "Count": 2
+    },
+    {
+     "Item": "shield",
+     "Count": 16
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 16
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 15
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "iron",
+   "tier": "none",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "wheat",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 10
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 5
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 14
+    },
+    {
+     "Item": "red_wool",
+     "Count": 9
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "flint",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 2
+    },
+    {
+     "Item": "white_wool",
+     "Count": 9
+    },
+    {
+     "Item": "oak_log",
+     "Count": 6
+    },
+    {
+     "Item": "torch",
+     "Count": 5
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 3
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 11
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 1
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "wheat",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 10
+    },
+    {
+     "Item": "oak_log",
+     "Count": 18
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 2
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 15
+    },
+    {
+     "Item": "porkchop",
+     "Count": 12
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "lapis",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 10
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 20
+    },
+    {
+     "Item": "shield",
+     "Count": 15
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 10
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 1
+    },
+    {
+     "Item": "red_wool",
+     "Count": 16
+    },
+    {
+     "Item": "white_wool",
+     "Count": 11
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "none",
+   "tier": "wooden",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "stay",
+   "item": "spider",
+   "tier": "diamond",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "attack",
+   "item": "stone",
+   "tier": "none",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "inventory",
+   "item": "bread",
+   "tier": "wooden",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "mine",
+   "item": "husk",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 5
+    },
+    {
+     "Item": "shield",
+     "Count": 10
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 3
+    },
+    {
+     "Item": "birch_log",
+     "Count": 12
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 6
+    },
+    {
+     "Item": "stick",
+     "Count": 20
+    },
+    {
+     "Item": "oak_log",
+     "Count": 3
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "string",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 19
+    },
+    {
+     "Item": "carrot",
+     "Count": 9
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "meat",
+   "tier": "wooden",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "axe",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 10
+    },
+    {
+     "Item": "birch_log",
+     "Count": 12
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 3
+    },
+    {
+     "Item": "birch_log",
+     "Count": 2
+    },
+    {
+     "Item": "coal",
+     "Count": 1
+    },
+    {
+     "Item": "white_wool",
+     "Count": 6
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stop",
+   "item": "seeds",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 14
+    },
+    {
+     "Item": "carrot",
+     "Count": 7
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 19
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 5
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 16
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "boots",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 8
+    },
+    {
+     "Item": "charcoal",
+     "Count": 7
+    },
+    {
+     "Item": "diamond",
+     "Count": 17
+    },
+    {
+     "Item": "white_wool",
+     "Count": 20
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 3
+    },
+    {
+     "Item": "porkchop",
+     "Count": 7
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "drowned",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 4
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 18
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "come",
+   "item": "charcoal",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 8
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "food",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 17
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 7
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 12
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 6
+    }
+   ],
+   "want": "rotten_flesh"
+  },
+  {
+   "command": "inventory",
+   "item": "stone",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "inventory",
+   "item": "ladder",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 6
+    },
+    {
+     "Item": "torch",
+     "Count": 15
+    },
+    {
+     "Item": "dirt",
+     "Count": 19
+    },
+    {
+     "Item": "stone",
+     "Count": 1
+    },
+    {
+     "Item": "red_wool",
+     "Count": 2
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "arrow",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 14
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 12
+    },
+    {
+     "Item": "apple",
+     "Count": 1
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "zombie",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 10
+    },
+    {
+     "Item": "oak_log",
+     "Count": 4
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 18
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "sword",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "diamond_axe",
+     "Count": 3
+    },
+    {
+     "Item": "stick",
+     "Count": 11
+    },
+    {
+     "Item": "charcoal",
+     "Count": 15
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "furnace",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 10
+    }
+   ],
+   "want": "furnace"
+  },
+  {
+   "command": "craft",
+   "item": "bread",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 17
+    },
+    {
+     "Item": "porkchop",
+     "Count": 11
+    },
+    {
+     "Item": "sand",
+     "Count": 10
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 17
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "mine",
+   "item": "bread",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 12
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 13
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 10
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 16
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stop",
+   "item": "stone",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 5
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "mine",
+   "item": "axe",
+   "tier": "iron",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "stone",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 5
+    },
+    {
+     "Item": "carrot",
+     "Count": 3
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 12
+    },
+    {
+     "Item": "sand",
+     "Count": 11
+    },
+    {
+     "Item": "oak_log",
+     "Count": 13
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "skeleton",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 18
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "cow",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 9
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "charcoal",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 17
+    },
+    {
+     "Item": "stick",
+     "Count": 16
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "store",
+   "item": "wood",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 6
+    },
+    {
+     "Item": "diamond",
+     "Count": 5
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 7
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 8
+    },
+    {
+     "Item": "sand",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stay",
+   "item": "chest",
+   "tier": "none",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "dirt",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 18
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 12
+    },
+    {
+     "Item": "sand",
+     "Count": 8
+    },
+    {
+     "Item": "bread",
+     "Count": 5
+    },
+    {
+     "Item": "diamond",
+     "Count": 16
+    },
+    {
+     "Item": "carrot",
+     "Count": 19
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 12
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "inventory",
+   "item": "iron",
+   "tier": "stone",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "attack",
+   "item": "apple",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 1
+    },
+    {
+     "Item": "coal",
+     "Count": 10
+    },
+    {
+     "Item": "coal",
+     "Count": 2
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 12
+    },
+    {
+     "Item": "oak_log",
+     "Count": 16
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "stay",
+   "item": "drowned",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 2
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 12
+    },
+    {
+     "Item": "sand",
+     "Count": 10
+    },
+    {
+     "Item": "charcoal",
+     "Count": 11
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 7
+    },
+    {
+     "Item": "shield",
+     "Count": 13
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 13
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "diamond",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 19
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 7
+    },
+    {
+     "Item": "white_wool",
+     "Count": 20
+    },
+    {
+     "Item": "shield",
+     "Count": 1
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 9
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "craft",
+   "item": "planks",
+   "tier": "stone",
+   "carry": null,
+   "want": "planks"
+  },
+  {
+   "command": "attack",
+   "item": "diamond",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 6
+    },
+    {
+     "Item": "red_wool",
+     "Count": 3
+    },
+    {
+     "Item": "charcoal",
+     "Count": 1
+    },
+    {
+     "Item": "diamond",
+     "Count": 9
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "stick",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 1
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 4
+    },
+    {
+     "Item": "sand",
+     "Count": 7
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "chat",
+   "item": "planks",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 7
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "attack",
+   "item": "flint",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 6
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 4
+    },
+    {
+     "Item": "stone",
+     "Count": 2
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 19
+    },
+    {
+     "Item": "charcoal",
+     "Count": 10
+    },
+    {
+     "Item": "red_wool",
+     "Count": 1
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "wheat",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 9
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 18
+    },
+    {
+     "Item": "charcoal",
+     "Count": 18
+    },
+    {
+     "Item": "carrot",
+     "Count": 9
+    },
+    {
+     "Item": "red_wool",
+     "Count": 14
+    },
+    {
+     "Item": "coal",
+     "Count": 9
+    },
+    {
+     "Item": "sand",
+     "Count": 17
+    }
+   ],
+   "want": "wheat"
+  },
+  {
+   "command": "eat",
+   "item": "wheat",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 18
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 2
+    },
+    {
+     "Item": "white_wool",
+     "Count": 16
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 15
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "eat",
+   "item": "shield",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 7
+    },
+    {
+     "Item": "red_wool",
+     "Count": 19
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "come",
+   "item": "diamond",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 12
+    },
+    {
+     "Item": "apple",
+     "Count": 7
+    },
+    {
+     "Item": "torch",
+     "Count": 13
+    },
+    {
+     "Item": "sand",
+     "Count": 6
+    },
+    {
+     "Item": "red_wool",
+     "Count": 2
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 15
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 2
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "gather",
+   "item": "diamond",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 4
+    },
+    {
+     "Item": "coal",
+     "Count": 6
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 6
+    },
+    {
+     "Item": "coal",
+     "Count": 20
+    },
+    {
+     "Item": "red_wool",
+     "Count": 9
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "eat",
+   "item": "glass",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 11
+    },
+    {
+     "Item": "bread",
+     "Count": 3
+    },
+    {
+     "Item": "birch_log",
+     "Count": 11
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "come",
+   "item": "chestplate",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 10
+    },
+    {
+     "Item": "oak_log",
+     "Count": 20
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 9
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "attack",
+   "item": "helmet",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 19
+    },
+    {
+     "Item": "shield",
+     "Count": 10
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "give",
+   "item": "shield",
+   "tier": "diamond",
+   "carry": null,
+   "want": "none"
+  },
+  {
+   "command": "attack",
+   "item": "coal",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 5
+    },
+    {
+     "Item": "dirt",
+     "Count": 19
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 11
+    },
+    {
+     "Item": "birch_log",
+     "Count": 8
+    }
+   ],
+   "want": "none"
+  },
+  {
+   "command": "mine",
+   "item": "dirt",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 5
+    },
+    {
+     "Item": "red_wool",
+     "Count": 15
+    },
+    {
+     "Item": "shield",
+     "Count": 18
+    },
+    {
+     "Item": "dirt",
+     "Count": 16
+    },
+    {
+     "Item": "red_wool",
+     "Count": 5
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "craft",
+   "item": "glass",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 12
+    },
+    {
+     "Item": "bread",
+     "Count": 3
+    },
+    {
+     "Item": "charcoal",
+     "Count": 14
+    }
+   ],
+   "want": "glass"
+  },
+  {
+   "command": "gather",
+   "item": "redstone",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "diamond_axe",
+     "Count": 18
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 16
+    },
+    {
+     "Item": "oak_log",
+     "Count": 17
+    },
+    {
+     "Item": "carrot",
+     "Count": 20
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 11
+    },
+    {
+     "Item": "bread",
+     "Count": 10
+    }
+   ],
+   "want": "redstone"
+  },
+  {
+   "command": "gather",
+   "item": "wool",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 7
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 16
+    }
+   ],
+   "want": "white_wool"
+  },
+  {
+   "command": "craft",
+   "item": "ladder",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 9
+    },
+    {
+     "Item": "porkchop",
+     "Count": 18
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 6
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 17
+    },
+    {
+     "Item": "red_wool",
+     "Count": 1
+    }
+   ],
+   "want": "ladder"
+  },
+  {
+   "command": "mine",
+   "item": "gold",
+   "tier": "wooden",
+   "carry": null,
+   "want": "raw_gold"
+  },
+  {
+   "command": "mine",
+   "item": "string",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 19
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 10
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 5
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 4
+    },
+    {
+     "Item": "porkchop",
+     "Count": 2
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 13
+    },
+    {
+     "Item": "coal",
+     "Count": 2
+    }
+   ],
+   "want": "string"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 19
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 19
+    },
+    {
+     "Item": "sand",
+     "Count": 12
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 9
+    },
+    {
+     "Item": "apple",
+     "Count": 7
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "craft",
+   "item": "glass",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 10
+    },
+    {
+     "Item": "sand",
+     "Count": 2
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 17
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 5
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 4
+    },
+    {
+     "Item": "carrot",
+     "Count": 2
+    }
+   ],
+   "want": "glass"
+  },
+  {
+   "command": "gather",
+   "item": "coal",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "diamond_axe",
+     "Count": 19
+    }
+   ],
+   "want": "coal"
+  },
+  {
+   "command": "mine",
+   "item": "wool",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 4
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 5
+    },
+    {
+     "Item": "coal",
+     "Count": 15
+    },
+    {
+     "Item": "carrot",
+     "Count": 8
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 14
+    }
+   ],
+   "want": "white_wool"
+  },
+  {
+   "command": "mine",
+   "item": "dirt",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 2
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 14
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "attack",
+   "item": "enderman",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 15
+    },
+    {
+     "Item": "carrot",
+     "Count": 13
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 8
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 1
+    },
+    {
+     "Item": "charcoal",
+     "Count": 8
+    }
+   ],
+   "want": "enderman"
+  },
+  {
+   "command": "mine",
+   "item": "coal",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 18
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 2
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 3
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 11
+    },
+    {
+     "Item": "apple",
+     "Count": 7
+    },
+    {
+     "Item": "sand",
+     "Count": 5
+    },
+    {
+     "Item": "stone",
+     "Count": 6
+    }
+   ],
+   "want": "coal"
+  },
+  {
+   "command": "gather",
+   "item": "diamond",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 20
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 14
+    },
+    {
+     "Item": "stick",
+     "Count": 17
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 2
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "gather",
+   "item": "diamond",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 11
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 3
+    },
+    {
+     "Item": "sand",
+     "Count": 18
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 20
+    },
+    {
+     "Item": "stick",
+     "Count": 18
+    },
+    {
+     "Item": "dirt",
+     "Count": 17
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "craft",
+   "item": "leggings",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 12
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 4
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 9
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 3
+    },
+    {
+     "Item": "oak_log",
+     "Count": 13
+    },
+    {
+     "Item": "porkchop",
+     "Count": 19
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 13
+    }
+   ],
+   "want": "diamond_leggings"
+  },
+  {
+   "command": "craft",
+   "item": "planks",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 3
+    },
+    {
+     "Item": "torch",
+     "Count": 11
+    },
+    {
+     "Item": "bread",
+     "Count": 3
+    },
+    {
+     "Item": "apple",
+     "Count": 2
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 2
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "craft",
+   "item": "ladder",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "golden_apple",
+     "Count": 11
+    },
+    {
+     "Item": "carrot",
+     "Count": 3
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 3
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 4
+    }
+   ],
+   "want": "ladder"
+  },
+  {
+   "command": "give",
+   "item": "apple",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "torch",
+     "Count": 8
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 7
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 12
+    },
+    {
+     "Item": "shield",
+     "Count": 2
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 7
+    }
+   ],
+   "want": "apple"
+  },
+  {
+   "command": "store",
+   "item": "food",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 19
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 8
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 13
+    },
+    {
+     "Item": "birch_log",
+     "Count": 15
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 6
+    }
+   ],
+   "want": "cooked_beef"
+  },
+  {
+   "command": "craft",
+   "item": "torch",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "stone_pickaxe",
+     "Count": 11
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 4
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "oak_log",
+     "Count": 4
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 10
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 18
+    },
+    {
+     "Item": "coal",
+     "Count": 11
+    }
+   ],
+   "want": "torch"
+  },
+  {
+   "command": "eat",
+   "item": "bread",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 15
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 2
+    },
+    {
+     "Item": "stone",
+     "Count": 14
+    },
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 19
+    },
+    {
+     "Item": "bread",
+     "Count": 6
+    }
+   ],
+   "want": "bread"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 11
+    },
+    {
+     "Item": "birch_log",
+     "Count": 5
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 4
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 10
+    },
+    {
+     "Item": "red_wool",
+     "Count": 1
+    }
+   ],
+   "want": "bucket"
+  },
+  {
+   "command": "gather",
+   "item": "gravel",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "stick",
+     "Count": 5
+    }
+   ],
+   "want": "gravel"
+  },
+  {
+   "command": "attack",
+   "item": "skeleton",
+   "tier": "wooden",
+   "carry": null,
+   "want": "skeleton"
+  },
+  {
+   "command": "craft",
+   "item": "planks",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 11
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "craft",
+   "item": "table",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 17
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 8
+    },
+    {
+     "Item": "coal",
+     "Count": 10
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 3
+    },
+    {
+     "Item": "birch_log",
+     "Count": 2
+    },
+    {
+     "Item": "birch_log",
+     "Count": 10
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 2
+    }
+   ],
+   "want": "crafting_table"
+  },
+  {
+   "command": "craft",
+   "item": "coal",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 18
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 7
+    },
+    {
+     "Item": "birch_log",
+     "Count": 14
+    }
+   ],
+   "want": "charcoal"
+  },
+  {
+   "command": "attack",
+   "item": "cave_spider",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 1
+    },
+    {
+     "Item": "carrot",
+     "Count": 8
+    },
+    {
+     "Item": "shield",
+     "Count": 12
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 6
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 10
+    },
+    {
+     "Item": "carrot",
+     "Count": 11
+    }
+   ],
+   "want": "cave_spider"
+  },
+  {
+   "command": "gather",
+   "item": "planks",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 13
+    },
+    {
+     "Item": "bread",
+     "Count": 8
+    },
+    {
+     "Item": "torch",
+     "Count": 14
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "craft",
+   "item": "gold",
+   "tier": "wooden",
+   "carry": null,
+   "want": "gold_ingot"
+  },
+  {
+   "command": "craft",
+   "item": "ladder",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 1
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 17
+    },
+    {
+     "Item": "charcoal",
+     "Count": 7
+    },
+    {
+     "Item": "porkchop",
+     "Count": 12
+    }
+   ],
+   "want": "ladder"
+  },
+  {
+   "command": "mine",
+   "item": "diamond",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 17
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "gather",
+   "item": "dirt",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 12
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 12
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "gather",
+   "item": "planks",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 13
+    },
+    {
+     "Item": "carrot",
+     "Count": 9
+    },
+    {
+     "Item": "stick",
+     "Count": 2
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "craft",
+   "item": "shield",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 12
+    },
+    {
+     "Item": "charcoal",
+     "Count": 14
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 11
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 17
+    },
+    {
+     "Item": "sand",
+     "Count": 12
+    },
+    {
+     "Item": "dirt",
+     "Count": 9
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 8
+    }
+   ],
+   "want": "shield"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 4
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 8
+    },
+    {
+     "Item": "oak_log",
+     "Count": 2
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "attack",
+   "item": "witch",
+   "tier": "stone",
+   "carry": null,
+   "want": "witch"
+  },
+  {
+   "command": "mine",
+   "item": "wheat",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 11
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 11
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 13
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 9
+    }
+   ],
+   "want": "wheat"
+  },
+  {
+   "command": "craft",
+   "item": "glass",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 4
+    },
+    {
+     "Item": "dirt",
+     "Count": 2
+    },
+    {
+     "Item": "porkchop",
+     "Count": 20
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 19
+    },
+    {
+     "Item": "birch_log",
+     "Count": 14
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 12
+    },
+    {
+     "Item": "birch_log",
+     "Count": 13
+    }
+   ],
+   "want": "glass"
+  },
+  {
+   "command": "gather",
+   "item": "wood",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 7
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 6
+    },
+    {
+     "Item": "stone",
+     "Count": 20
+    },
+    {
+     "Item": "torch",
+     "Count": 11
+    },
+    {
+     "Item": "oak_log",
+     "Count": 19
+    },
+    {
+     "Item": "stone",
+     "Count": 5
+    },
+    {
+     "Item": "birch_log",
+     "Count": 10
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "craft",
+   "item": "stone",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 3
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 12
+    },
+    {
+     "Item": "stone",
+     "Count": 1
+    },
+    {
+     "Item": "diamond",
+     "Count": 6
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 11
+    }
+   ],
+   "want": "stone"
+  },
+  {
+   "command": "attack",
+   "item": "drowned",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 6
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 4
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 8
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 6
+    }
+   ],
+   "want": "drowned"
+  },
+  {
+   "command": "gather",
+   "item": "sand",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 12
+    },
+    {
+     "Item": "coal",
+     "Count": 1
+    },
+    {
+     "Item": "stick",
+     "Count": 7
+    },
+    {
+     "Item": "porkchop",
+     "Count": 11
+    },
+    {
+     "Item": "torch",
+     "Count": 19
+    }
+   ],
+   "want": "sand"
+  },
+  {
+   "command": "mine",
+   "item": "string",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 2
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 9
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 19
+    },
+    {
+     "Item": "porkchop",
+     "Count": 20
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 8
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 6
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 19
+    }
+   ],
+   "want": "string"
+  },
+  {
+   "command": "gather",
+   "item": "lapis",
+   "tier": "stone",
+   "carry": null,
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "eat",
+   "item": "food",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 1
+    },
+    {
+     "Item": "charcoal",
+     "Count": 2
+    },
+    {
+     "Item": "stick",
+     "Count": 19
+    },
+    {
+     "Item": "coal",
+     "Count": 4
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 8
+    }
+   ],
+   "want": "cooked_beef"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 3
+    }
+   ],
+   "want": "bucket"
+  },
+  {
+   "command": "craft",
+   "item": "charcoal",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 18
+    },
+    {
+     "Item": "bread",
+     "Count": 20
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 2
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 6
+    }
+   ],
+   "want": "charcoal"
+  },
+  {
+   "command": "craft",
+   "item": "wood",
+   "tier": "iron",
+   "carry": null,
+   "want": "planks"
+  },
+  {
+   "command": "craft",
+   "item": "bowl",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 20
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 14
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 20
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 1
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 15
+    },
+    {
+     "Item": "charcoal",
+     "Count": 13
+    },
+    {
+     "Item": "porkchop",
+     "Count": 8
+    }
+   ],
+   "want": "bowl"
+  },
+  {
+   "command": "mine",
+   "item": "seeds",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 16
+    }
+   ],
+   "want": "wheat_seeds"
+  },
+  {
+   "command": "gather",
+   "item": "coal",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 20
+    },
+    {
+     "Item": "red_wool",
+     "Count": 20
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 13
+    },
+    {
+     "Item": "stone",
+     "Count": 9
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 19
+    }
+   ],
+   "want": "coal"
+  },
+  {
+   "command": "give",
+   "item": "gold",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 9
+    },
+    {
+     "Item": "diamond",
+     "Count": 16
+    },
+    {
+     "Item": "apple",
+     "Count": 15
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 4
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 11
+    },
+    {
+     "Item": "charcoal",
+     "Count": 9
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 16
+    }
+   ],
+   "want": "gold_ingot"
+  },
+  {
+   "command": "mine",
+   "item": "stick",
+   "tier": "diamond",
+   "carry": null,
+   "want": "stick"
+  },
+  {
+   "command": "attack",
+   "item": "witch",
+   "tier": "iron",
+   "carry": null,
+   "want": "witch"
+  },
+  {
+   "command": "gather",
+   "item": "diamond",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 15
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 17
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "mine",
+   "item": "lapis",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 12
+    },
+    {
+     "Item": "shield",
+     "Count": 14
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 14
+    },
+    {
+     "Item": "sand",
+     "Count": 12
+    },
+    {
+     "Item": "diamond",
+     "Count": 17
+    },
+    {
+     "Item": "bread",
+     "Count": 16
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 18
+    }
+   ],
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "craft",
+   "item": "shield",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 12
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 17
+    },
+    {
+     "Item": "birch_log",
+     "Count": 12
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 19
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 14
+    },
+    {
+     "Item": "red_wool",
+     "Count": 6
+    },
+    {
+     "Item": "coal",
+     "Count": 14
+    }
+   ],
+   "want": "shield"
+  },
+  {
+   "command": "store",
+   "item": "wood",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "diamond_axe",
+     "Count": 15
+    },
+    {
+     "Item": "birch_log",
+     "Count": 16
+    },
+    {
+     "Item": "charcoal",
+     "Count": 11
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 17
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 11
+    }
+   ],
+   "want": "birch_log"
+  },
+  {
+   "command": "gather",
+   "item": "iron",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 9
+    },
+    {
+     "Item": "sand",
+     "Count": 15
+    },
+    {
+     "Item": "red_wool",
+     "Count": 13
+    },
+    {
+     "Item": "birch_log",
+     "Count": 8
+    }
+   ],
+   "want": "raw_iron"
+  },
+  {
+   "command": "craft",
+   "item": "glass",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 14
+    },
+    {
+     "Item": "diamond",
+     "Count": 13
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 8
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 4
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 7
+    }
+   ],
+   "want": "glass"
+  },
+  {
+   "command": "craft",
+   "item": "helmet",
+   "tier": "iron",
+   "carry": null,
+   "want": "iron_helmet"
+  },
+  {
+   "command": "attack",
+   "item": "skeleton",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 4
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 19
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 18
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 11
+    },
+    {
+     "Item": "stick",
+     "Count": 7
+    }
+   ],
+   "want": "skeleton"
+  },
+  {
+   "command": "mine",
+   "item": "dirt",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 3
+    },
+    {
+     "Item": "red_wool",
+     "Count": 4
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 8
+    },
+    {
+     "Item": "apple",
+     "Count": 10
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 20
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 10
+    },
+    {
+     "Item": "stick",
+     "Count": 16
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "give",
+   "item": "food",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 7
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 9
+    },
+    {
+     "Item": "apple",
+     "Count": 13
+    },
+    {
+     "Item": "red_wool",
+     "Count": 10
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 9
+    },
+    {
+     "Item": "carrot",
+     "Count": 4
+    },
+    {
+     "Item": "stick",
+     "Count": 6
+    }
+   ],
+   "want": "apple"
+  },
+  {
+   "command": "mine",
+   "item": "stone",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 9
+    },
+    {
+     "Item": "stick",
+     "Count": 6
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 20
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 3
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 10
+    },
+    {
+     "Item": "red_wool",
+     "Count": 13
+    }
+   ],
+   "want": "cobblestone"
+  },
+  {
+   "command": "attack",
+   "item": "chicken",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 18
+    }
+   ],
+   "want": "chicken"
+  },
+  {
+   "command": "mine",
+   "item": "stick",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 18
+    }
+   ],
+   "want": "stick"
+  },
+  {
+   "command": "gather",
+   "item": "gravel",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 14
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 14
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 11
+    }
+   ],
+   "want": "gravel"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 13
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 3
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 13
+    },
+    {
+     "Item": "dirt",
+     "Count": 16
+    }
+   ],
+   "want": "bucket"
+  },
+  {
+   "command": "gather",
+   "item": "wool",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 12
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 9
+    },
+    {
+     "Item": "sand",
+     "Count": 9
+    }
+   ],
+   "want": "white_wool"
+  },
+  {
+   "command": "craft",
+   "item": "shears",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 17
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 17
+    },
+    {
+     "Item": "sand",
+     "Count": 1
+    },
+    {
+     "Item": "porkchop",
+     "Count": 10
+    }
+   ],
+   "want": "shears"
+  },
+  {
+   "command": "craft",
+   "item": "shovel",
+   "tier": "stone",
+   "carry": null,
+   "want": "stone_shovel"
+  },
+  {
+   "command": "give",
+   "item": "stone",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "golden_apple",
+     "Count": 12
+    },
+    {
+     "Item": "stone",
+     "Count": 16
+    }
+   ],
+   "want": "stone"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 18
+    },
+    {
+     "Item": "birch_log",
+     "Count": 4
+    },
+    {
+     "Item": "sand",
+     "Count": 14
+    },
+    {
+     "Item": "diamond",
+     "Count": 10
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "eat",
+   "item": "food",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 6
+    },
+    {
+     "Item": "sand",
+     "Count": 20
+    },
+    {
+     "Item": "carrot",
+     "Count": 20
+    }
+   ],
+   "want": "carrot"
+  },
+  {
+   "command": "attack",
+   "item": "chicken",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 19
+    },
+    {
+     "Item": "stick",
+     "Count": 9
+    },
+    {
+     "Item": "birch_log",
+     "Count": 9
+    },
+    {
+     "Item": "sand",
+     "Count": 2
+    },
+    {
+     "Item": "porkchop",
+     "Count": 1
+    }
+   ],
+   "want": "chicken"
+  },
+  {
+   "command": "craft",
+   "item": "axe",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 10
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 2
+    },
+    {
+     "Item": "dirt",
+     "Count": 18
+    }
+   ],
+   "want": "wooden_axe"
+  },
+  {
+   "command": "attack",
+   "item": "husk",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 1
+    },
+    {
+     "Item": "bread",
+     "Count": 2
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 19
+    }
+   ],
+   "want": "husk"
+  },
+  {
+   "command": "eat",
+   "item": "food",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 1
+    },
+    {
+     "Item": "porkchop",
+     "Count": 20
+    },
+    {
+     "Item": "oak_log",
+     "Count": 10
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 19
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 10
+    },
+    {
+     "Item": "charcoal",
+     "Count": 8
+    }
+   ],
+   "want": "porkchop"
+  },
+  {
+   "command": "craft",
+   "item": "helmet",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 7
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 18
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 2
+    },
+    {
+     "Item": "carrot",
+     "Count": 17
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 8
+    }
+   ],
+   "want": "iron_helmet"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "diamond_axe",
+     "Count": 9
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 17
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 18
+    },
+    {
+     "Item": "porkchop",
+     "Count": 3
+    },
+    {
+     "Item": "coal",
+     "Count": 20
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 6
+    }
+   ],
+   "want": "bucket"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 13
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "craft",
+   "item": "axe",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 20
+    },
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 13
+    },
+    {
+     "Item": "dirt",
+     "Count": 12
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 8
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 7
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 1
+    }
+   ],
+   "want": "iron_axe"
+  },
+  {
+   "command": "mine",
+   "item": "string",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 10
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 1
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 12
+    },
+    {
+     "Item": "porkchop",
+     "Count": 1
+    }
+   ],
+   "want": "string"
+  },
+  {
+   "command": "gather",
+   "item": "flint",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 19
+    },
+    {
+     "Item": "coal",
+     "Count": 9
+    },
+    {
+     "Item": "stone",
+     "Count": 7
+    },
+    {
+     "Item": "torch",
+     "Count": 1
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 12
+    }
+   ],
+   "want": "flint"
+  },
+  {
+   "command": "gather",
+   "item": "lapis",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 1
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 13
+    },
+    {
+     "Item": "oak_log",
+     "Count": 20
+    },
+    {
+     "Item": "bread",
+     "Count": 2
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 14
+    }
+   ],
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "mine",
+   "item": "copper",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 9
+    }
+   ],
+   "want": "raw_copper"
+  },
+  {
+   "command": "mine",
+   "item": "sand",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 4
+    },
+    {
+     "Item": "oak_log",
+     "Count": 10
+    },
+    {
+     "Item": "torch",
+     "Count": 4
+    },
+    {
+     "Item": "red_wool",
+     "Count": 17
+    },
+    {
+     "Item": "stone",
+     "Count": 11
+    }
+   ],
+   "want": "sand"
+  },
+  {
+   "command": "mine",
+   "item": "redstone",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "stone_pickaxe",
+     "Count": 1
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 6
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 1
+    },
+    {
+     "Item": "red_wool",
+     "Count": 9
+    },
+    {
+     "Item": "shield",
+     "Count": 14
+    }
+   ],
+   "want": "redstone"
+  },
+  {
+   "command": "gather",
+   "item": "redstone",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 7
+    },
+    {
+     "Item": "stone",
+     "Count": 15
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 5
+    },
+    {
+     "Item": "sand",
+     "Count": 11
+    },
+    {
+     "Item": "coal",
+     "Count": 7
+    }
+   ],
+   "want": "redstone"
+  },
+  {
+   "command": "craft",
+   "item": "wood",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 13
+    },
+    {
+     "Item": "oak_log",
+     "Count": 9
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 7
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 13
+    },
+    {
+     "Item": "white_wool",
+     "Count": 16
+    },
+    {
+     "Item": "shield",
+     "Count": 1
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "attack",
+   "item": "enderman",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 12
+    }
+   ],
+   "want": "enderman"
+  },
+  {
+   "command": "store",
+   "item": "food",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 6
+    },
+    {
+     "Item": "bread",
+     "Count": 19
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 19
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 4
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 3
+    }
+   ],
+   "want": "bread"
+  },
+  {
+   "command": "attack",
+   "item": "pig",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 3
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 3
+    }
+   ],
+   "want": "pig"
+  },
+  {
+   "command": "craft",
+   "item": "ladder",
+   "tier": "iron",
+   "carry": null,
+   "want": "ladder"
+  },
+  {
+   "command": "craft",
+   "item": "bowl",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 7
+    }
+   ],
+   "want": "bowl"
+  },
+  {
+   "command": "craft",
+   "item": "planks",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 7
+    },
+    {
+     "Item": "stone",
+     "Count": 16
+    },
+    {
+     "Item": "red_wool",
+     "Count": 12
+    },
+    {
+     "Item": "porkchop",
+     "Count": 1
+    },
+    {
+     "Item": "charcoal",
+     "Count": 2
+    },
+    {
+     "Item": "oak_log",
+     "Count": 9
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 20
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "gather",
+   "item": "flint",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 10
+    }
+   ],
+   "want": "flint"
+  },
+  {
+   "command": "attack",
+   "item": "husk",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 3
+    },
+    {
+     "Item": "carrot",
+     "Count": 17
+    },
+    {
+     "Item": "bread",
+     "Count": 2
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 1
+    },
+    {
+     "Item": "charcoal",
+     "Count": 16
+    },
+    {
+     "Item": "white_wool",
+     "Count": 2
+    },
+    {
+     "Item": "torch",
+     "Count": 13
+    }
+   ],
+   "want": "husk"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "stick",
+     "Count": 11
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 8
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "mine",
+   "item": "string",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 5
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 18
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 17
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 15
+    }
+   ],
+   "want": "string"
+  },
+  {
+   "command": "gather",
+   "item": "dirt",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 12
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 1
+    },
+    {
+     "Item": "red_wool",
+     "Count": 17
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 12
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 5
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "mine",
+   "item": "coal",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 5
+    },
+    {
+     "Item": "diamond",
+     "Count": 3
+    },
+    {
+     "Item": "torch",
+     "Count": 3
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 18
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 4
+    }
+   ],
+   "want": "coal"
+  },
+  {
+   "command": "gather",
+   "item": "emerald",
+   "tier": "wooden",
+   "carry": null,
+   "want": "emerald"
+  },
+  {
+   "command": "attack",
+   "item": "witch",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 15
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 20
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 2
+    }
+   ],
+   "want": "witch"
+  },
+  {
+   "command": "attack",
+   "item": "zombie",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 20
+    }
+   ],
+   "want": "zombie"
+  },
+  {
+   "command": "mine",
+   "item": "wood",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 19
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 9
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 10
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 5
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 4
+    },
+    {
+     "Item": "carrot",
+     "Count": 5
+    },
+    {
+     "Item": "charcoal",
+     "Count": 5
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "gather",
+   "item": "planks",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 9
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "mine",
+   "item": "planks",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 15
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 20
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "mine",
+   "item": "flint",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "stick",
+     "Count": 20
+    },
+    {
+     "Item": "red_wool",
+     "Count": 10
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 8
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 9
+    },
+    {
+     "Item": "sand",
+     "Count": 20
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 2
+    }
+   ],
+   "want": "flint"
+  },
+  {
+   "command": "craft",
+   "item": "shovel",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 9
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 1
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 1
+    }
+   ],
+   "want": "wooden_shovel"
+  },
+  {
+   "command": "attack",
+   "item": "sheep",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 7
+    }
+   ],
+   "want": "sheep"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 17
+    },
+    {
+     "Item": "torch",
+     "Count": 12
+    }
+   ],
+   "want": "bucket"
+  },
+  {
+   "command": "gather",
+   "item": "wool",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 9
+    },
+    {
+     "Item": "coal",
+     "Count": 20
+    },
+    {
+     "Item": "oak_log",
+     "Count": 15
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 16
+    },
+    {
+     "Item": "apple",
+     "Count": 10
+    }
+   ],
+   "want": "white_wool"
+  },
+  {
+   "command": "mine",
+   "item": "string",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 18
+    },
+    {
+     "Item": "red_wool",
+     "Count": 13
+    }
+   ],
+   "want": "string"
+  },
+  {
+   "command": "store",
+   "item": "iron",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 17
+    },
+    {
+     "Item": "dirt",
+     "Count": 18
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 8
+    },
+    {
+     "Item": "stone",
+     "Count": 16
+    },
+    {
+     "Item": "coal",
+     "Count": 18
+    },
+    {
+     "Item": "dirt",
+     "Count": 8
+    },
+    {
+     "Item": "sand",
+     "Count": 11
+    }
+   ],
+   "want": "raw_iron"
+  },
+  {
+   "command": "gather",
+   "item": "coal",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 9
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 5
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 19
+    },
+    {
+     "Item": "shield",
+     "Count": 15
+    }
+   ],
+   "want": "coal"
+  },
+  {
+   "command": "attack",
+   "item": "spider",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 19
+    }
+   ],
+   "want": "spider"
+  },
+  {
+   "command": "attack",
+   "item": "husk",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 12
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 12
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 1
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 7
+    },
+    {
+     "Item": "stick",
+     "Count": 9
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 12
+    },
+    {
+     "Item": "porkchop",
+     "Count": 16
+    }
+   ],
+   "want": "husk"
+  },
+  {
+   "command": "craft",
+   "item": "leggings",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 5
+    },
+    {
+     "Item": "diamond",
+     "Count": 6
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 11
+    },
+    {
+     "Item": "birch_log",
+     "Count": 3
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 3
+    }
+   ],
+   "want": "diamond_leggings"
+  },
+  {
+   "command": "craft",
+   "item": "sword",
+   "tier": "iron",
+   "carry": null,
+   "want": "iron_sword"
+  },
+  {
+   "command": "attack",
+   "item": "drowned",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 2
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 18
+    },
+    {
+     "Item": "diamond",
+     "Count": 18
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 12
+    },
+    {
+     "Item": "dirt",
+     "Count": 12
+    },
+    {
+     "Item": "white_wool",
+     "Count": 15
+    }
+   ],
+   "want": "drowned"
+  },
+  {
+   "command": "craft",
+   "item": "shield",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 5
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 9
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 7
+    },
+    {
+     "Item": "torch",
+     "Count": 8
+    }
+   ],
+   "want": "shield"
+  },
+  {
+   "command": "gather",
+   "item": "stick",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 18
+    }
+   ],
+   "want": "stick"
+  },
+  {
+   "command": "craft",
+   "item": "chest",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 19
+    },
+    {
+     "Item": "coal",
+     "Count": 18
+    }
+   ],
+   "want": "chest"
+  },
+  {
+   "command": "mine",
+   "item": "seeds",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 6
+    },
+    {
+     "Item": "apple",
+     "Count": 10
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 11
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 4
+    },
+    {
+     "Item": "sand",
+     "Count": 20
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 8
+    }
+   ],
+   "want": "wheat_seeds"
+  },
+  {
+   "command": "mine",
+   "item": "seeds",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 18
+    },
+    {
+     "Item": "oak_log",
+     "Count": 5
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 11
+    },
+    {
+     "Item": "sand",
+     "Count": 13
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 15
+    },
+    {
+     "Item": "shield",
+     "Count": 10
+    },
+    {
+     "Item": "birch_log",
+     "Count": 2
+    }
+   ],
+   "want": "wheat_seeds"
+  },
+  {
+   "command": "attack",
+   "item": "drowned",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 9
+    },
+    {
+     "Item": "diamond",
+     "Count": 15
+    },
+    {
+     "Item": "diamond",
+     "Count": 15
+    },
+    {
+     "Item": "stick",
+     "Count": 20
+    },
+    {
+     "Item": "charcoal",
+     "Count": 10
+    }
+   ],
+   "want": "drowned"
+  },
+  {
+   "command": "gather",
+   "item": "flint",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 10
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "shield",
+     "Count": 17
+    },
+    {
+     "Item": "red_wool",
+     "Count": 3
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 5
+    }
+   ],
+   "want": "flint"
+  },
+  {
+   "command": "gather",
+   "item": "seeds",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 18
+    }
+   ],
+   "want": "wheat_seeds"
+  },
+  {
+   "command": "mine",
+   "item": "lapis",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 16
+    },
+    {
+     "Item": "carrot",
+     "Count": 19
+    },
+    {
+     "Item": "apple",
+     "Count": 20
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 14
+    }
+   ],
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "craft",
+   "item": "boots",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 16
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 9
+    },
+    {
+     "Item": "oak_log",
+     "Count": 19
+    }
+   ],
+   "want": "iron_boots"
+  },
+  {
+   "command": "attack",
+   "item": "skeleton",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 16
+    }
+   ],
+   "want": "skeleton"
+  },
+  {
+   "command": "craft",
+   "item": "glass",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "stone_pickaxe",
+     "Count": 19
+    }
+   ],
+   "want": "glass"
+  },
+  {
+   "command": "mine",
+   "item": "string",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 6
+    },
+    {
+     "Item": "oak_log",
+     "Count": 6
+    },
+    {
+     "Item": "oak_log",
+     "Count": 15
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 14
+    },
+    {
+     "Item": "diamond",
+     "Count": 15
+    }
+   ],
+   "want": "string"
+  },
+  {
+   "command": "gather",
+   "item": "flint",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "golden_apple",
+     "Count": 4
+    }
+   ],
+   "want": "flint"
+  },
+  {
+   "command": "mine",
+   "item": "seeds",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 16
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 2
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 3
+    }
+   ],
+   "want": "wheat_seeds"
+  },
+  {
+   "command": "craft",
+   "item": "leggings",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 9
+    }
+   ],
+   "want": "iron_leggings"
+  },
+  {
+   "command": "give",
+   "item": "apple",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 15
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 17
+    },
+    {
+     "Item": "red_wool",
+     "Count": 18
+    },
+    {
+     "Item": "diamond",
+     "Count": 3
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 6
+    },
+    {
+     "Item": "bread",
+     "Count": 9
+    },
+    {
+     "Item": "diamond",
+     "Count": 17
+    }
+   ],
+   "want": "golden_apple"
+  },
+  {
+   "command": "gather",
+   "item": "gold",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 7
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 4
+    },
+    {
+     "Item": "oak_log",
+     "Count": 11
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 13
+    }
+   ],
+   "want": "raw_gold"
+  },
+  {
+   "command": "store",
+   "item": "planks",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 15
+    },
+    {
+     "Item": "apple",
+     "Count": 5
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 3
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 4
+    },
+    {
+     "Item": "shield",
+     "Count": 3
+    }
+   ],
+   "want": "spruce_planks"
+  },
+  {
+   "command": "gather",
+   "item": "redstone",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 4
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 19
+    },
+    {
+     "Item": "white_wool",
+     "Count": 6
+    }
+   ],
+   "want": "redstone"
+  },
+  {
+   "command": "craft",
+   "item": "stick",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 20
+    },
+    {
+     "Item": "charcoal",
+     "Count": 16
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 8
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 16
+    },
+    {
+     "Item": "red_wool",
+     "Count": 2
+    }
+   ],
+   "want": "stick"
+  },
+  {
+   "command": "attack",
+   "item": "pig",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 2
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 16
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 5
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 20
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 4
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 11
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 13
+    }
+   ],
+   "want": "pig"
+  },
+  {
+   "command": "mine",
+   "item": "wool",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 1
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 20
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 19
+    },
+    {
+     "Item": "apple",
+     "Count": 12
+    }
+   ],
+   "want": "white_wool"
+  },
+  {
+   "command": "eat",
+   "item": "meat",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 14
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 14
+    },
+    {
+     "Item": "red_wool",
+     "Count": 4
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 16
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 13
+    },
+    {
+     "Item": "apple",
+     "Count": 11
+    }
+   ],
+   "want": "cooked_beef"
+  },
+  {
+   "command": "craft",
+   "item": "shears",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 11
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 13
+    },
+    {
+     "Item": "diamond",
+     "Count": 5
+    },
+    {
+     "Item": "torch",
+     "Count": 10
+    },
+    {
+     "Item": "carrot",
+     "Count": 3
+    },
+    {
+     "Item": "stone",
+     "Count": 7
+    },
+    {
+     "Item": "stick",
+     "Count": 8
+    }
+   ],
+   "want": "shears"
+  },
+  {
+   "command": "craft",
+   "item": "iron",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 1
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 1
+    }
+   ],
+   "want": "iron_ingot"
+  },
+  {
+   "command": "mine",
+   "item": "wheat",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 18
+    }
+   ],
+   "want": "wheat"
+  },
+  {
+   "command": "craft",
+   "item": "bowl",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 10
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 10
+    },
+    {
+     "Item": "stone",
+     "Count": 4
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 1
+    },
+    {
+     "Item": "coal",
+     "Count": 18
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 9
+    }
+   ],
+   "want": "bowl"
+  },
+  {
+   "command": "gather",
+   "item": "diamond",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 12
+    },
+    {
+     "Item": "diamond",
+     "Count": 17
+    },
+    {
+     "Item": "stick",
+     "Count": 18
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 11
+    },
+    {
+     "Item": "bread",
+     "Count": 2
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "gather",
+   "item": "wood",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 19
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "attack",
+   "item": "enderman",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 3
+    },
+    {
+     "Item": "birch_log",
+     "Count": 19
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 17
+    }
+   ],
+   "want": "enderman"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 2
+    },
+    {
+     "Item": "coal",
+     "Count": 1
+    },
+    {
+     "Item": "bread",
+     "Count": 8
+    },
+    {
+     "Item": "white_wool",
+     "Count": 13
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "give",
+   "item": "charcoal",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 6
+    }
+   ],
+   "want": "charcoal"
+  },
+  {
+   "command": "attack",
+   "item": "cave_spider",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 14
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 5
+    },
+    {
+     "Item": "red_wool",
+     "Count": 17
+    }
+   ],
+   "want": "cave_spider"
+  },
+  {
+   "command": "mine",
+   "item": "wood",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 20
+    },
+    {
+     "Item": "bread",
+     "Count": 5
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 17
+    },
+    {
+     "Item": "carrot",
+     "Count": 6
+    },
+    {
+     "Item": "dirt",
+     "Count": 6
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 20
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "craft",
+   "item": "planks",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 4
+    },
+    {
+     "Item": "sand",
+     "Count": 2
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 3
+    },
+    {
+     "Item": "charcoal",
+     "Count": 3
+    },
+    {
+     "Item": "dirt",
+     "Count": 11
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 11
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "attack",
+   "item": "skeleton",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 15
+    },
+    {
+     "Item": "apple",
+     "Count": 15
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 19
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 3
+    },
+    {
+     "Item": "carrot",
+     "Count": 1
+    }
+   ],
+   "want": "skeleton"
+  },
+  {
+   "command": "craft",
+   "item": "coal",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 11
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 8
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 11
+    }
+   ],
+   "want": "charcoal"
+  },
+  {
+   "command": "attack",
+   "item": "stray",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 5
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 12
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 7
+    }
+   ],
+   "want": "stray"
+  },
+  {
+   "command": "mine",
+   "item": "coal",
+   "tier": "diamond",
+   "carry": null,
+   "want": "coal"
+  },
+  {
+   "command": "craft",
+   "item": "glass",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 20
+    },
+    {
+     "Item": "red_wool",
+     "Count": 13
+    },
+    {
+     "Item": "diamond",
+     "Count": 12
+    },
+    {
+     "Item": "coal",
+     "Count": 12
+    }
+   ],
+   "want": "glass"
+  },
+  {
+   "command": "attack",
+   "item": "stray",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "stone_pickaxe",
+     "Count": 8
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 3
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 8
+    },
+    {
+     "Item": "coal",
+     "Count": 8
+    },
+    {
+     "Item": "stone",
+     "Count": 1
+    },
+    {
+     "Item": "bread",
+     "Count": 3
+    }
+   ],
+   "want": "stray"
+  },
+  {
+   "command": "craft",
+   "item": "chestplate",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 19
+    },
+    {
+     "Item": "shield",
+     "Count": 3
+    },
+    {
+     "Item": "torch",
+     "Count": 2
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 20
+    }
+   ],
+   "want": "iron_chestplate"
+  },
+  {
+   "command": "mine",
+   "item": "gold",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 15
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 11
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 18
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 14
+    }
+   ],
+   "want": "raw_gold"
+  },
+  {
+   "command": "mine",
+   "item": "dirt",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 15
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "gather",
+   "item": "seeds",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 8
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 2
+    },
+    {
+     "Item": "white_wool",
+     "Count": 1
+    },
+    {
+     "Item": "oak_log",
+     "Count": 8
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 20
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 2
+    }
+   ],
+   "want": "wheat_seeds"
+  },
+  {
+   "command": "craft",
+   "item": "chest",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 1
+    }
+   ],
+   "want": "chest"
+  },
+  {
+   "command": "gather",
+   "item": "gold",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 1
+    },
+    {
+     "Item": "birch_log",
+     "Count": 13
+    }
+   ],
+   "want": "raw_gold"
+  },
+  {
+   "command": "store",
+   "item": "meat",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 13
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 2
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 15
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 7
+    }
+   ],
+   "want": "cooked_beef"
+  },
+  {
+   "command": "store",
+   "item": "stone",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 17
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 1
+    },
+    {
+     "Item": "stick",
+     "Count": 9
+    }
+   ],
+   "want": "cobblestone"
+  },
+  {
+   "command": "attack",
+   "item": "zombie",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 7
+    },
+    {
+     "Item": "stone",
+     "Count": 9
+    },
+    {
+     "Item": "diamond",
+     "Count": 9
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 17
+    },
+    {
+     "Item": "oak_log",
+     "Count": 11
+    }
+   ],
+   "want": "zombie"
+  },
+  {
+   "command": "attack",
+   "item": "stray",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 6
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 15
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 7
+    }
+   ],
+   "want": "stray"
+  },
+  {
+   "command": "attack",
+   "item": "stray",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 7
+    }
+   ],
+   "want": "stray"
+  },
+  {
+   "command": "gather",
+   "item": "iron",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 15
+    },
+    {
+     "Item": "red_wool",
+     "Count": 6
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 20
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 10
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 2
+    }
+   ],
+   "want": "raw_iron"
+  },
+  {
+   "command": "gather",
+   "item": "wood",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "red_wool",
+     "Count": 14
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "gather",
+   "item": "lapis",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 12
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 2
+    }
+   ],
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "craft",
+   "item": "charcoal",
+   "tier": "wooden",
+   "carry": null,
+   "want": "charcoal"
+  },
+  {
+   "command": "mine",
+   "item": "sand",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 15
+    },
+    {
+     "Item": "charcoal",
+     "Count": 13
+    },
+    {
+     "Item": "white_wool",
+     "Count": 1
+    },
+    {
+     "Item": "stick",
+     "Count": 10
+    },
+    {
+     "Item": "porkchop",
+     "Count": 6
+    },
+    {
+     "Item": "coal",
+     "Count": 5
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 5
+    }
+   ],
+   "want": "sand"
+  },
+  {
+   "command": "craft",
+   "item": "hoe",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 7
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 12
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 2
+    },
+    {
+     "Item": "diamond",
+     "Count": 12
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 7
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 13
+    }
+   ],
+   "want": "diamond_hoe"
+  },
+  {
+   "command": "store",
+   "item": "diamond",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 9
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 1
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 7
+    },
+    {
+     "Item": "diamond",
+     "Count": 16
+    },
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "birch_log",
+     "Count": 10
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "craft",
+   "item": "stick",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "coal",
+     "Count": 8
+    },
+    {
+     "Item": "diamond",
+     "Count": 18
+    },
+    {
+     "Item": "diamond",
+     "Count": 19
+    },
+    {
+     "Item": "coal",
+     "Count": 16
+    },
+    {
+     "Item": "stone",
+     "Count": 15
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 4
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 17
+    }
+   ],
+   "want": "stick"
+  },
+  {
+   "command": "craft",
+   "item": "helmet",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 18
+    }
+   ],
+   "want": "iron_helmet"
+  },
+  {
+   "command": "mine",
+   "item": "flint",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 20
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 6
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 11
+    },
+    {
+     "Item": "coal",
+     "Count": 7
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 5
+    }
+   ],
+   "want": "flint"
+  },
+  {
+   "command": "gather",
+   "item": "iron",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 17
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 2
+    },
+    {
+     "Item": "stone",
+     "Count": 14
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 7
+    }
+   ],
+   "want": "raw_iron"
+  },
+  {
+   "command": "store",
+   "item": "planks",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 4
+    }
+   ],
+   "want": "spruce_planks"
+  },
+  {
+   "command": "mine",
+   "item": "wood",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 13
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 1
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 19
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 7
+    },
+    {
+     "Item": "white_wool",
+     "Count": 15
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 6
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "gather",
+   "item": "sand",
+   "tier": "none",
+   "carry": null,
+   "want": "sand"
+  },
+  {
+   "command": "gather",
+   "item": "copper",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 20
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 9
+    },
+    {
+     "Item": "birch_log",
+     "Count": 18
+    }
+   ],
+   "want": "raw_copper"
+  },
+  {
+   "command": "gather",
+   "item": "copper",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 10
+    }
+   ],
+   "want": "raw_copper"
+  },
+  {
+   "command": "gather",
+   "item": "emerald",
+   "tier": "stone",
+   "carry": null,
+   "want": "emerald"
+  },
+  {
+   "command": "store",
+   "item": "food",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 5
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 6
+    }
+   ],
+   "want": "rotten_flesh"
+  },
+  {
+   "command": "gather",
+   "item": "emerald",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 4
+    },
+    {
+     "Item": "stone",
+     "Count": 13
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 3
+    }
+   ],
+   "want": "emerald"
+  },
+  {
+   "command": "gather",
+   "item": "copper",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 6
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 13
+    }
+   ],
+   "want": "raw_copper"
+  },
+  {
+   "command": "mine",
+   "item": "dirt",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 1
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 12
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 15
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "craft",
+   "item": "gold",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 16
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 13
+    },
+    {
+     "Item": "coal",
+     "Count": 1
+    }
+   ],
+   "want": "gold_ingot"
+  },
+  {
+   "command": "eat",
+   "item": "food",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "cooked_beef",
+     "Count": 12
+    }
+   ],
+   "want": "cooked_beef"
+  },
+  {
+   "command": "craft",
+   "item": "hoe",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 4
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 1
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 16
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 20
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 7
+    },
+    {
+     "Item": "torch",
+     "Count": 14
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 13
+    }
+   ],
+   "want": "diamond_hoe"
+  },
+  {
+   "command": "attack",
+   "item": "cave_spider",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 12
+    },
+    {
+     "Item": "oak_log",
+     "Count": 6
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 14
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 5
+    },
+    {
+     "Item": "carrot",
+     "Count": 13
+    }
+   ],
+   "want": "cave_spider"
+  },
+  {
+   "command": "craft",
+   "item": "table",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 3
+    },
+    {
+     "Item": "oak_log",
+     "Count": 11
+    },
+    {
+     "Item": "coal",
+     "Count": 13
+    },
+    {
+     "Item": "coal",
+     "Count": 1
+    },
+    {
+     "Item": "white_wool",
+     "Count": 1
+    }
+   ],
+   "want": "crafting_table"
+  },
+  {
+   "command": "mine",
+   "item": "coal",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 17
+    },
+    {
+     "Item": "oak_log",
+     "Count": 20
+    },
+    {
+     "Item": "bread",
+     "Count": 8
+    },
+    {
+     "Item": "bread",
+     "Count": 11
+    },
+    {
+     "Item": "coal",
+     "Count": 3
+    }
+   ],
+   "want": "coal"
+  },
+  {
+   "command": "mine",
+   "item": "wheat",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 6
+    },
+    {
+     "Item": "oak_log",
+     "Count": 17
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 19
+    },
+    {
+     "Item": "charcoal",
+     "Count": 6
+    },
+    {
+     "Item": "oak_log",
+     "Count": 2
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 20
+    }
+   ],
+   "want": "wheat"
+  },
+  {
+   "command": "gather",
+   "item": "wood",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 5
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 13
+    },
+    {
+     "Item": "oak_log",
+     "Count": 17
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 14
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 15
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 9
+    },
+    {
+     "Item": "shield",
+     "Count": 11
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "mine",
+   "item": "wheat",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "oak_log",
+     "Count": 2
+    },
+    {
+     "Item": "coal",
+     "Count": 16
+    }
+   ],
+   "want": "wheat"
+  },
+  {
+   "command": "attack",
+   "item": "slime",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 1
+    },
+    {
+     "Item": "sand",
+     "Count": 8
+    },
+    {
+     "Item": "sand",
+     "Count": 2
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 13
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 20
+    }
+   ],
+   "want": "slime"
+  },
+  {
+   "command": "mine",
+   "item": "diamond",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 8
+    },
+    {
+     "Item": "carrot",
+     "Count": 13
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 5
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 10
+    },
+    {
+     "Item": "carrot",
+     "Count": 19
+    },
+    {
+     "Item": "torch",
+     "Count": 10
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "mine",
+   "item": "lapis",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "stick",
+     "Count": 6
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 20
+    }
+   ],
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "mine",
+   "item": "diamond",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 2
+    },
+    {
+     "Item": "white_wool",
+     "Count": 20
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 8
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 6
+    },
+    {
+     "Item": "oak_log",
+     "Count": 8
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "give",
+   "item": "meat",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 1
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 12
+    },
+    {
+     "Item": "diamond",
+     "Count": 2
+    },
+    {
+     "Item": "bread",
+     "Count": 10
+    },
+    {
+     "Item": "torch",
+     "Count": 6
+    },
+    {
+     "Item": "white_wool",
+     "Count": 5
+    },
+    {
+     "Item": "porkchop",
+     "Count": 7
+    }
+   ],
+   "want": "cooked_beef"
+  },
+  {
+   "command": "mine",
+   "item": "redstone",
+   "tier": "stone",
+   "carry": null,
+   "want": "redstone"
+  },
+  {
+   "command": "give",
+   "item": "food",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "stone_pickaxe",
+     "Count": 8
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 14
+    },
+    {
+     "Item": "carrot",
+     "Count": 16
+    }
+   ],
+   "want": "carrot"
+  },
+  {
+   "command": "craft",
+   "item": "stick",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 20
+    },
+    {
+     "Item": "diamond",
+     "Count": 5
+    },
+    {
+     "Item": "birch_log",
+     "Count": 16
+    }
+   ],
+   "want": "stick"
+  },
+  {
+   "command": "gather",
+   "item": "planks",
+   "tier": "iron",
+   "carry": null,
+   "want": "planks"
+  },
+  {
+   "command": "attack",
+   "item": "zombie",
+   "tier": "wooden",
+   "carry": null,
+   "want": "zombie"
+  },
+  {
+   "command": "store",
+   "item": "wood",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 18
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 6
+    },
+    {
+     "Item": "charcoal",
+     "Count": 3
+    },
+    {
+     "Item": "oak_log",
+     "Count": 6
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 20
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 6
+    }
+   ],
+   "want": "oak_log"
+  },
+  {
+   "command": "craft",
+   "item": "axe",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_pickaxe",
+     "Count": 15
+    },
+    {
+     "Item": "coal",
+     "Count": 19
+    },
+    {
+     "Item": "white_wool",
+     "Count": 13
+    },
+    {
+     "Item": "white_wool",
+     "Count": 18
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 12
+    }
+   ],
+   "want": "stone_axe"
+  },
+  {
+   "command": "mine",
+   "item": "stone",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 9
+    },
+    {
+     "Item": "dirt",
+     "Count": 4
+    },
+    {
+     "Item": "diamond",
+     "Count": 9
+    },
+    {
+     "Item": "stick",
+     "Count": 17
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 16
+    }
+   ],
+   "want": "cobblestone"
+  },
+  {
+   "command": "craft",
+   "item": "coal",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 2
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 16
+    },
+    {
+     "Item": "charcoal",
+     "Count": 19
+    }
+   ],
+   "want": "charcoal"
+  },
+  {
+   "command": "craft",
+   "item": "furnace",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 18
+    },
+    {
+     "Item": "red_wool",
+     "Count": 13
+    }
+   ],
+   "want": "furnace"
+  },
+  {
+   "command": "attack",
+   "item": "stray",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 8
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 19
+    },
+    {
+     "Item": "white_wool",
+     "Count": 16
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 6
+    },
+    {
+     "Item": "oak_log",
+     "Count": 15
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 4
+    }
+   ],
+   "want": "stray"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 16
+    },
+    {
+     "Item": "white_wool",
+     "Count": 10
+    },
+    {
+     "Item": "stone",
+     "Count": 15
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "craft",
+   "item": "leggings",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 12
+    },
+    {
+     "Item": "stone",
+     "Count": 8
+    },
+    {
+     "Item": "stick",
+     "Count": 2
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 9
+    },
+    {
+     "Item": "coal",
+     "Count": 12
+    },
+    {
+     "Item": "stone",
+     "Count": 3
+    },
+    {
+     "Item": "carrot",
+     "Count": 5
+    }
+   ],
+   "want": "iron_leggings"
+  },
+  {
+   "command": "gather",
+   "item": "gold",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 20
+    },
+    {
+     "Item": "carrot",
+     "Count": 5
+    }
+   ],
+   "want": "raw_gold"
+  },
+  {
+   "command": "craft",
+   "item": "stone",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 12
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 19
+    },
+    {
+     "Item": "oak_log",
+     "Count": 13
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 12
+    },
+    {
+     "Item": "dirt",
+     "Count": 10
+    },
+    {
+     "Item": "red_wool",
+     "Count": 20
+    }
+   ],
+   "want": "stone"
+  },
+  {
+   "command": "craft",
+   "item": "shovel",
+   "tier": "wooden",
+   "carry": null,
+   "want": "wooden_shovel"
+  },
+  {
+   "command": "gather",
+   "item": "string",
+   "tier": "iron",
+   "carry": null,
+   "want": "string"
+  },
+  {
+   "command": "mine",
+   "item": "seeds",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 13
+    },
+    {
+     "Item": "white_wool",
+     "Count": 20
+    },
+    {
+     "Item": "apple",
+     "Count": 8
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 2
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 15
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 3
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 20
+    }
+   ],
+   "want": "wheat_seeds"
+  },
+  {
+   "command": "attack",
+   "item": "cow",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 5
+    }
+   ],
+   "want": "cow"
+  },
+  {
+   "command": "mine",
+   "item": "dirt",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "stick",
+     "Count": 9
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 12
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 6
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "attack",
+   "item": "witch",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 16
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 5
+    }
+   ],
+   "want": "witch"
+  },
+  {
+   "command": "craft",
+   "item": "bowl",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 4
+    }
+   ],
+   "want": "bowl"
+  },
+  {
+   "command": "store",
+   "item": "diamond",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 14
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 5
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 7
+    },
+    {
+     "Item": "charcoal",
+     "Count": 3
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 20
+    },
+    {
+     "Item": "coal",
+     "Count": 8
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "gather",
+   "item": "lapis",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 19
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 5
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 10
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 14
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 20
+    },
+    {
+     "Item": "sand",
+     "Count": 7
+    },
+    {
+     "Item": "birch_log",
+     "Count": 17
+    }
+   ],
+   "want": "lapis_lazuli"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 7
+    },
+    {
+     "Item": "coal",
+     "Count": 15
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 18
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 19
+    },
+    {
+     "Item": "charcoal",
+     "Count": 13
+    },
+    {
+     "Item": "shield",
+     "Count": 13
+    }
+   ],
+   "want": "bucket"
+  },
+  {
+   "command": "mine",
+   "item": "wool",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 18
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 7
+    }
+   ],
+   "want": "white_wool"
+  },
+  {
+   "command": "give",
+   "item": "shield",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 10
+    },
+    {
+     "Item": "dirt",
+     "Count": 20
+    },
+    {
+     "Item": "shield",
+     "Count": 4
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 1
+    }
+   ],
+   "want": "shield"
+  },
+  {
+   "command": "give",
+   "item": "pickaxe",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 6
+    },
+    {
+     "Item": "bread",
+     "Count": 5
+    },
+    {
+     "Item": "carrot",
+     "Count": 20
+    }
+   ],
+   "want": "wooden_pickaxe"
+  },
+  {
+   "command": "craft",
+   "item": "table",
+   "tier": "iron",
+   "carry": null,
+   "want": "crafting_table"
+  },
+  {
+   "command": "mine",
+   "item": "diamond",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 2
+    },
+    {
+     "Item": "torch",
+     "Count": 16
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 3
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 6
+    }
+   ],
+   "want": "diamond"
+  },
+  {
+   "command": "gather",
+   "item": "sand",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 15
+    },
+    {
+     "Item": "coal",
+     "Count": 16
+    },
+    {
+     "Item": "dirt",
+     "Count": 2
+    }
+   ],
+   "want": "sand"
+  },
+  {
+   "command": "craft",
+   "item": "boots",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 3
+    }
+   ],
+   "want": "diamond_boots"
+  },
+  {
+   "command": "craft",
+   "item": "shield",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 19
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 20
+    },
+    {
+     "Item": "stone",
+     "Count": 7
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 18
+    }
+   ],
+   "want": "shield"
+  },
+  {
+   "command": "craft",
+   "item": "sword",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "raw_gold",
+     "Count": 15
+    },
+    {
+     "Item": "torch",
+     "Count": 11
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 19
+    },
+    {
+     "Item": "torch",
+     "Count": 2
+    },
+    {
+     "Item": "red_wool",
+     "Count": 11
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 8
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 11
+    }
+   ],
+   "want": "diamond_sword"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "none",
+   "carry": null,
+   "want": "bucket"
+  },
+  {
+   "command": "mine",
+   "item": "coal",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "shield",
+     "Count": 5
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 16
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 3
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 20
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 3
+    },
+    {
+     "Item": "rotten_flesh",
+     "Count": 2
+    },
+    {
+     "Item": "carrot",
+     "Count": 10
+    }
+   ],
+   "want": "coal"
+  },
+  {
+   "command": "craft",
+   "item": "stick",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 8
+    }
+   ],
+   "want": "stick"
+  },
+  {
+   "command": "craft",
+   "item": "leggings",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_sword",
+     "Count": 16
+    },
+    {
+     "Item": "stick",
+     "Count": 6
+    }
+   ],
+   "want": "iron_leggings"
+  },
+  {
+   "command": "mine",
+   "item": "wheat",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 20
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 3
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 17
+    },
+    {
+     "Item": "white_wool",
+     "Count": 6
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 19
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 16
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 14
+    }
+   ],
+   "want": "wheat"
+  },
+  {
+   "command": "craft",
+   "item": "stone",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 18
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 15
+    },
+    {
+     "Item": "dirt",
+     "Count": 12
+    }
+   ],
+   "want": "stone"
+  },
+  {
+   "command": "eat",
+   "item": "meat",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 16
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 7
+    },
+    {
+     "Item": "porkchop",
+     "Count": 5
+    },
+    {
+     "Item": "stone",
+     "Count": 13
+    }
+   ],
+   "want": "porkchop"
+  },
+  {
+   "command": "gather",
+   "item": "stick",
+   "tier": "stone",
+   "carry": null,
+   "want": "stick"
+  },
+  {
+   "command": "craft",
+   "item": "planks",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "porkchop",
+     "Count": 14
+    },
+    {
+     "Item": "birch_log",
+     "Count": 15
+    },
+    {
+     "Item": "torch",
+     "Count": 1
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 7
+    },
+    {
+     "Item": "white_wool",
+     "Count": 15
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "gather",
+   "item": "planks",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "white_wool",
+     "Count": 15
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 19
+    },
+    {
+     "Item": "carrot",
+     "Count": 19
+    },
+    {
+     "Item": "stone",
+     "Count": 3
+    },
+    {
+     "Item": "dirt",
+     "Count": 4
+    },
+    {
+     "Item": "apple",
+     "Count": 15
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "mine",
+   "item": "stone",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 15
+    },
+    {
+     "Item": "charcoal",
+     "Count": 12
+    }
+   ],
+   "want": "cobblestone"
+  },
+  {
+   "command": "gather",
+   "item": "wood",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "iron_helmet",
+     "Count": 16
+    },
+    {
+     "Item": "stone",
+     "Count": 6
+    },
+    {
+     "Item": "carrot",
+     "Count": 15
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 17
+    },
+    {
+     "Item": "wooden_pickaxe",
+     "Count": 2
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 1
+    }
+   ],
+   "want": "log"
+  },
+  {
+   "command": "mine",
+   "item": "copper",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 20
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 10
+    },
+    {
+     "Item": "iron_ingot",
+     "Count": 13
+    }
+   ],
+   "want": "raw_copper"
+  },
+  {
+   "command": "craft",
+   "item": "axe",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 8
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 9
+    },
+    {
+     "Item": "stick",
+     "Count": 15
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 2
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 14
+    },
+    {
+     "Item": "carrot",
+     "Count": 15
+    }
+   ],
+   "want": "diamond_axe"
+  },
+  {
+   "command": "craft",
+   "item": "pickaxe",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 16
+    },
+    {
+     "Item": "torch",
+     "Count": 17
+    },
+    {
+     "Item": "oak_log",
+     "Count": 11
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 8
+    },
+    {
+     "Item": "porkchop",
+     "Count": 1
+    }
+   ],
+   "want": "iron_pickaxe"
+  },
+  {
+   "command": "craft",
+   "item": "bucket",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 1
+    },
+    {
+     "Item": "porkchop",
+     "Count": 11
+    }
+   ],
+   "want": "bucket"
+  },
+  {
+   "command": "craft",
+   "item": "chest",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "apple",
+     "Count": 13
+    },
+    {
+     "Item": "coal",
+     "Count": 5
+    }
+   ],
+   "want": "chest"
+  },
+  {
+   "command": "gather",
+   "item": "stick",
+   "tier": "iron",
+   "carry": null,
+   "want": "stick"
+  },
+  {
+   "command": "gather",
+   "item": "redstone",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "torch",
+     "Count": 15
+    },
+    {
+     "Item": "coal",
+     "Count": 6
+    }
+   ],
+   "want": "redstone"
+  },
+  {
+   "command": "craft",
+   "item": "sword",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 19
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 12
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 14
+    },
+    {
+     "Item": "white_wool",
+     "Count": 4
+    },
+    {
+     "Item": "red_wool",
+     "Count": 18
+    }
+   ],
+   "want": "iron_sword"
+  },
+  {
+   "command": "attack",
+   "item": "cave_spider",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "sand",
+     "Count": 15
+    },
+    {
+     "Item": "apple",
+     "Count": 3
+    },
+    {
+     "Item": "iron_helmet",
+     "Count": 10
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 18
+    }
+   ],
+   "want": "cave_spider"
+  },
+  {
+   "command": "attack",
+   "item": "zombie",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "dirt",
+     "Count": 20
+    },
+    {
+     "Item": "porkchop",
+     "Count": 12
+    },
+    {
+     "Item": "coal",
+     "Count": 16
+    },
+    {
+     "Item": "sand",
+     "Count": 4
+    }
+   ],
+   "want": "zombie"
+  },
+  {
+   "command": "give",
+   "item": "axe",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 19
+    },
+    {
+     "Item": "coal",
+     "Count": 15
+    },
+    {
+     "Item": "white_wool",
+     "Count": 19
+    },
+    {
+     "Item": "wheat_seeds",
+     "Count": 20
+    },
+    {
+     "Item": "dirt",
+     "Count": 1
+    },
+    {
+     "Item": "iron_pickaxe",
+     "Count": 1
+    },
+    {
+     "Item": "diamond_axe",
+     "Count": 8
+    }
+   ],
+   "want": "diamond_axe"
+  },
+  {
+   "command": "gather",
+   "item": "emerald",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "diamond_axe",
+     "Count": 7
+    }
+   ],
+   "want": "emerald"
+  },
+  {
+   "command": "mine",
+   "item": "planks",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "spruce_planks",
+     "Count": 8
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 10
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "attack",
+   "item": "cow",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "stone_pickaxe",
+     "Count": 18
+    },
+    {
+     "Item": "white_wool",
+     "Count": 12
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 16
+    }
+   ],
+   "want": "cow"
+  },
+  {
+   "command": "gather",
+   "item": "stone",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "gold_ingot",
+     "Count": 1
+    },
+    {
+     "Item": "carrot",
+     "Count": 1
+    }
+   ],
+   "want": "cobblestone"
+  },
+  {
+   "command": "gather",
+   "item": "dirt",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "rotten_flesh",
+     "Count": 7
+    },
+    {
+     "Item": "shield",
+     "Count": 1
+    },
+    {
+     "Item": "charcoal",
+     "Count": 8
+    },
+    {
+     "Item": "golden_apple",
+     "Count": 12
+    }
+   ],
+   "want": "dirt"
+  },
+  {
+   "command": "attack",
+   "item": "skeleton",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "bread",
+     "Count": 15
+    },
+    {
+     "Item": "raw_gold",
+     "Count": 2
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 2
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 18
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 6
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 17
+    }
+   ],
+   "want": "skeleton"
+  },
+  {
+   "command": "craft",
+   "item": "glass",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "diamond",
+     "Count": 3
+    },
+    {
+     "Item": "diamond",
+     "Count": 15
+    }
+   ],
+   "want": "glass"
+  },
+  {
+   "command": "mine",
+   "item": "planks",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "stone",
+     "Count": 3
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 14
+    },
+    {
+     "Item": "bread",
+     "Count": 19
+    }
+   ],
+   "want": "planks"
+  },
+  {
+   "command": "craft",
+   "item": "copper",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "charcoal",
+     "Count": 10
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 14
+    },
+    {
+     "Item": "stone",
+     "Count": 17
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 3
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 20
+    },
+    {
+     "Item": "red_wool",
+     "Count": 12
+    }
+   ],
+   "want": "copper_ingot"
+  },
+  {
+   "command": "mine",
+   "item": "gold",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "raw_iron",
+     "Count": 11
+    },
+    {
+     "Item": "bread",
+     "Count": 5
+    },
+    {
+     "Item": "cooked_beef",
+     "Count": 6
+    }
+   ],
+   "want": "raw_gold"
+  },
+  {
+   "command": "craft",
+   "item": "helmet",
+   "tier": "none",
+   "carry": [
+    {
+     "Item": "carrot",
+     "Count": 4
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 5
+    },
+    {
+     "Item": "carrot",
+     "Count": 14
+    }
+   ],
+   "want": "iron_helmet"
+  },
+  {
+   "command": "store",
+   "item": "shield",
+   "tier": "stone",
+   "carry": [
+    {
+     "Item": "wheat_seeds",
+     "Count": 19
+    },
+    {
+     "Item": "raw_iron",
+     "Count": 17
+    },
+    {
+     "Item": "cobblestone",
+     "Count": 1
+    },
+    {
+     "Item": "stick",
+     "Count": 17
+    },
+    {
+     "Item": "dirt",
+     "Count": 7
+    },
+    {
+     "Item": "shield",
+     "Count": 19
+    }
+   ],
+   "want": "shield"
+  },
+  {
+   "command": "store",
+   "item": "bread",
+   "tier": "wooden",
+   "carry": [
+    {
+     "Item": "iron_ingot",
+     "Count": 4
+    },
+    {
+     "Item": "bread",
+     "Count": 5
+    },
+    {
+     "Item": "shield",
+     "Count": 15
+    },
+    {
+     "Item": "stick",
+     "Count": 2
+    },
+    {
+     "Item": "sand",
+     "Count": 15
+    },
+    {
+     "Item": "apple",
+     "Count": 6
+    },
+    {
+     "Item": "gold_ingot",
+     "Count": 15
+    }
+   ],
+   "want": "bread"
+  },
+  {
+   "command": "craft",
+   "item": "shovel",
+   "tier": "iron",
+   "carry": [
+    {
+     "Item": "cobblestone",
+     "Count": 1
+    },
+    {
+     "Item": "torch",
+     "Count": 19
+    },
+    {
+     "Item": "spruce_planks",
+     "Count": 11
+    },
+    {
+     "Item": "iron_sword",
+     "Count": 8
+    },
+    {
+     "Item": "stick",
+     "Count": 17
+    }
+   ],
+   "want": "iron_shovel"
+  },
+  {
+   "command": "attack",
+   "item": "witch",
+   "tier": "stone",
+   "carry": null,
+   "want": "witch"
+  },
+  {
+   "command": "gather",
+   "item": "string",
+   "tier": "diamond",
+   "carry": [
+    {
+     "Item": "birch_log",
+     "Count": 16
+    },
+    {
+     "Item": "stone_pickaxe",
+     "Count": 19
+    },
+    {
+     "Item": "charcoal",
+     "Count": 10
+    }
+   ],
+   "want": "string"
+  }
+ ],
+ "tiers": [
+  "wooden",
+  "stone",
+  "iron",
+  "diamond",
+  "none"
+ ]
+}

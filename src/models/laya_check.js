@@ -1,0 +1,80 @@
+// npm run laya:check [task]
+//
+// Checks the decision-model tasks in settings.decision_models: the server and
+// whether it's reachable, the decision models it lists, the model the task
+// uses, and, for tasks with a sample request, a real answer and its time. Run
+// it after changing which model answers a task. Exits 1 if an enabled task
+// can't be answered.
+
+import { existsSync, readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import settings from '../../settings.js';
+import { createLayaClient, refreshServed, servedPrompt } from './laya.js';
+
+// SAMPLES are known requests per task, used to ask a real question.
+export const SAMPLES = {
+    follow: new URL('../../test/fixtures/laya-follow-v1/request.json', import.meta.url),
+    'follow:v2': new URL('../../test/fixtures/laya-follow-v2/request.json', import.meta.url),
+    mine: new URL('../../test/fixtures/laya-mine-v1/request.json', import.meta.url),
+    farm: new URL('../../test/fixtures/laya-farm-v1/request.json', import.meta.url),
+    'farm:v2': new URL('../../test/fixtures/laya-farm-v2/request.json', import.meta.url),
+    command: new URL('../../test/fixtures/laya-command-v1/request.json', import.meta.url),
+    'command:v2': new URL('../../test/fixtures/laya-command-v2/request.json', import.meta.url),
+    'mine:v2': new URL('../../test/fixtures/laya-mine-v2/request.json', import.meta.url),
+    // v2.1: the command's own prompt; mine and farm keep v2's prompt text
+    'command:v2.1': new URL('../../test/fixtures/laya-command-v21/request.json', import.meta.url),
+    'mine:v2.1': new URL('../../test/fixtures/laya-mine-v2/request.json', import.meta.url),
+    'farm:v2.1': new URL('../../test/fixtures/laya-farm-v2/request.json', import.meta.url),
+};
+
+// loadSample returns a task's sample request, matching its prompt version.
+export function loadSample(task, prompt = 'v1') {
+    const path = SAMPLES[prompt === 'v1' ? task : `${task}:${prompt}`] ?? SAMPLES[task];
+    if (!path || !existsSync(path)) return null;
+    const { state, questions } = JSON.parse(readFileSync(path, 'utf8'));
+    return { state, questions };
+}
+
+// formatReport writes one task's check as lines of text.
+export function formatReport(r) {
+    const lines = [`${r.task} (${r.enabled ? 'enabled' : 'off'})`];
+    lines.push(`  server   ${r.url ?? '—'}  ${r.reachable ? 'reachable' : 'NOT reachable'}`);
+    if (r.reachable) lines.push(`  models   ${r.models.length ? r.models.join(', ') : 'no decision models'}`);
+    if (r.model) lines.push(`  uses     ${r.model}${r.samplePrompt ? `, prompt ${r.samplePrompt}${r.prompt ? ' (served)' : ' (settings: the server names none)'}` : ''}`);
+    if (r.answer) {
+        const parts = Object.entries(r.answer.answers).map(([name, a]) =>
+            a.type === 'noul' ? `${name} ${a.probability.toFixed(2)}` : `${name} ${a.top} ${a.topProbability.toFixed(2)}${a.confident ? '' : ' (not confident)'}`);
+        lines.push(`  sample   ${parts.join(', ')} in ${r.answer.ms} ms`);
+    }
+    if (r.error) lines.push(`  error    ${r.error}`);
+    return lines.join('\n');
+}
+
+// run checks the named task, or every configured task, and returns the exit
+// status.
+export async function run(args, config = settings.decision_models, out = console.log) {
+    const client = createLayaClient(() => config, { log: () => {} });
+    const tasks = args.length ? args : Object.keys(config?.tasks || {});
+    if (!tasks.length) {
+        out('no decision-model tasks in settings.decision_models');
+        return 1;
+    }
+    let status = 0;
+    for (const task of tasks) {
+        const t = config?.tasks?.[task];
+        const url = config?.servers?.[t?.server]?.url;
+        if (url) await refreshServed(url).catch(() => {});
+        const prompt = (url && t?.model ? servedPrompt(url, t.model) : undefined) ?? t?.prompt;
+        const r = await client.check(task, loadSample(task, prompt));
+        r.samplePrompt = prompt || 'v1';
+        if (r.reachable && r.model && !r.models.includes(r.model)) r.error = `model "${r.model}" is not served here`;
+        out(formatReport(r));
+        if (r.enabled && (r.error || !r.reachable)) status = 1;
+        if (!config?.tasks?.[task]) status = 1;
+    }
+    return status;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    process.exitCode = await run(process.argv.slice(2));
+}

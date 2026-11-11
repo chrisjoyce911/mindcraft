@@ -3,6 +3,20 @@ import * as world from "./world.js";
 import pf from 'mineflayer-pathfinder';
 import Vec3 from 'vec3';
 import settings from "../../../settings.js";
+import { laya, taskSettings } from "../../models/laya.js";
+import { followWithLaya } from "../laya/follow.js";
+import { runCraft, settle } from "../laya/craft.js";
+import { generic as layaGeneric, ITEMS as LAYA_ITEMS } from "../laya/craft_state.js";
+import { mineWithLaya, pickUpDrop, floorDrop, hollowUnder } from "../laya/mine.js";
+import { ORES as MINE_ORES } from "../laya/mine_state.js";
+import { farmWithLaya } from "../laya/farm.js";
+import { farmDeps } from "../laya/farm_actions.js";
+import { packDeps } from "../laya/pack_actions.js";
+import { huntUntil } from "../laya/hunt.js";
+import { kitIn } from "../laya/chores_state.js";
+import { mineStore } from "../laya/mine_memory.js";
+import { readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, mkdirSync as mkdirSyncFs } from "fs";
+import { stopped } from '../run_token.js';
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -100,7 +114,18 @@ export async function craftRecipe(bot, itemName, num=1) {
     const requiredIngredients = mc.ingredientsFromPrismarineRecipe(recipe); //Items required to use the recipe once.
     const craftLimit = mc.calculateLimitingResource(inventory, requiredIngredients);
     
-    await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
+    const times = Math.min(craftLimit.num, num);
+    // One craft at a time, each followed by a wait for the inventory to show
+    // it: mineflayer's multi-count craft dropped one of three (3 logs gave 8
+    // planks) and left a stale inventory, and the next craft could stall on
+    // its updateSlot timeout.
+    const per = recipe.result?.count || 1;
+    for (let i = 0; i < times; i++) {
+        const before = world.getInventoryCounts(bot)[itemName] || 0;
+        await bot.craft(recipe, 1, craftingTable);
+        if (!await settle(() => (world.getInventoryCounts(bot)[itemName] || 0) >= before + per, { ms: 2000, quiet: 50 }))
+            console.log(`craftRecipe: ${itemName} still short of ${before + per} after waiting`);
+    }
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     if (placedTable) {
@@ -128,7 +153,7 @@ export async function wait(bot, milliseconds) {
     let startTime = Date.now();
     
     while (timeLeft > 0) {
-        if (bot.interrupt_code) return false;
+        if (stopped(bot)) return false;
         
         let waitTime = Math.min(2000, timeLeft);
         await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -243,7 +268,7 @@ export async function smeltItem(bot, itemName, num=1) {
         if (Date.now() - last_collected > 11000) {
             break; // if nothing has been collected in 11 seconds, stop
         }
-        if (bot.interrupt_code) {
+        if (stopped(bot)) {
             break;
         }
     }
@@ -356,7 +381,7 @@ export async function attackEntity(bot, entity, kill=true) {
         bot.pvp.attack(entity);
         while (world.getNearbyEntities(bot, 24).includes(entity)) {
             await new Promise(resolve => setTimeout(resolve, 1000));
-            if (bot.interrupt_code) {
+            if (stopped(bot)) {
                 bot.pvp.stop();
                 return false;
             }
@@ -367,11 +392,12 @@ export async function attackEntity(bot, entity, kill=true) {
     }
 }
 
-export async function defendSelf(bot, range=9) {
+export async function defendSelf(bot, range=9, only=null) {
     /**
      * Defend yourself from all nearby hostile mobs until there are no more.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {number} range, the range to look for mobs. Defaults to 8.
+     * @param {function} only, optional: fight only the mobs it accepts (the attackers).
      * @returns {Promise<boolean>} true if the bot found any enemies and has killed them, false if no entities were found.
      * @example
      * await skills.defendSelf(bot);
@@ -379,7 +405,8 @@ export async function defendSelf(bot, range=9) {
     bot.modes.pause('self_defense');
     bot.modes.pause('cowardice');
     let attacked = false;
-    let enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), range);
+    const foe = entity => mc.isHostile(entity) && (!only || only(entity));
+    let enemy = world.getNearestEntityWhere(bot, foe, range);
     while (enemy) {
         await equipHighestAttack(bot);
         if (bot.entity.position.distanceTo(enemy.position) >= 4 && enemy.name !== 'creeper' && enemy.name !== 'phantom') {
@@ -398,8 +425,8 @@ export async function defendSelf(bot, range=9) {
         bot.pvp.attack(enemy);
         attacked = true;
         await new Promise(resolve => setTimeout(resolve, 500));
-        enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), range);
-        if (bot.interrupt_code) {
+        enemy = world.getNearestEntityWhere(bot, foe, range);
+        if (stopped(bot)) {
             bot.pvp.stop();
             return false;
         }
@@ -449,9 +476,17 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     // Blocks to ignore safety for, usually next to lava/water
     const unsafeBlocks = ['obsidian'];
 
+    // never the block under the feet with a drop of more than 3 under it
+    // (a cave under a stone or ore floor): the bot would fall in
+    const at = (x, y, z) => bot.blockAt(new Vec3(x, y, z));
     for (let i=0; i<num; i++) {
+        if (stopped(bot)) break;
         let blocks = world.getNearestBlocksWhere(bot, block => {
             if (!blocktypes.includes(block.name)) {
+                return false;
+            }
+            // (findBlocks first asks with no position, by block type only)
+            if (block.position && floorDrop(at, bot.entity.position, block.position, MAX_SAFE_DROP)) {
                 return false;
             }
             if (exclude) {
@@ -516,16 +551,46 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 break;
             }
             else {
+                // an interrupt makes the dig or the path fail: stop, don't
+                // go for the next block
+                if (stopped(bot)) break;
                 log(bot, `Failed to collect ${blockType}: ${err}.`);
                 continue;
             }
         }
         
-        if (bot.interrupt_code)
+        if (stopped(bot))
             break;  
     }
     log(bot, `Collected ${collected} ${blockType}.`);
     return collected > 0;
+}
+
+export function inventoryCount(bot, item) {
+    /**
+     * How many of an item the bot carries.
+     **/
+    return world.getInventoryCounts(bot)[item] || 0;
+}
+
+export async function huntForDrop(bot, mob, item, count=1, target=null) {
+    /**
+     * Hunt the given mob until count more of item (its drop) are carried, picking up the drops.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {string} mob, the mob that drops it, e.g. "cow".
+     * @param {string} item, the drop, e.g. "beef".
+     * @param {number} count, how many more to have.
+     * @returns {Promise<boolean>} true once it has them.
+     **/
+    const have = () => world.getInventoryCounts(bot)[item] || 0;
+    const r = await huntUntil(count, {
+        have,
+        attack: () => attackNearest(bot, mob, true),
+        pickup: () => pickupNearbyItems(bot),
+        interrupted: () => !!stopped(bot),
+    }, target);
+    log(bot, r.ok ? `Hunted ${r.kills} ${mob}: I have ${have()} ${item}.` : `Stopped hunting ${mob} for ${item}: ${r.reason}.`);
+    return r.ok;
 }
 
 export async function pickupNearbyItems(bot) {
@@ -540,7 +605,7 @@ export async function pickupNearbyItems(bot) {
     const getNearestItem = bot => bot.nearestEntity(entity => entity.name === 'item' && bot.entity.position.distanceTo(entity.position) < distance);
     let nearestItem = getNearestItem(bot);
     let pickedUp = 0;
-    while (nearestItem) {
+    while (nearestItem && !stopped(bot)) {
         let movements = new pf.Movements(bot);
         movements.canDig = false;
         bot.pathfinder.setMovements(movements);
@@ -895,6 +960,35 @@ export async function putInChest(bot, itemName, num=-1) {
     return true;
 }
 
+// isHomeChestBlock: the chest block is the home chest (the player kit is in it).
+function isHomeChestBlock(bot, chest) {
+    const home = bot.layaHomeChest?.();
+    return !!home && !!chest && chest.position.x === Math.floor(home[0]) && chest.position.y === Math.floor(home[1]) && chest.position.z === Math.floor(home[2]);
+}
+
+// kitReserved: the player kit's reserved items ({name: count}) in an open
+// container's items.
+function kitReserved(bot, container) {
+    const all = container.containerItems().map(i => ({ name: i.name, count: i.count }));
+    return kitIn(all, n => !!(bot.registry.foodsByName || {})[n]).reserved;
+}
+
+// chestItemsForUse: an open chest's items ({name, count}) less the player
+// kit when it is the home chest: what a task may take.
+export function chestItemsForUse(bot, chest, container) {
+    const items = container.containerItems().map(i => ({ name: i.name, count: i.count }));
+    if (!isHomeChestBlock(bot, chest)) return items;
+    const reserved = kitReserved(bot, container);
+    const left = { ...reserved };
+    const out = [];
+    for (const i of items) {
+        const r = Math.min(left[i.name] || 0, i.count);
+        if (r) left[i.name] -= r;
+        if (i.count - r > 0) out.push({ name: i.name, count: i.count - r });
+    }
+    return out;
+}
+
 export async function takeFromChest(bot, itemName, num=-1) {
     /**
      * Take the given item from the nearest chest, potentially from multiple slots.
@@ -922,6 +1016,17 @@ export async function takeFromChest(bot, itemName, num=-1) {
     }
     
     let totalAvailable = matchingItems.reduce((sum, item) => sum + item.count, 0);
+    // the home chest keeps one player kit (laya-chores): its tools, 8 cooked
+    // food and 16 torches are never taken
+    if (isHomeChestBlock(bot, chest)) {
+        const reserved = kitReserved(bot, chestContainer);
+        totalAvailable = Math.max(0, totalAvailable - (reserved[itemName] || 0));
+        if (totalAvailable === 0) {
+            log(bot, `The ${itemName} in the home chest is the player's kit; I'm leaving it.`);
+            await chestContainer.close();
+            return false;
+        }
+    }
     let remaining = num === -1 ? totalAvailable : Math.min(num, totalAvailable);
     let totalTaken = 0;
     
@@ -1010,7 +1115,7 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
         log(bot, `You cannot give items to yourself.`);
         return false;
     }
-    let player = bot.players[username].entity
+    let player = bot.players[username]?.entity
     if (!player) {
         log(bot, `Could not find ${username}.`);
         return false;
@@ -1026,7 +1131,7 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
         let too_close = true;
         let start_moving_away = Date.now();
         await moveAwayFromEntity(bot, player, 2);
-        while (too_close && !bot.interrupt_code) {
+        while (too_close && !stopped(bot)) {
             await new Promise(resolve => setTimeout(resolve, 500));
             too_close = bot.entity.position.distanceTo(player.position) < 5;
             if (too_close) {
@@ -1053,7 +1158,7 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
             }
         });
         let start = Date.now();
-        while (!given && !bot.interrupt_code) {
+        while (!given && !stopped(bot)) {
             await new Promise(resolve => setTimeout(resolve, 500));
             if (given) {
                 return true;
@@ -1313,7 +1418,7 @@ export async function goToPlayer(bot, username, distance=3) {
 
     bot.modes.pause('self_defense');
     bot.modes.pause('cowardice');
-    let player = bot.players[username].entity
+    let player = bot.players[username]?.entity
     if (!player) {
         log(bot, `Could not find ${username}.`);
         return false;
@@ -1328,6 +1433,54 @@ export async function goToPlayer(bot, username, distance=3) {
 }
 
 
+// followPlayerWithLaya follows with the Laya "follow" decision model (see
+// src/agent/laya/follow.js), falling back to the pathfinder follow below
+// whenever the model can't help.
+async function followPlayerWithLaya(bot, username, distance, task) {
+    const move = new pf.Movements(bot);
+    move.digCost = 10;
+    bot.pathfinder.setMovements(move);
+    // unstuck and elbow_room move the bot on their own (randomly, or away from the
+    // player): the Laya loop has its own stuck fallback, so they stay off.
+    const paused = ['item_collecting', 'hunting', 'torch_placing', 'unstuck', 'elbow_room'];
+    paused.forEach(m => bot.modes.pause(m));
+    log(bot, `You are now actively following player ${username}, stepping with the Laya follow model.`);
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        const { found, counters } = await followWithLaya(bot, username, distance, {
+            client: laya,
+            task,
+            blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
+            mobs: () => Object.values(bot.entities)
+                .filter(e => e !== bot.entity && e.name && e.position)
+                .map(e => ({ kind: e.name, x: Math.floor(e.position.x), z: Math.floor(e.position.z) })),
+            stepTo: async (x, y, z, ms) => {
+                bot.pathfinder.setGoal(new pf.goals.GoalXZ(x, z)); // x and z only: a misread height must not make the step unreachable
+                const end = Date.now() + ms;
+                while (Date.now() < end && !stopped(bot)) {
+                    await sleep(50);
+                    const p = bot.entity.position;
+                    if (Math.floor(p.x) === x && Math.floor(p.z) === z) return true;
+                }
+                bot.pathfinder.setGoal(null);
+                return false;
+            },
+            fallback: async (entity, dist, ms) => {
+                bot.pathfinder.setGoal(new pf.goals.GoalFollow(entity, dist), true);
+                const end = Date.now() + ms;
+                while (Date.now() < end && !stopped(bot)) await sleep(100);
+            },
+            sleep,
+            log: msg => log(bot, msg),
+            stepLog: `./bots/${bot.username}/logs/laya-follow.jsonl`,
+        });
+        return found;
+    } finally {
+        paused.forEach(m => bot.modes.unpause(m));
+    }
+}
+
+
 export async function followPlayer(bot, username, distance=4) {
     /**
      * Follow the given player endlessly. Will not return until the code is manually stopped.
@@ -1337,9 +1490,15 @@ export async function followPlayer(bot, username, distance=4) {
      * @example
      * await skills.followPlayer(bot, "player");
      **/
-    let player = bot.players[username].entity
-    if (!player)
+    let player = bot.players[username]?.entity
+    if (!player) {
+        log(bot, `Could not find ${username}.`);
         return false;
+    }
+
+    const layaTask = taskSettings('follow');
+    if (layaTask)
+        return await followPlayerWithLaya(bot, username, distance, layaTask);
 
     const move = new pf.Movements(bot);
     move.digCost = 10;
@@ -1350,7 +1509,7 @@ export async function followPlayer(bot, username, distance=4) {
     log(bot, `You are now actively following player ${username}.`);
 
 
-    while (!bot.interrupt_code) {
+    while (!stopped(bot)) {
         await new Promise(resolve => setTimeout(resolve, 500));
         // in cheat mode, if the distance is too far, teleport to the player
         const distance_from_player = bot.entity.position.distanceTo(player.position);
@@ -1460,7 +1619,7 @@ export async function avoidEnemies(bot, distance=16) {
         bot.pathfinder.setGoal(inverted_goal, true);
         await new Promise(resolve => setTimeout(resolve, 500));
         enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), distance);
-        if (bot.interrupt_code) {
+        if (stopped(bot)) {
             break;
         }
         if (enemy && bot.entity.position.distanceTo(enemy.position) < 3) {
@@ -1489,7 +1648,7 @@ export async function stay(bot, seconds=30) {
     bot.modes.pause('torch_placing');
     bot.modes.pause('item_collecting');
     let start = Date.now();
-    while (!bot.interrupt_code && (seconds === -1 || Date.now() - start < seconds*1000)) {
+    while (!stopped(bot) && (seconds === -1 || Date.now() - start < seconds*1000)) {
         await new Promise(resolve => setTimeout(resolve, 500));
     }
     log(bot, `Stayed for ${(Date.now() - start)/1000} seconds.`);
@@ -2091,3 +2250,375 @@ export async function useToolOn(bot, toolName, targetName) {
     log(bot, `Used ${toolName} on ${block.name}.`);
     return true;
  }
+
+
+// ---- Laya craft (crafting, gathering, storage): see src/agent/laya/craft.js ----
+
+// Names people and the LLM use for things to gather, as laya-go's craft items.
+const LAYA_ALIASES = { iron_ore: 'raw_iron', deepslate_iron_ore: 'raw_iron', coal_ore: 'coal', deepslate_coal_ore: 'coal',
+    diamond_ore: 'diamond', deepslate_diamond_ore: 'diamond', stone: 'cobblestone', seeds: 'wheat_seeds', wood: 'log', logs: 'log' };
+
+// layaItem maps a Minecraft or everyday item name to laya-go's craft item,
+// or null if the craft model doesn't know it.
+export function layaItem(name) {
+    const n = LAYA_ALIASES[name] ?? layaGeneric(name);
+    return LAYA_ITEMS[n] ? n : null;
+}
+
+const countOf = (bot, g) => bot.inventory.items().filter(i => layaGeneric(i.name) === g).reduce((n, i) => n + i.count, 0);
+
+// realName picks a Minecraft name for a generic one from what's carried (or,
+// for logs, the most carried wood): "planks" from the logs carried.
+function realName(bot, g) {
+    const carried = bot.inventory.items().filter(i => layaGeneric(i.name) === g).sort((a, b) => b.count - a.count);
+    if (carried.length) return carried[0].name;
+    if (g === 'planks') {
+        const log = bot.inventory.items().filter(i => layaGeneric(i.name) === 'log').sort((a, b) => b.count - a.count)[0];
+        if (log) return log.name.replace(/_(log|stem)$/, '_planks').replace('_stem_planks', '_planks');
+        return 'oak_planks';
+    }
+    return g;
+}
+
+async function layaGatherBlocks(bot, g, n) {
+    const before = countOf(bot, g);
+    if (g === 'log') {
+        const block = bot.findBlock({ matching: b => b.name.endsWith('_log'), maxDistance: 64 });
+        if (!block) { log(bot, 'No trees nearby.'); return false; }
+        await collectBlock(bot, block.name, n);
+    } else if (g === 'wheat') {
+        const unripe = world.getNearestBlocksWhere(bot, b => b.name === 'wheat' && b.getProperties?.().age !== 7, 64).map(b => b.position);
+        await collectBlock(bot, 'wheat', n, unripe);
+    } else if (g === 'wheat_seeds') {
+        for (let i = 0; i < 10 * n && countOf(bot, g) - before < n && !stopped(bot); i++)
+            if (!await collectBlock(bot, 'short_grass', 1) && !await collectBlock(bot, 'tall_grass', 1)) break;
+    } else if (g === 'bone') {
+        log(bot, 'Bones come from skeletons: I cannot gather them by mining.');
+        return false;
+    } else {
+        const block = { raw_iron: 'iron_ore', coal: 'coal', diamond: 'diamond' }[g] ?? g;
+        await collectBlock(bot, block, n);
+    }
+    await pickupNearbyItems(bot);
+    return countOf(bot, g) > before;
+}
+
+// TAKE_IN_BULK: materials the craft task takes at least TAKE_MIN of at once.
+export const TAKE_IN_BULK = new Set(['planks', 'log', 'stick', 'coal', 'charcoal', 'cobblestone']);
+const TAKE_MIN = 8;
+
+function layaCraftDeps(bot) {
+    return {
+        client: laya,
+        task: taskSettings('craft'),
+        items: () => bot.inventory.items(),
+        near: () => ({
+            table: !!world.getNearestBlock(bot, 'crafting_table', 16),
+            furnace: !!world.getNearestBlock(bot, 'furnace', 16),
+            chest: !!world.getNearestBlock(bot, 'chest', 32),
+        }),
+        readChest: async () => {
+            const chest = world.getNearestBlock(bot, 'chest', 32);
+            if (!chest) return null;
+            try {
+                await goToPosition(bot, chest.position.x, chest.position.y, chest.position.z, 2);
+                const c = await bot.openContainer(chest);
+                const out = {};
+                // the player kit in the home chest isn't there for the taking
+                for (const it of chestItemsForUse(bot, chest, c)) out[layaGeneric(it.name)] = (out[layaGeneric(it.name)] || 0) + it.count;
+                await c.close();
+                return out;
+            } catch { return null; }
+        },
+        act: {
+            gather: (g, n) => layaGatherBlocks(bot, g, n),
+            craft: async (g, times) => {
+                const before = countOf(bot, g);
+                await craftRecipe(bot, realName(bot, g), times);
+                // the inventory can show the craft late ("craft stick failed"
+                // with the sticks made): wait for it before calling it failed
+                return countOf(bot, g) > before || await settle(() => countOf(bot, g) > before, { ms: 3000, quiet: 0 });
+            },
+            smelt: async (g, n) => {
+                const before = countOf(bot, g);
+                await smeltItem(bot, realName(bot, LAYA_ITEMS[g].source), n);
+                return countOf(bot, g) > before;
+            },
+            place: async g => {
+                const pos = world.getNearestFreeSpace(bot, 1, 8);
+                if (!pos) return false;
+                return await placeBlock(bot, g, pos.x, pos.y, pos.z);
+            },
+            take: async (g, n) => {
+                const chest = world.getNearestBlock(bot, 'chest', 32);
+                if (!chest) return false;
+                let name = g;
+                if (g === 'log' || g === 'planks') {
+                    await goToPosition(bot, chest.position.x, chest.position.y, chest.position.z, 2);
+                    const c = await bot.openContainer(chest);
+                    name = chestItemsForUse(bot, chest, c).find(i => layaGeneric(i.name) === g)?.name ?? g;
+                    await c.close();
+                }
+                // materials in one withdrawal, not one at a time (planks x1 ×4)
+                const bulk = TAKE_IN_BULK.has(g) ? Math.max(n, TAKE_MIN) : n;
+                return await takeFromChest(bot, name, bulk);
+            },
+            store: async (name, n) => {
+                const total = bot.inventory.items().filter(i => i.name === name).reduce((s, i) => s + i.count, 0);
+                if (!total) return false;
+                return await putInChest(bot, name, n === -1 ? total : Math.min(n, total));
+            },
+        },
+        log: msg => log(bot, msg),
+        stepLog: `./bots/${bot.username}/logs/laya-craft.jsonl`,
+        interrupted: () => !!stopped(bot),
+    };
+}
+
+// layaTarget is the count of item to have after making count more of it
+// (null for an item the craft model doesn't know), fixed when a command
+// starts so a resumed one doesn't make more.
+export function layaTarget(bot, item, count = 1) {
+    const g = layaItem(item);
+    return g ? countOf(bot, g) + count : null;
+}
+
+// layaMake makes (or gathers) count of item with the Laya craft model, and
+// returns {ok, reason, steps}. Other skills call it to make what they lack.
+// item may be a Minecraft name ("oak_planks", "iron_ore") or laya-go's
+// generic one ("planks", "raw_iron").
+export async function layaMake(bot, item, count = 1, target = null) {
+    const g = layaItem(item);
+    if (!g) return { ok: false, reason: `the craft model doesn't know ${item}`, steps: 0 };
+    if (!taskSettings('craft')) return { ok: false, reason: 'the craft task is off (settings.decision_models.tasks.craft)', steps: 0 };
+    target ??= countOf(bot, g) + count;
+    if (countOf(bot, g) >= target) return { ok: true, reason: 'carried', steps: 0 };
+    const r = await runCraft(g, target, layaCraftDeps(bot));
+    log(bot, r.ok ? `Laya craft: made ${item} in ${r.steps} steps.` : `Laya craft stopped after ${r.steps} steps: ${r.reason}.`);
+    return r;
+}
+
+// craftForTask crafts an item a Laya task needs: with the Laya craft task's
+// runCraft when that is available (laya-craft), otherwise craftRecipe.
+export async function craftForTask(bot, item, count) {
+    // layaMake asks the Laya craft model (gathering and smelting what's
+    // missing); with the craft task off or the item unknown to it, craftRecipe.
+    if (taskSettings('craft')) {
+        const r = await layaMake(bot, item, count);
+        if (r?.ok) return true;
+    }
+    if (stopped(bot)) return false;
+    // the recipe rules alone: the ingredients first (logs → planks →
+    // sticks → a stone sword), from what is carried or in a chest
+    const g = layaItem(item);
+    if (g) {
+        const target = countOf(bot, g) + count;
+        const r = await runCraft(g, target, { ...layaCraftDeps(bot), client: null, task: { ...(taskSettings('craft') || {}), max_steps: 20 } });
+        if (r.ok && countOf(bot, g) >= target) return true;
+        if (stopped(bot)) return false;
+    }
+    return !!(await craftRecipe(bot, item, count));
+}
+
+// eatBestFood eats the most filling safe food carried (rotten flesh last);
+// returns whether it ate.
+const HARMFUL_FOOD = new Set(['pufferfish', 'poisonous_potato', 'spider_eye', 'suspicious_stew']);
+export async function eatBestFood(bot) {
+    const foods = bot.registry.foodsByName || {};
+    const points = i => i.name === 'rotten_flesh' ? -1 : (foods[i.name].foodPoints || 0);
+    const item = bot.inventory.items().filter(i => foods[i.name] && !HARMFUL_FOOD.has(i.name)).sort((a, b) => points(b) - points(a))[0];
+    if (!item) return false;
+    try { await bot.equip(item, 'hand'); await bot.consume(); return true; } catch { return false; }
+}
+
+export async function mineOre(bot, ore, count=1, homeChest=null, progress=null) {
+    /**
+     * Mine until count more of an ore's drop is collected, finding the ore
+     * underground with the Laya mine task (a staircase down to the ore's
+     * height and a branch mine there, torches, blocking lava) and crafting the
+     * pickaxe and torches it needs. Without the task it collects the nearest
+     * ore blocks.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {string} ore, one of coal, copper, iron, lapis, gold, redstone, diamond.
+     * @param {number} count, how many of the ore's drop to collect.
+     * @param {function} homeChest, optional: returns the home chest's [x, y, z] (the remembered place "home_chest"), or nothing.
+     * @param {object} progress, optional: {done}, raised by each drop collected (kept across a resumed job).
+     * @returns {Promise<boolean>} true if it collected them.
+     **/
+    const info = MINE_ORES[ore];
+    if (!info) {
+        log(bot, `Unknown ore ${ore}: one of ${Object.keys(MINE_ORES).join(', ')}.`);
+        return false;
+    }
+    const task = taskSettings('mine');
+    if (!task) return await collectBlock(bot, info.blocks[0], count);
+    // unstuck moves the bot randomly; torch_placing would place its own torches.
+    const paused = ['unstuck', 'torch_placing', 'elbow_room'];
+    paused.forEach(m => bot.modes.pause(m));
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        const r = await mineWithLaya(bot, ore, count, {
+            client: laya,
+            task,
+            blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
+            inventory: () => world.getInventoryCounts(bot),
+            nearestOre: (blocks, range) => {
+                const b = world.getNearestBlocks(bot, blocks, range, 1)[0];
+                return b ? b.position : null;
+            },
+            ores: (blocks, range) => world.getNearestBlocks(bot, blocks, range, 32).map(b => b.position),
+            craft: (item, n) => craftForTask(bot, item, n),
+            collect: (blocks, n, o) => collectOreAt(bot, o, blocks, info.drop),
+            dig: async (x, y, z) => {
+                const b = bot.blockAt(new Vec3(x, y, z));
+                if (!b || b.boundingBox === 'empty') return true;
+                return await breakBlockAt(bot, x, y, z);
+            },
+            moveTo: async (x, y, z, ms = 4000) => {
+                const goal = new pf.goals.GoalBlock(x, y, z);
+                const timeout = sleep(ms).then(() => { throw new Error('timeout'); });
+                const prev = bot.pathfinder.movements;
+                try {
+                    // never off a drop of more than 3 blocks on the way
+                    bot.pathfinder.setMovements(safeMovements(bot));
+                    await Promise.race([bot.pathfinder.goto(goal), timeout]);
+                } catch {
+                    bot.pathfinder.setGoal(null);
+                } finally {
+                    if (prev) bot.pathfinder.setMovements(prev);
+                }
+                const p = bot.entity.position;
+                return Math.floor(p.x) === x && Math.floor(p.z) === z && Math.abs(Math.floor(p.y) - y) <= 1;
+            },
+            place: (item, x, y, z, placeOn = 'bottom') => placeBlock(bot, item, x, y, z, placeOn, true),
+            // the home chest and its neighbours, as the farm task uses them
+            ...packDeps(bot, homeChest),
+            chat: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
+            eat: () => eatBestFood(bot),
+            // mine memory: a mine within 16 blocks goes on (bots/<name>/laya-mines.json)
+            mines: mineStore({
+                load: () => JSON.parse(readFileSyncFs(`./bots/${bot.username}/laya-mines.json`, 'utf8')),
+                save: list => {
+                    mkdirSyncFs(`./bots/${bot.username}`, { recursive: true });
+                    writeFileSyncFs(`./bots/${bot.username}/laya-mines.json`, JSON.stringify(list, null, 1));
+                },
+            }),
+            sleep,
+            log: msg => log(bot, msg),
+            stepLog: `./bots/${bot.username}/logs/laya-mine.jsonl`,
+            progress,
+        });
+        log(bot, r.ok ? `Mined ${r.collected} ${info.drop}.` : `Stopped mining ${ore}: ${r.reason}.`);
+        return r.ok;
+    } finally {
+        paused.forEach(m => bot.modes.unpause(m));
+    }
+}
+
+// safeMovements: pathfinder moves that never drop more than MAX_SAFE_DROP
+// blocks, jump gaps or wade through fluid (mining, collecting ore).
+export const MAX_SAFE_DROP = 3;
+export function safeMovements(bot) {
+    const m = new pf.Movements(bot);
+    m.liquidCost = 100;
+    m.dontCreateFlow = true;
+    m.allowParkour = false;
+    m.maxDropDown = MAX_SAFE_DROP;
+    m.infiniteLiquidDropdownDistance = false;
+    return m;
+}
+
+// collectOreAt digs one ore block at o ({x, y, z}) and picks up its drop
+// (the Laya mine task, and a vein seen while gathering stone). The way
+// there keeps out of water and lava and never drops more than 3 blocks;
+// over a hollow (a cave under the ore) it never stands on the ore to dig
+// it. It returns true when the drop is in the pack.
+export async function collectOreAt(bot, o, names, drop, ms = 30000) {
+    const block = o && bot.blockAt(new Vec3(o.x, o.y, o.z));
+    if (!block || !names.includes(block.name)) return false;
+    const prev = bot.pathfinder.movements;
+    const m = safeMovements(bot);
+    const blockAt = (x, y, z) => bot.blockAt(new Vec3(x, y, z));
+    const hollow = hollowUnder(blockAt, o, MAX_SAFE_DROP);
+    let timer;
+    try {
+        bot.pathfinder.setMovements(m);
+        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); });
+        const goal = new pf.goals.GoalLookAtBlock(block.position, bot.world, { reach: 4 });
+        if (hollow) {
+            // a cave under the ore: stand anywhere but on top of it
+            const isEnd = goal.isEnd.bind(goal);
+            goal.isEnd = node => !(node.x === o.x && node.z === o.z && node.y > o.y) && isEnd(node);
+        }
+        const standingOn = () => floorDrop(blockAt, bot.entity.position, o, MAX_SAFE_DROP);
+        try {
+            await Promise.race([bot.pathfinder.goto(goal), timeout]);
+        } catch {
+            bot.pathfinder.setGoal(null);
+        }
+        if (bot.entity.position.distanceTo(block.position.offset(0.5, 0.5, 0.5)) > 5) return false;
+        if (standingOn()) {
+            log(bot, `Not digging the ${block.name} under my feet at ${o.x} ${o.y} ${o.z}: there is a drop under it.`);
+            return false;
+        }
+        await bot.tool.equipForBlock(block);
+        if (!block.canHarvest(bot.heldItem ? bot.heldItem.type : null)) return false;
+        const count = () => world.getInventoryCounts(bot)[drop] || 0;
+        const before = count();
+        await bot.dig(block);
+        const at = block.position.offset(0.5, 0.5, 0.5);
+        const got = await pickUpDrop({
+            count, before,
+            findItem: () => bot.nearestEntity(e => e.name === 'item' && e.position.distanceTo(at) < 4),
+            fetch: async item => {
+                const stop = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
+                try {
+                    await Promise.race([bot.pathfinder.goto(new pf.goals.GoalNear(item.position.x, item.position.y, item.position.z, 0.5)), stop]);
+                } catch { bot.pathfinder.setGoal(null); }
+            },
+            sleep: t => new Promise(r => setTimeout(r, t)),
+        });
+        if (!got) log(bot, `Broke ${block.name} but couldn't pick up the ${drop}${bot.inventory.emptySlotCount() ? '' : ' (my pack is full)'}.`);
+        return got;
+    } finally {
+        clearTimeout(timer);
+        if (prev) bot.pathfinder.setMovements(prev);
+    }
+}
+
+export async function farmWithLayaModel(bot, goal=5, homeChest=null, adopt=null) {
+    /**
+     * Farm nearby with the Laya "farm" decision model (src/agent/laya/farm.js):
+     * harvest, replant, till, water, bone meal and breed, making a hoe, seeds
+     * or a water bucket when needed, walking to water when there is none, and
+     * (prompt v2) emptying a full pack into the home chest. Needs the farm
+     * task in settings.decision_models.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number|object} goal, minutes to farm, or {crop, count, minutes}: crop wheat, carrots, potatoes, beetroot or any; count of the crop to harvest (null: until stopped).
+     * @param {function} homeChest, optional: returns the home chest's [x, y, z] (the remembered place "home_chest"), or nothing.
+     * @param {object} adopt, optional {remember([x, y, z]), say(msg)}: saves a chest marked by a sign with the bot's name as the home chest when none is saved.
+     * @returns {Promise<boolean>} true if farming ran.
+     **/
+    const task = taskSettings('farm');
+    if (!task) {
+        log(bot, 'The Laya farm task is off (settings.decision_models.tasks.farm).');
+        return false;
+    }
+    const g = typeof goal === 'number' ? { crop: 'any', count: null, minutes: goal } : goal;
+    const paused = ['item_collecting', 'hunting', 'torch_placing', 'unstuck', 'elbow_room'];
+    paused.forEach(m => bot.modes.pause(m));
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        await farmWithLaya(bot, { crop: g.crop || 'any', count: g.count ?? null, progress: g.progress, ms: g.minutes == null ? null : g.minutes * 60000 }, {
+            client: laya, task, ...farmDeps(bot, task.water_radius ?? 64),
+            pack: packDeps(bot, homeChest, adopt),
+            inventory: () => world.getInventoryCounts(bot),
+            say: msg => { if (settings.chat_ingame !== false) bot.chat(msg); },
+            now: () => Date.now(), sleep, log: msg => log(bot, msg),
+            stepLog: `./bots/${bot.username}/logs/laya-farm.jsonl`,
+        });
+        return true;
+    } finally {
+        paused.forEach(m => bot.modes.unpause(m));
+    }
+}

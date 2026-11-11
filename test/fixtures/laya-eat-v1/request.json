@@ -1,0 +1,20 @@
+{
+  "questions": {
+    "Eat": {
+      "criteria": null,
+      "instructions": "I should eat now.",
+      "type": "noul"
+    },
+    "Food": {
+      "criteria": [
+        "apple",
+        "golden_apple",
+        "rotten_flesh",
+        "none"
+      ],
+      "instructions": "Which food should I eat?",
+      "type": "choice"
+    }
+  },
+  "state": "Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\napple x3 4 2.4\ngolden_apple x1 4 9.6 rare\nrotten_flesh x2 4 0.8 bad"
+}

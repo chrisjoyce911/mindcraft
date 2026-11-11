@@ -3,6 +3,21 @@ import * as world from './library/world.js';
 import * as mc from '../utils/mcdata.js';
 import settings from './settings.js'
 import convoManager from './conversation.js';
+import { laya, taskSettings } from '../models/laya.js';
+import { llmOn } from './llm_gate.js';
+import { runStoppable } from './run_token.js';
+import { SAFETY_MODES } from './laya/director.js';
+import { LayaEater, summary as eatSummary } from './laya/eat.js';
+import { LayaDefender, summary as defendSummary } from './laya/defend.js';
+import { defendActions } from './laya/defend_actions.js';
+import { situation as defendSituation, PLAYER_NEAR, MOB_RANGE } from './laya/defend_state.js';
+
+// layaDefender is the laya_defending mode's defender while the defend task
+// is on; the ordinary defence modes stand aside while it is in control.
+let layaDefender = null;
+function layaDefendInControl() {
+    return !!taskSettings('defend') && !!layaDefender && layaDefender.inControl();
+}
 
 async function say(agent, message) {
     agent.bot.modes.behavior_log += message + '\n';
@@ -76,7 +91,7 @@ const modes_list = [
                     });
                 }
             }
-            else if (Date.now() - bot.lastDamageTime < 3000 && (bot.health < 5 || bot.lastDamageTaken >= bot.health)) {
+            else if (Date.now() - bot.lastDamageTime < 3000 && (bot.health < 5 || bot.lastDamageTaken >= bot.health) && !layaDefendInControl()) {
                 say(agent, 'I\'m dying!');
                 execute(this, agent, async () => {
                     await skills.moveAway(bot, 20);
@@ -138,13 +153,65 @@ const modes_list = [
         }
     },
     {
+        name: 'laya_defending',
+        description: 'Fight, flee or hold off hostile mobs with the Laya defend model, when the defend decision task is on. Interrupts all actions.',
+        interrupts: ['all'],
+        on: true,
+        active: false,
+        summaryAt: 0,
+        update: async function (agent) {
+            const task = taskSettings('defend');
+            if (!task) {
+                layaDefender = null;
+                return;
+            }
+            const bot = agent.bot;
+            if (!layaDefender) {
+                const read = () => {
+                    // only mobs attacking andy or a player: one that attacks
+                    // nobody is left alone (user decision 2026-11-11)
+                    const hostile = Object.values(bot.entities).filter(e => e !== bot.entity && mc.isHostile(e) && e.position
+                        && bot.entity.position.distanceTo(e.position) <= MOB_RANGE + 2 && agent.isAttacker(e));
+                    const mobs = hostile.map(e => ({ kind: e.name, x: Math.floor(e.position.x), z: Math.floor(e.position.z), health: e.health, entity: e }));
+                    const playerNear = Object.values(bot.entities).some(e => e.type === 'player' && e !== bot.entity
+                        && bot.entity.position.distanceTo(e.position) <= PLAYER_NEAR);
+                    const s = defendSituation(bot, mobs, playerNear);
+                    return { situation: s, entities: s.mobs.map(m => m.entity) };
+                };
+                layaDefender = new LayaDefender({
+                    client: laya,
+                    task,
+                    read,
+                    act: defendActions(bot),
+                    interrupted: () => !!bot.interrupt_code,
+                    sleep: ms => new Promise(r => setTimeout(r, ms)),
+                    now: () => Date.now(),
+                    stepLog: `./bots/${agent.name}/logs/laya-defend.jsonl`,
+                });
+                this.summaryAt = Date.now() + 10 * 60_000;
+            }
+            if (Date.now() > this.summaryAt) {
+                this.summaryAt = Date.now() + 10 * 60_000;
+                if (layaDefender.counters.asked) console.log(defendSummary(layaDefender.counters));
+            }
+            if (!layaDefender.wantsToEngage()) return;
+            say(agent, 'Defending myself!');
+            const defender = layaDefender;
+            execute(this, agent, async () => {
+                await defender.engage();
+            });
+        }
+    },
+    {
         name: 'cowardice',
         description: 'Run away from enemies. Interrupts all actions.',
         interrupts: ['all'],
         on: true,
         active: false,
         update: async function (agent) {
-            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 16);
+            if (layaDefendInControl()) return; // the Laya defend model decides
+            // only from a mob attacking andy or a player (user decision 2026-11-11)
+            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity) && agent.isAttacker(entity), 16);
             if (enemy && await world.isClearPath(agent.bot, enemy)) {
                 say(agent, `Aaa! A ${enemy.name.replace("_", " ")}!`);
                 execute(this, agent, async () => {
@@ -160,12 +227,66 @@ const modes_list = [
         on: true,
         active: false,
         update: async function (agent) {
-            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 8);
+            if (layaDefendInControl()) return; // the Laya defend model decides
+            // only a mob attacking andy or a player; one that attacks nobody
+            // is left alone, however near (user decision 2026-11-11)
+            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity) && agent.isAttacker(entity), 8);
             if (enemy && await world.isClearPath(agent.bot, enemy)) {
                 say(agent, `Fighting ${enemy.name}!`);
                 execute(this, agent, async () => {
-                    await skills.defendSelf(agent.bot, 8);
+                    await skills.defendSelf(agent.bot, 8, e => agent.isAttacker(e));
                 });
+            }
+        }
+    },
+    {
+        name: 'laya_eating',
+        description: 'Decide when and what to eat with the Laya eat model, when the eat decision task is on. Does not interrupt actions.',
+        interrupts: [],
+        on: true,
+        active: false,
+        eater: null,
+        summaryAt: 0,
+        update: async function (agent) {
+            const task = taskSettings('eat');
+            if (!task) {
+                if (this.eater) { this.eater.stop(); this.eater = null; }
+                return;
+            }
+            const bot = agent.bot;
+            if (!this.eater) {
+                this.eater = new LayaEater(bot, {
+                    client: laya,
+                    task,
+                    danger: () => !!world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), 8)
+                        || !!bot.findBlock({ matching: block => block.name === 'lava', maxDistance: 2 }),
+                    eat: async food => {
+                        const item = bot.inventory.items().find(i => i.name === food);
+                        if (!item) return false;
+                        const previous = bot.heldItem;
+                        try {
+                            await bot.equip(item, 'hand');
+                            await bot.consume();
+                            return true;
+                        } catch (err) {
+                            return false;
+                        } finally {
+                            if (previous && previous.name !== food) {
+                                try { await bot.equip(previous, 'hand'); } catch (err) { /* nothing to re-equip */ }
+                            }
+                        }
+                    },
+                    autoEat: { enable: () => bot.autoEat.enable(), disable: () => bot.autoEat.disable() },
+                    now: () => Date.now(),
+                    stepLog: `./bots/${agent.name}/logs/laya-eat.jsonl`,
+                });
+                this.summaryAt = Date.now() + 10 * 60_000;
+            }
+            // not awaited: a decision never blocks the mode loop
+            this.eater.tick().catch(err => console.warn('[laya] eat:', err.message));
+            if (Date.now() > this.summaryAt) {
+                this.summaryAt = Date.now() + 10 * 60_000;
+                if (this.eater.counters.asked) console.log(eatSummary(this.eater.counters));
             }
         }
     },
@@ -307,18 +428,27 @@ async function execute(mode, agent, func, timeout=-1) {
     if (agent.self_prompter.isActive())
         agent.self_prompter.stopLoop();
     let interrupted_action = agent.actions.currentActionLabel;
+    // a safety mode goes on the job stack over an interrupted Laya job, and
+    // comes off when done: the director then resumes the job
+    const entry = SAFETY_MODES.has(mode.name) ? agent.director?.stack.pause(mode.name) : null;
     mode.active = true;
+    // a mode's work ends within 100 ms of an interrupt too (a fight whose
+    // pathfinder never settles must not get the process killed)
     let code_return = await agent.actions.runAction(`mode:${mode.name}`, async () => {
-        await func();
+        await runStoppable(agent.bot, func);
     }, { timeout });
     mode.active = false;
+    if (entry) agent.director.stack.done(entry);
     console.log(`Mode ${mode.name} finished executing, code_return: ${code_return.message}`);
+    const job_waiting = !!agent.director?.stack.job();
 
     let should_reprompt = 
         interrupted_action && // it interrupted a previous action
         !agent.actions.resume_func && // there is no resume function
+        !job_waiting && // no Laya job waits to resume (the director resumes it)
         !agent.self_prompter.isActive() && // self prompting is not on
-        !code_return.interrupted; // this mode action was not interrupted by something else
+        !code_return.interrupted && // this mode action was not interrupted by something else
+        llmOn(settings); // with the chat LLM off nobody is asked: a resumable job carries on by itself
 
     if (should_reprompt) {
         // auto prompt to respond to the interruption

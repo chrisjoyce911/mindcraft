@@ -1,5 +1,20 @@
 import * as skills from '../library/skills.js';
 import settings from '../settings.js';
+import { parseGoal as parseFarmGoal } from '../laya/farm.js';
+import { nearestChestTo } from '../laya/pack_actions.js';
+import { isHomeName } from '../laya/home_chest.js';
+import { jobFailedMessage } from '../laya/job_message.js';
+import { parseOnOff } from '../laya/chores.js';
+import { runStoppable } from '../run_token.js';
+
+// homeChestAdopter lets a Laya task save a chest marked by a sign with the
+// bot's name as the home chest (when none is saved), telling the player.
+function homeChestAdopter(agent) {
+    return {
+        remember: c => agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z),
+        say: msg => agent.openChat(msg),
+    };
+}
 import convoManager from '../conversation.js';
 
 
@@ -23,6 +38,88 @@ function runAsAction (actionFn, resume = false, timeout = -1) {
     }
 
     return wrappedAction;
+}
+
+// runLayaAction runs a Laya skill as a job on the director's job stack
+// (laya/director.js): when a mode (a fight, eating, unstuck) interrupts it,
+// the director resumes it once the mode is done. start(agent, ...args) is
+// called once per command and returns the work (work.remaining(), optional:
+// how many are left), so goals fixed at the command (have N more logs)
+// aren't counted again on resume. The job ends when the work finishes by
+// itself (or fails), or a player's new command or !stop replaces it.
+//
+// start(agent, args, saved) gets saved = what work.save() returned before a
+// restart (null for a new command); work.save() (optional) is kept in
+// bots/<name>/laya-job.json while the job is on the stack (laya/job_save.js).
+export const LAYA_JOBS = {};
+function runLayaAction(label, start, timeout = -1) {
+    LAYA_JOBS[label] = { start, timeout };
+    return async function (agent, ...args) {
+        const work = start(agent, args, null);
+        const job = agent.director.stack.start(label, args, { work, remaining: work.remaining, save: work.save, timeout });
+        return await runJob(agent, job);
+    };
+}
+
+// restoreJob puts a job saved before a restart back on the stack, paused
+// (the director resumes it); returns it, or null for an unknown job.
+export function restoreJob(agent, entry) {
+    const def = LAYA_JOBS[entry.name];
+    if (!def) return null;
+    const work = def.start(agent, entry.args, entry.saved || {});
+    const stack = agent.director.stack;
+    const job = stack.start(entry.name, entry.args, { work, remaining: work.remaining, save: work.save, timeout: def.timeout });
+    stack.paused(job);
+    return job;
+}
+
+// runJob runs (or resumes) a job from the stack as the agent's action.
+export async function runJob(agent, job) {
+    const stack = agent.director.stack;
+    stack.resumed(job);
+    let result;
+    // the work returns within 100 ms of an interrupt, even when a skill
+    // under it doesn't stop (ActionManager kills the process after 10 s)
+    const r = await agent.actions.runAction(`action:${job.name}`, async () => {
+        result = await runStoppable(agent.bot, () => job.work(), () => undefined);
+    }, { timeout: job.timeout ?? -1 });
+    if (stack.has(job)) {
+        if (r.interrupted && !r.timedout) stack.paused(job);
+        else {
+            const how = !r.success ? 'blocked' : (result === false || result?.ok === false) ? 'failed' : 'done';
+            stack.ended(job, how);
+            // a chore reports its end to the chores runner (a failed chore
+            // goes in Failed, quietly); a job that ends without doing it
+            // says why (a resumed job's output reaches no one else)
+            if (job.onEnd) job.onEnd(how, result, r);
+            else if (how !== 'done') agent.openChat(jobFailedMessage(job, result, r));
+        }
+    }
+    agent.director.tick('job-ended').catch(() => {});
+    if (r.interrupted && !r.timedout) return;
+    return r.message;
+}
+
+// layaFarmJob runs !layaFarm's job (args crop, count|'any'); end: when a
+// timed farm stops (ms) or null. progress.harvested is kept across resumes
+// after a fight and across a restart.
+runLayaAction('layaFarm', (agent, [crop, count], saved) => {
+    const end = saved?.end ?? null;
+    const progress = { harvested: saved?.harvested ?? 0 };
+    const n = count === 'any' || count == null ? null : +count;
+    const work = () => skills.farmWithLayaModel(agent.bot,
+        { crop, count: n, progress, minutes: end == null ? null : Math.max(0.1, (end - Date.now()) / 60000) },
+        () => agent.homeChest(), homeChestAdopter(agent));
+    if (n != null) work.remaining = () => n - progress.harvested;
+    work.save = () => ({ harvested: progress.harvested, end });
+    return work;
+});
+function layaFarmJob(agent, crop, count, end) {
+    // a new command: the end time rides in as if saved
+    const def = LAYA_JOBS.layaFarm;
+    const work = def.start(agent, [crop, count], { end, harvested: 0 });
+    const job = agent.director.stack.start('layaFarm', [crop, count], { work, remaining: work.remaining, save: work.save, timeout: def.timeout });
+    return runJob(agent, job);
 }
 
 export const actionsList = [
@@ -54,6 +151,7 @@ export const actionsList = [
         name: '!stop',
         description: 'Force stop all actions and commands that are currently executing.',
         perform: async function (agent) {
+            agent.director?.stack.clear(); // no Laya job resumes
             await agent.actions.stop();
             agent.clearBotLogs();
             agent.actions.cancelResume();
@@ -111,6 +209,55 @@ export const actionsList = [
         }, true)
     },
     {
+        name: '!layaMine',
+        description: 'Mine underground until you have the given number of an ore (coal, copper, iron, lapis, gold, redstone or diamond): a staircase down to its height and a branch mine there, placing torches, blocking lava, crafting the pickaxe and torches it needs, and emptying a full pack into the home chest (the remembered place "home_chest").',
+        params: {
+            'ore': {type: 'string', description: 'The ore: coal, copper, iron, lapis, gold, redstone or diamond.'},
+            'count': {type: 'int', description: 'How many of the ore to collect.', domain: [1, 64]}
+        },
+        // progress.done (the drop collected so far) is kept across resumes
+        // after a fight, so a resumed job mines only what is left.
+        perform: runLayaAction('layaMine', (agent, [ore, count], saved) => {
+            const progress = { done: saved?.done ?? 0 };
+            const work = () => skills.mineOre(agent.bot, ore, Math.max(1, count - progress.done),
+                () => agent.homeChest(), progress);
+            work.remaining = () => count - progress.done;
+            work.save = () => ({ done: progress.done });
+            return work;
+        })
+    },
+    {
+        name: '!hunt',
+        description: 'Hunt an animal or mob until you have the given number more of its drop (e.g. cow for beef or leather, pig for porkchop, sheep for mutton or wool, chicken for chicken, feather or egg, spider for string), picking up the drops.',
+        params: {
+            'mob': { type: 'string', description: 'The mob to hunt, e.g. cow.' },
+            'item': { type: 'string', description: 'The drop to collect, e.g. beef.' },
+            'count': { type: 'int', description: 'How many more of the drop to have.', domain: [1, 64] },
+        },
+        // the target is fixed at the command, so a resumed hunt doesn't add more
+        perform: runLayaAction('hunt', (agent, [mob, item, count], saved) => {
+            const target = saved?.target ?? (skills.inventoryCount?.(agent.bot, item) ?? 0) + count;
+            const work = () => skills.huntForDrop(agent.bot, mob, item, count, target);
+            work.remaining = () => target - (skills.inventoryCount?.(agent.bot, item) ?? 0);
+            work.save = () => ({ target });
+            return work;
+        })
+    },
+    {
+        name: '!layaFarm',
+        description: 'Farm nearby with the Laya farm model: harvest ripe crops, replant, till, water, bone meal and breed animals, making a hoe, seeds or a water bucket when needed and emptying a full pack into the home chest (the remembered place "home_chest"). With a count it stops once that many of the crop are harvested; without one it farms until stopped. A lone number is minutes to farm (old form).',
+        params: {
+            'crop': {type: 'string', optional: true, description: 'The crop: wheat, carrots, potatoes, beetroot or any (default any).'},
+            'count': {type: 'string', optional: true, description: 'How many of the crop to harvest, or "any" to farm until stopped (default).'}
+        },
+        perform: async function (agent, crop, count) {
+            const goal = parseFarmGoal(crop, count);
+            if (goal.error) return goal.error;
+            const end = goal.minutes == null ? null : Date.now() + goal.minutes * 60000;
+            return layaFarmJob(agent, goal.crop, goal.count ?? 'any', end);
+        }
+    },
+    {
         name: '!goToCoordinates',
         description: 'Go to the given x, y, z location.',
         params: {
@@ -158,11 +305,45 @@ export const actionsList = [
         })
     },
     {
+        name: '!layaChores',
+        description: 'Turn chores on or off: with chores on, when nobody has given you a job you work by yourself (wood, tools, a farm, food, torches, a chest, beds, a kit for the player). Saved across restarts.',
+        params: { 'state': { type: 'string', description: 'on or off.' } },
+        perform: async function (agent, state) {
+            const on = parseOnOff(state);
+            if (on == null) return 'Say on or off.';
+            agent.setChores(on);
+            if (on) setTimeout(() => agent.director.tick('chores-on').catch(() => {}), 200);
+            return on ? "Okay, I'll do my chores when nobody needs me." : "Okay, I'm taking a break from chores.";
+        }
+    },
+    {
+        name: '!setHomeChest',
+        description: 'Make the chest next to the player who spoke last (or next to you) your home chest, where Laya mining and farming empty a full pack.',
+        perform: async function (agent) {
+            const speaker = agent.last_speaker && agent.bot.players?.[agent.last_speaker]?.entity;
+            const at = (speaker || agent.bot.entity).position;
+            const c = nearestChestTo(agent.bot, at);
+            if (!c) return "I can't see a chest near you.";
+            agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z);
+            // a player set the home: it replaces a table home and the chores centre
+            agent.memory_bank.forgetPlace('home_table');
+            agent.memory_bank.forgetPlace('chores_centre');
+            return `Home chest set at ${c.x} ${c.y} ${c.z}.`;
+        }
+    },
+    {
         name: '!rememberHere',
         description: 'Save the current location with a given name.',
         params: {'name': { type: 'string', description: 'The name to remember the location as.' }},
         perform: async function (agent, name) {
             const pos = agent.bot.entity.position;
+            if (isHomeName(name)) {
+                // the home chest is only ever a chest: the one nearest me
+                const c = nearestChestTo(agent.bot, pos);
+                if (!c) return "There's no chest here, so I can't make it my home chest. Stand by a chest and use !setHomeChest.";
+                agent.memory_bank.rememberPlace('home_chest', c.x, c.y, c.z);
+                return `Home chest set at ${c.x} ${c.y} ${c.z}.`;
+            }
             agent.memory_bank.rememberPlace(name, pos.x, pos.y, pos.z);
             return `Location saved as "${name}".`;
         }
@@ -262,6 +443,34 @@ export const actionsList = [
         perform: runAsAction(async (agent, type, num) => {
             await skills.collectBlock(agent.bot, type, num);
         }, false, 10) // 10 minute timeout
+    },
+    {
+        name: '!layaCraft',
+        description: 'Make an item from scratch with the Laya craft model: it gathers, smelts, places stations and crafts every step needed, storing junk in a chest when the inventory is full.',
+        params: {
+            'item_name': { type: 'string', description: 'The item to make, e.g. iron_pickaxe, torch, chest, bread.' },
+            'num': { type: 'int', description: 'How many items to have made.', domain: [1, 64] }
+        },
+        perform: runLayaAction('layaCraft', (agent, [item_name, num], saved) => {
+            const target = saved?.target ?? skills.layaTarget(agent.bot, item_name, num);
+            const work = () => skills.layaMake(agent.bot, item_name, num, target);
+            work.save = () => ({ target });
+            return work;
+        }, 20)
+    },
+    {
+        name: '!layaGather',
+        description: 'Gather resources with the Laya craft model, making any tool needed first (e.g. a stone pickaxe for iron), storing junk in a chest when full.',
+        params: {
+            'item_name': { type: 'string', description: 'What to gather: log, cobblestone, coal, raw_iron (iron ore), diamond, sand, wheat, wheat_seeds.' },
+            'num': { type: 'int', description: 'How many to gather.', domain: [1, 64] }
+        },
+        perform: runLayaAction('layaGather', (agent, [item_name, num], saved) => {
+            const target = saved?.target ?? skills.layaTarget(agent.bot, item_name, num);
+            const work = () => skills.layaMake(agent.bot, item_name, num, target);
+            work.save = () => ({ target });
+            return work;
+        }, 20)
     },
     {
         name: '!craftRecipe',

@@ -1,3 +1,5 @@
+import settings from '../settings.js';
+import { llmOn } from '../llm_gate.js';
 import { readdirSync, readFileSync } from 'fs';
 import { NPCData } from './data.js';
 import { ItemGoal } from './item_goal.js';
@@ -87,7 +89,7 @@ export class NPCContoller {
             return;
         }
 
-        if (!this.data.do_set_goal) return;
+        if (!this.data.do_set_goal || !llmOn(settings)) return;
 
         let past_goals = {...this.last_goals};
         for (let goal in this.data.goals) {

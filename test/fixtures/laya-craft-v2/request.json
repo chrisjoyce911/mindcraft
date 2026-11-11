@@ -1,0 +1,56 @@
+{
+  "questions": {
+    "Action": {
+      "criteria": [
+        "craft",
+        "smelt",
+        "gather",
+        "take",
+        "place",
+        "store",
+        "done"
+      ],
+      "instructions": "What should I do next?",
+      "type": "choice"
+    },
+    "Count": {
+      "criteria": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "6",
+        "8",
+        "12",
+        "16",
+        "24",
+        "32",
+        "48",
+        "64"
+      ],
+      "instructions": "How many?",
+      "type": "choice"
+    },
+    "Item": {
+      "criteria": [
+        "chest",
+        "cobblestone",
+        "crafting_table",
+        "furnace",
+        "iron_ingot",
+        "iron_pickaxe",
+        "log",
+        "planks",
+        "raw_iron",
+        "stick",
+        "stone_pickaxe",
+        "wooden_pickaxe",
+        "dirt",
+        "none"
+      ],
+      "instructions": "Which item?",
+      "type": "choice"
+    }
+  },
+  "state": "Craft.\nGoal iron_pickaxe x1\nHave planks x3 stick x2 wooden_pickaxe x1\nOther dirt x12\nChest raw_iron x5\nNear crafting_table yes furnace no chest no\nInventory 4/36"
+}

@@ -9,6 +9,7 @@ export class ActionManager {
         this.resume_name = '';
         this.last_action_time = 0;
         this.recent_action_counter = 0;
+        this.runId = 0;
     }
 
     async resumeAction(actionFn, timeout) {
@@ -28,7 +29,11 @@ export class ActionManager {
         const timeout = setTimeout(() => {
             this.agent.cleanKill('Code execution refused stop after 10 seconds. Killing process.');
         }, 10000);
-        while (this.executing) {
+        // only the action running now: once it has ended, a newer one that
+        // started meanwhile is not this stop's to wait for (two actions
+        // starting in turn every second kept one stop waiting 10 s → kill)
+        const run = this.runId;
+        while (this.executing && this.runId === run) {
             this.agent.requestInterrupt();
             console.log('waiting for code to finish executing...');
             await new Promise(resolve => setTimeout(resolve, 300));
@@ -93,6 +98,7 @@ export class ActionManager {
             this.agent.clearBotLogs();
 
             this.executing = true;
+            this.runId = (this.runId || 0) + 1;
             this.currentActionLabel = actionLabel;
             this.currentActionFn = actionFn;
 
@@ -128,7 +134,10 @@ export class ActionManager {
             this.currentActionLabel = '';
             this.currentActionFn = null;
             clearTimeout(TIMEOUT);
-            this.cancelResume();
+            // An interrupt (a mode taking over) often throws out of the
+            // action (e.g. "Digging aborted"): keep its resume so the job
+            // carries on afterwards. Any other error ends it.
+            if (!this.agent.bot.interrupt_code) this.cancelResume();
             console.error("Code execution triggered catch:", err);
             // Log the full stack trace
             console.error(err.stack);
