@@ -29,6 +29,16 @@ export function realDeps(config) {
             // log to stderr: stdout is the MCP channel
             return new TestWorld({ config: tw, sites: loadSites(tw.sitesFile), deps: realWorldDeps({ log: line => process.stderr.write(line + '\n') }) });
         },
+        // forgetAgent: the agent's saved memory and chores state belong to
+        // the world before a reset (a home chest, a home bed, chest
+        // contents): removed so the restarted agent starts with nothing
+        // saved, and with chores off (on, he'd adopt a chest by the spawn as
+        // home at once); each test sets chores as its tags say.
+        forgetAgent: async () => {
+            const { rmSync, writeFileSync } = await import('fs');
+            try { rmSync(`${config.botDir}/memory.json`, { force: true }); } catch { /* none */ }
+            try { writeFileSync(`${config.botDir}/laya-chores.json`, JSON.stringify({ on: false })); } catch { /* no bot dir */ }
+        },
         makeBot: async () => {
             const [{ Bot }, { realBotDeps }] = await Promise.all([import('../../test-world/lib/bot.js'), import('../../test-world/lib/real.js')]);
             return new Bot({ config: config.testWorld, deps: realBotDeps() });
