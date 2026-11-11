@@ -332,7 +332,7 @@ test('a different safety answer preempts the running activity; the same answer l
     await w.director.stop();
 });
 
-test('defend ends calm → a quiet spell: the director\'s defend answer is not rerun at once', async () => {
+test('defend ends calm → no quiet spell (only ignore starts one); the 1 s restart hold stops a hot loop', async () => {
     const w = world();
     // a spider by day attacked andy: the defend rules say calm (spiders are calm by day)
     w.addMob(mobFact(60, 'spider', 2, 0, true));
@@ -340,9 +340,41 @@ test('defend ends calm → a quiet spell: the director\'s defend answer is not r
     const d = await w.director.decide('hurt');
     assert.equal(d?.answer, 'defend');
     assert.ok(await until(() => w.logs.length === 2), 'the decision after the activity ends');
-    assert.deepEqual([w.logs[1]?.event, w.logs[1]?.answer, w.logs[1]?.acted], ['defend-done', 'defend', 'quiet']);
+    assert.deepEqual([w.logs[1]?.event, w.logs[1]?.answer, w.logs[1]?.acted], ['defend-done', 'defend', 'hold']);
     assert.equal(w.director.holder, null);
     assert.deepEqual(w.defends, [], 'the defend rules say calm: nothing to log or do');
+});
+
+test('a second attacker right after a kill is defended at once (no quiet after calm/gone; a hit breaks quiet)', async () => {
+    const w = world({ items: [{ name: 'iron_sword', count: 1 }], facts: { armed: 'sword' } });
+    w.director.timing.quietMs = 60000;
+    w.addMob(mobFact(80, 'zombie', 2, 0, true));
+    w.facts = { ...w.facts, me: { by: 'zombie', entityId: 80, at: 0, dist: 2 } };
+    assert.equal((await w.director.decide('hurt'))?.answer, 'defend');
+    assert.ok(await until(() => w.calls.some(c => c.what === 'attack' && c.arg === 80)), 'fights the first');
+    assert.ok(await until(() => w.director.holder === null), 'the first dies: defend ends');
+    // within quiet_ms (and the restart hold) a second zombie hits andy
+    w.addMob(mobFact(81, 'zombie', 2, 1, true));
+    w.facts = { ...w.facts, me: { by: 'zombie', entityId: 81, at: 0, dist: 2 } };
+    const d = await w.director.decide('hurt');
+    assert.equal(d?.answer, 'defend');
+    assert.equal(w.logs.at(-1)?.acted, undefined, 'acted on, not held');
+    assert.ok(await until(() => w.calls.some(c => c.what === 'attack' && c.arg === 81)), 'fights the second at once');
+    await w.director.stop();
+});
+
+test('after an ignore end the quiet spell holds a tick\'s defend answer, but a hurt event breaks it', async () => {
+    const w = world();
+    w.director.timing.quietMs = 60000;
+    (w.director as unknown as { quietUntil: number }).quietUntil = Date.now() + 60000;   // as after 'ignore'
+    w.addMob(mobFact(90, 'zombie', 2, 0, true));
+    w.facts = { ...w.facts, me: { by: 'zombie', entityId: 90, at: 0, dist: 2 } };
+    await w.director.decide('tick');
+    assert.equal(w.logs.at(-1)?.acted, 'quiet');
+    assert.equal(w.director.holder, null);
+    await w.director.decide('hurt');
+    assert.equal(w.director.holder, 'director:defend');
+    await w.director.stop();
 });
 
 test('events never move the body: every actuator call happens under the lease', async () => {

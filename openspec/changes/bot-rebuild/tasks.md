@@ -80,7 +80,13 @@ lease overrun test passes.
   against flapping: defend quiet, 1 s restart hold, eat-refused). Defend sees only attackers; defend-player walks to the
   player first. Lease fix: the holder is set before the runner starts. 115 unit tests incl. ports of laya_director,
   laya_defend, fix_round3/4 parts. Live (`bot-rebuild-3.4-2026-11-12.md`): eat, new defend-fight, flee-creeper and
-  night-survival (tag rebuild) pass; defend's follow steps wait for 4.2.
+  night-survival (tag rebuild) pass; defend's follow steps wait for 4.2. Review fix: defend's quiet spell follows only
+  an `ignore` end and a hurt event breaks it (a second attacker right after a kill is fought at once); the holds are
+  in design §5.2.
+  **Open (before 4.x jobs, owner laya-go skills-spec):** after the eat model refuses (e.g. only rotten flesh while not
+  starving), the director's `eat` answer is held for up to 30 s and nothing runs, so a paused job is not resumed
+  while the director's `Food items` still counts the refused food. Fix in the spec: the director's `Food items`
+  should count only the foods the eat model may choose. No "resume instead" rule in code.
 - [ ] 3.5 Logs: `laya-director/eat/defend.jsonl` identical in format to the fixtures (1.2).
 
 Done means: golden green; suite scenarios for defend, flee, eat and night survival pass on the new bot; no mode exists.

@@ -175,6 +175,15 @@ A single async loop in `director/loop.ts`:
 A player command replaces the top job (today's `replaceTop`); a safety activity pauses it; when the activity ends the
 director answers `resume` and the job continues from its `progress`.
 
+**Holds (the only "when to act" rules outside the models).** They limit how fast an answer is acted on; none picks a
+different activity. Each held answer is logged with `acted`.
+
+| Hold | Trigger | Holds | Timeout | Broken by |
+|---|---|---|---|---|
+| defend quiet (`acted: quiet`) | the defend activity ended `ignore` (the old LayaDefender's quiet after ignore) | the director's `defend` answer | `defend.quiet_ms` in settings (default 3000 ms) | a `hurt` event (a hit is news) |
+| restart hold (`acted: hold`) | a safety activity ended by itself (not stopped) | the same activity for the same answer, so the answer and the activity's own end check can't loop | 1 s (`RESTART_HOLD_MS`); the next tick acts | a `hurt` event |
+| eat-refused (`acted: eat-refused`) | the eat activity ended `no-eat` (the eat model refused) | the director's `eat` answer; nothing runs, a paused job is not resumed (open item in tasks.md 3.4) | 30 s (`EAT_REFUSED_HOLD_MS`) or food drops below the level it refused at | stop, death |
+
 ### 5.3 Modes are replaced by director decisions
 
 | Old mode | Replacement |

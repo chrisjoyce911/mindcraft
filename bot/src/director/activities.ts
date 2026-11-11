@@ -26,7 +26,7 @@ export type ActivityEnd =
 export interface Timing {
     /** defend: pause between decisions while mobs are active. */
     stepMs: number;
-    /** defend: after ignore/calm, how long the director's defend answer isn't run again. */
+    /** defend: after an ignore end, how long the director's defend answer isn't run again (a hurt event breaks it). */
     quietMs: number;
     /** defend: an engagement's ceiling. */
     maxEngageMs: number;

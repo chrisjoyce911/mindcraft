@@ -61,7 +61,9 @@ interface Current { id: number; name: ActivityRunnerName | 'job'; held: Held<unk
 
 /**
  * The eat model refused (e.g. only rotten flesh while not starving, which the director counts as food):
- * the director's eat answer acts as continue until food drops below the level it refused at, or this long.
+ * the director's eat answer is held, and nothing runs (a paused job is not resumed), until food drops below
+ * the level it refused at, or this long. Open item (tasks.md): the director's `Food items` should match the
+ * foods the eat model may choose.
  */
 export const EAT_REFUSED_HOLD_MS = 30000;
 
@@ -198,7 +200,9 @@ export class Director {
     private async arbitrate(answer: Activity, eat: EatDecision | null, facts: Facts, event: DirectorEvent = 'tick'): Promise<string | undefined> {
         const cur = this.current;
         if (isSafety(answer)) {
-            if (answer === 'defend' && cur?.name !== 'defend' && this.now() < this.quietUntil) return 'quiet';
+            // defend's quiet spell (the old LayaDefender's quiet_ms) follows only an 'ignore' end; a hit is news
+            // and breaks it, so a second attacker right after a kill is fought at once.
+            if (answer === 'defend' && cur?.name !== 'defend' && event !== 'hurt' && this.now() < this.quietUntil) return 'quiet';
             const refused = this.eatRefused;
             if (answer === 'eat' && !cur && refused && facts.food >= refused.food && this.now() < refused.until) return 'eat-refused';
             const name = runnerFor(answer, facts);
@@ -277,7 +281,7 @@ export class Director {
             }
             this.deps.sink.note(`${name} ended: ${end}`);
             if (r.how === 'threw') this.deps.sink.note(`${name} threw: ${String(r.error)}`);
-            if (name === 'defend' && (end === 'calm' || end === 'ignore' || end === 'gone')) this.quietUntil = this.now() + this.timing.quietMs;
+            if (name === 'defend' && end === 'ignore') this.quietUntil = this.now() + this.timing.quietMs;
             if (end !== 'stopped' && gen === this.generation) void this.decide(`${name}-done`);
         });
     }
