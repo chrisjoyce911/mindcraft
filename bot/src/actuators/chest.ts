@@ -8,6 +8,8 @@ import { goNear } from './approach.js';
 export const OPEN_TIMEOUT_MS = 5000;
 export const DEPOSIT_TIMEOUT_MS = 5000;
 export const CHEST_REACH = 2;
+/** On an abort, how long a deposit already in flight may finish before the chest is closed (< the lease overrun). */
+export const SETTLE_MS = 1000;
 
 /** deposit puts count of item into the chest at p. */
 export async function deposit(a: Act, p: Vec3Like, item: string, count: number, signal: AbortSignal): Promise<Outcome> {
@@ -24,11 +26,19 @@ export async function deposit(a: Act, p: Vec3Like, item: string, count: number, 
         return fail('error', String(e));
     } finally { t.dispose(); }
     const d = withTimeout(DEPOSIT_TIMEOUT_MS, signal);
+    const depositing = box.deposit(item, count);
     try {
-        await race(box.deposit(item, count), d.signal);
+        await race(depositing, d.signal);
         return OK;
     } catch (e) {
-        if (signal.aborted || isAborted(e) && !timedOut(d.signal)) return fail('cancelled');
+        if (signal.aborted || isAborted(e) && !timedOut(d.signal)) {
+            // let a deposit in flight settle before the close, so the inventory says what went in (the store
+            // job counts it on resume and never deposits it twice)
+            let t: NodeJS.Timeout | undefined;
+            await Promise.race([depositing.catch(() => {}), new Promise(r => { t = setTimeout(r, SETTLE_MS); })]);
+            clearTimeout(t);
+            return fail('cancelled');
+        }
         if (timedOut(d.signal)) return fail('timeout', 'deposit');
         return fail('error', String(e));
     } finally {

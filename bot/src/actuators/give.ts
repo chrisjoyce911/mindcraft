@@ -10,7 +10,18 @@ export const COLLECT_MS = 3000;
 
 export type GiveResult =
     | { ok: true; tossed: number }
-    | { ok: false; why: 'too close' | 'never received' | 'no-item' | 'cancelled'; outcome?: Outcome };
+    | { ok: false; why: 'too close' | 'never received' | 'no-item' | 'cancelled'; outcome?: Outcome }
+    /** Aborted after the toss: what was tossed, and whether the player picks it up (settles ≤ COLLECT_MS). */
+    | { ok: false; why: 'cancelled'; tossed: number; collected: Promise<boolean> };
+
+/** collectedOrAborted: the pickup, or 'aborted' as soon as the signal aborts (its listener removed after). */
+function collectedOrAborted(collected: Promise<boolean>, signal: AbortSignal): Promise<boolean | 'aborted'> {
+    if (signal.aborted) return Promise.resolve('aborted');
+    let onAbort = () => {};
+    const abort = new Promise<'aborted'>(resolve => { onAbort = () => resolve('aborted'); });
+    signal.addEventListener('abort', onAbort, { once: true });
+    return Promise.race([collected, abort]).finally(() => signal.removeEventListener('abort', onAbort));
+}
 
 const dist = (a: Vec3Like, b: Vec3Like) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
@@ -34,11 +45,14 @@ export async function giveTo(a: Act, player: ActEntity, username: string, item: 
     }
     try { await a.bot.lookAt(player.position); } catch { /* best effort */ }
     if (signal.aborted) return { ok: false, why: 'cancelled' };
-    const collected = a.bot.waitCollect(username, COLLECT_MS, signal);
+    // the pickup wait runs to its own timeout, not the job's signal: an abort after the toss still learns
+    // whether the player got it (the job must never toss again on resume)
+    const collected = a.bot.waitCollect(username, COLLECT_MS, new AbortController().signal);
     let tossed = 0;
     try { tossed = await a.bot.toss(item, count); } catch (e) { return { ok: false, why: 'never received', outcome: fail('error', String(e)) }; }
     if (!tossed) return { ok: false, why: 'no-item' };
-    if (await collected) return { ok: true, tossed };
-    if (signal.aborted) return { ok: false, why: 'cancelled' };
+    const got = await collectedOrAborted(collected, signal);
+    if (got === true) return { ok: true, tossed };
+    if (got === 'aborted') return { ok: false, why: 'cancelled', tossed, collected };
     return { ok: false, why: 'never received' };
 }

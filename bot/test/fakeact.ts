@@ -56,6 +56,13 @@ export interface World {
     tossed: ActItem[];
     /** waitCollect answers this (the player picked the toss up). */
     collects: boolean;
+    /** waitCollect takes this long when set (a test pauses a give during the pickup wait). */
+    collectMs?: number;
+    /** called right after a toss. */
+    onToss?: () => void;
+    /** a deposit takes this long when set; called when it starts. */
+    depositMs?: number;
+    onDeposit?: () => void;
     /** openContainer rejects when set. */
     openFails?: boolean;
     /** called on each moveUntil (a follow step): a test moves andy into the column, or not. */
@@ -115,6 +122,8 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
             return {
                 deposit: async (name, count) => {
                     rec('deposit', `${name} ${count}`);
+                    w.onDeposit?.();
+                    if (w.depositMs) await wait(w.depositMs);
                     const it = w.items.find(i => i.name === name);
                     if (!it || it.count < count) throw new Error(`not enough ${name}`);
                     it.count -= count;
@@ -134,9 +143,11 @@ export function world(opts: { facts?: Partial<Facts>; items?: ActItem[]; timing?
             }
             rec('toss', `${name} ${n}`);
             if (n) w.tossed.push({ name, count: n });
+            w.onToss?.();
             return n;
         },
         waitCollect: async (_player, ms, signal) => {
+            if (w.collectMs) return (await wait(w.collectMs, signal)) && w.collects;
             if (w.collects) return wait(5, signal);
             await wait(Math.min(ms, 30), signal);
             return false;

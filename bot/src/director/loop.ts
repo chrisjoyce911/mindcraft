@@ -129,6 +129,8 @@ export class Director {
         this.timer = null;
         this.generation++;
         this.current = null;
+        // a plan awaiting ended() must not hang after a disconnect: its jobs are cancelled
+        for (const j of [...this.waiters.keys()]) this.settle(j, { how: 'cancelled' });
         await this.deps.lease.release();
     }
 

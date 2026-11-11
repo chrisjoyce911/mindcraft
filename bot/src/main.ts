@@ -182,7 +182,7 @@ async function main() {
             case 'chores': say(`Chores aren't in the new bot yet.`); return false;
             case 'job': {
                 const d = director;
-                if (!d) return false;
+                if (!d) { say("I'm not in the game yet."); return false; }
                 const probe = makeRunner({ id: 'probe', spec: cmd.job, origin: 'player', progress: {}, status: 'running', startedAt: 0 }, jobDeps);
                 if (!probe) { say(`I can't do ${cmd.job.kind} yet in the new bot.`); return false; }
                 const entry = await d.startJob(cmd.job, 'player', {}, from, doneSay ? { doneSay } : {});

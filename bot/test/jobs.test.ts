@@ -192,3 +192,66 @@ test('follow: a real runner is paused by defend and resumed (action:followPlayer
     await w.director.stop();
     assert.equal(w.lease.isFree, true);
 });
+
+/** pauseByDefend: a zombie hits andy now, so defend takes the lease from the running job. */
+function pauseByDefend(w: World): void {
+    w.addMob(mobFact(40, 'zombie', 2, 0, true));
+    w.facts = { ...w.facts, me: { by: 'zombie', entityId: 40, at: 0, dist: 2 } };
+    void w.director.decide('hurt');
+}
+
+for (const collects of [true, false]) {
+    test(`give: paused by defend during the pickup wait, resumed, tosses only once (${collects ? 'received' : 'never received'})`, async () => {
+        const { w } = jobWorld({ items: [{ name: 'coal', count: 7 }, { name: 'stone_sword', count: 1 }] });
+        w.collects = collects;
+        w.collectMs = 150;
+        let paused = false;
+        w.onToss = () => { pauseByDefend(w); };
+        const job = await w.director.startJob({ kind: 'give', player: 'tester', item: 'coal', count: 3 }, 'player', {}, 'tester');
+        assert.ok(await until(() => job!.status === 'paused'), 'defend paused the give');
+        paused = true;
+        const end = await w.director.ended(job!);
+        assert.ok(paused);
+        assert.deepEqual(end, collects ? { how: 'done' } : { how: 'failed', reason: 'Failed to give coal to tester, it was never received.' });
+        assert.deepEqual(w.tossed, [{ name: 'coal', count: 3 }], 'one toss, the asked count');
+        assert.equal(w.calls.filter(c => c.what === 'toss').length, 1);
+        assert.deepEqual(w.items.find(i => i.name === 'coal'), { name: 'coal', count: 4 });
+        assert.ok(w.logs.some(l => l.answer === 'resume'));
+        await w.director.stop();
+    });
+}
+
+test('store: paused by defend during a deposit, resumed, deposits the asked count once', async () => {
+    const { w } = jobWorld({ items: [{ name: 'cobblestone', count: 20 }, { name: 'stone_sword', count: 1 }] });
+    w.blocks['4,64,2'] = { name: 'chest' };
+    w.depositMs = 100;
+    w.onDeposit = () => { w.onDeposit = undefined; pauseByDefend(w); };
+    const job = await w.director.startJob({ kind: 'store', item: 'cobblestone', count: 12 }, 'player', {});
+    assert.ok(await until(() => job!.status === 'paused'), 'defend paused the store');
+    assert.deepEqual(await w.director.ended(job!), { how: 'done' });
+    assert.equal(w.said.at(-1), 'Successfully put 12 cobblestone in the chest.');
+    assert.deepEqual(w.chests, { '4,64,2': { cobblestone: 12 } });
+    assert.equal(w.calls.filter(c => c.what === 'deposit').length, 1, 'never deposited again');
+    assert.deepEqual(w.items.find(i => i.name === 'cobblestone'), { name: 'cobblestone', count: 8 });
+    await w.director.stop();
+});
+
+test('store: paused before the deposit, resumed, deposits the rest of the asked count', async () => {
+    const { w } = jobWorld({ items: [{ name: 'cobblestone', count: 20 }, { name: 'stone_sword', count: 1 }] });
+    w.blocks['4,64,2'] = { name: 'chest' };
+    let first = true;
+    w.onGoTo = () => { if (first) { first = false; pauseByDefend(w); } };
+    const job = await w.director.startJob({ kind: 'store', item: 'cobblestone', count: 5 }, 'player', {});
+    assert.deepEqual(await w.director.ended(job!), { how: 'done' });
+    assert.deepEqual(w.chests, { '4,64,2': { cobblestone: 5 } });
+    assert.equal(w.said.at(-1), 'Successfully put 5 cobblestone in the chest.');
+    await w.director.stop();
+});
+
+test('dispose: a plan awaiting ended() is settled cancelled, not left hanging', async () => {
+    const { w } = jobWorld();
+    const job = await w.director.startJob({ kind: 'stay', seconds: -1 }, 'player', {});
+    const end = w.director.ended(job!);
+    await w.director.dispose();
+    assert.deepEqual(await end, { how: 'cancelled' });
+});
