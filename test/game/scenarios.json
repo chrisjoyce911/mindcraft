@@ -951,7 +951,7 @@
         "defend"
       ],
       "timeout": 150000,
-      "description": "Andy follows tester; a husk (a zombie that doesn't burn in the locked daytime) is summoned 5 blocks east of him. He must kill it and go back to following (the interrupted job resumes). Sets difficulty easy.",
+      "description": "Andy follows tester; a husk (a zombie that doesn't burn in the locked daytime) is summoned 5 blocks east of him and hits him (a /damage by the husk: beside creative tester a husk often attacks nobody, and since 2026-11-11 andy only fights a mob that attacks him or a player). He must kill it and go back to following (the interrupted job resumes). Sets difficulty easy.",
       "setup": [
         {
           "site": "base"
@@ -993,6 +993,9 @@
           },
           "timeout": 10000,
           "optional": true
+        },
+        {
+          "cmd": "/damage {andy} 2 minecraft:mob_attack by @e[type=husk,limit=1,sort=nearest]"
         },
         {
           "waitFor": {
