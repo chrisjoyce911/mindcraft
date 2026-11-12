@@ -291,7 +291,15 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
 `bots/andy/logs/game-tests/bot-rebuild-phase5-2026-11-12.md`.
 
 ## 6. Cut-over
-- [ ] 6.1 Full suite 16/16 on the new bot, twice in a row, zero process exits.
+- [x] 6.1 Full suite 16/16 on the new bot, twice in a row, zero process exits.
+      **Passed 2026-11-12 13:01–14:11 AEST** (5d67419, craft-t181 served, training held, one process PID 49130): craft-furnace
+      probe PASS (place crafting_table, craft furnace, p 0.9999); runs c 16/16, d 15/16, chores2-no-trees and
+      chores2-first-day PASS; then the defend check fix (d failed on the check: follow had resumed, the eat model ate
+      mid-follow at Food 17 as it sampled; now `followPlayer|director:eat` plus the director's `defend-done → resume`
+      log line), so the count restarted: **e 16/16, f 16/16**. Zero process exits (one fresh spawn, 18 reconnects,
+      uptimeS 60→4140 rising); every laya line an accepted shape, model max 265 ms. The pickaxe re-craft got
+      `gather log 2` p 1 in all four runs. Report `bots/andy/logs/game-tests/bot-rebuild-6.1-2026-11-12.md`.
+      First attempt:
       Run 2026-11-12 12:25–12:46 AEST (916a68e, training held, one process PID 82700): a 14/16, b 15/16, zero process
       exits (one fresh spawn, 9 reconnects, uptimeS monotonic); every laya line an old shape. Open for the served craft
       model only: craft-furnace fails in both (the phase 5 known failure: craft-t178 answers gather log 1 p 0.94);

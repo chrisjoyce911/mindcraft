@@ -1320,8 +1320,18 @@
         },
         {
           "type": "actionSeen",
-          "match": "followPlayer",
-          "final": true
+          "match": "followPlayer|director:eat",
+          "final": true,
+          "note": "following again at the end; a fight costs hunger, so the eat model may be eating mid-follow just then (6.1 run d: Food 17, eat bread at 13:24:11)"
+        },
+        {
+          "type": "log",
+          "task": "director",
+          "match": {
+            "event": "defend-done",
+            "answer": "resume"
+          },
+          "note": "the interrupted follow resumed after the defend (so director:eat at the end can't hide a follow that never came back)"
         },
         {
           "type": "stat",
