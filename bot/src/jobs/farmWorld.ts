@@ -6,12 +6,13 @@
 import type { Vec3Like } from '../types/index.js';
 import type { Act } from '../actuators/bot.js';
 import { animalsNear, breed, farmAct, fillBucket, waterSource } from '../actuators/farm.js';
-import { gatherItem } from '../actuators/gather.js';
+import { gatherSkillStep } from './gatherSkill.js';
+import { skillWorld } from './skillWorld.js';
 import { goHome, depositAtHome } from '../actuators/unload.js';
 import { wait } from '../actuators/settle.js';
 import { isHostile } from '../sensors/mobs.js';
 import { C, isKind, parseCellName, readFarm, type CellAction, type FarmView } from '../models/farm/index.js';
-import type { JobDeps } from './deps.js';
+import type { JobDeps, JobOf } from './deps.js';
 import type { FarmWorld } from './farm.js';
 import { homeOf, makeOrCraft } from './mineWorld.js';
 
@@ -20,6 +21,23 @@ export const HOSTILE_RANGE = 16;
 const MAKE: Readonly<Record<string, string>> = { hoe: 'wooden_hoe' };
 
 const dist = (a: Vec3Like, b: Vec3Like) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+/**
+ * gatherSeeds runs the gather skill for seeds inline until it ends (or the signal aborts): have reaches goal, or it
+ * ends without (the end's say is returned, null when done).
+ */
+export async function gatherSeeds(a: Act, deps: JobDeps, goal: number, signal: AbortSignal): Promise<string | null> {
+    const job: JobOf<'gatherSkill'> = {
+        id: 'farm-seeds', spec: { kind: 'gatherSkill', target: 'seeds', goal: Math.max(1, goal) }, origin: 'player',
+        progress: {}, status: 'running', startedAt: Date.now(),
+    };
+    const w = skillWorld(a);
+    while (!signal.aborted) {
+        const r = await gatherSkillStep(job, w, deps, signal);
+        if (r.how === 'end') return r.end.how === 'done' ? null : r.say ?? `gather seeds: ${r.end.how}`;
+    }
+    return null;
+}
 
 export function farmWorld(a: Act, deps: JobDeps, waterRadius: number, home: () => Vec3Like | null = () => homeOf(deps)): FarmWorld {
     const inventory = () => {
@@ -56,9 +74,9 @@ export function farmWorld(a: Act, deps: JobDeps, waterRadius: number, home: () =
         craft: async (item, n, signal) => {
             const before = count(item);
             if (item === 'wheat_seeds') {
-                // seeds drop from breaking grass
-                const r = await gatherItem(a, 'wheat_seeds', n, signal);
-                if (r.message && !r.ok) note(r.message);
+                // 6.2b: seeds through the gather skill, run inline (its search widens 49 → 97 → 193 by its rules)
+                const r = await gatherSeeds(a, deps, before + n, signal);
+                if (r) note(r);
                 return count(item) > before;
             }
             if (item === 'water_bucket') {

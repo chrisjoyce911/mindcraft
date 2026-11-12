@@ -3,14 +3,17 @@
 // answer (it failed or was vetoed just now) gives way to the rules' answer, or a wait. No water and nothing growing:
 // a wait becomes a pond on the nearest dry ground (with a water bucket), else find_water. A crop asked for: plant its
 // seed. Then the item the answer needs and the veto. The job only carries the result out.
-import { CROP_OF, NEEDS, NONE, isSeed, type FarmAction, type FarmCrop } from './data.js';
+import { CROP_OF, NEEDS, NONE, SEEDS, isSeed, type FarmAction, type FarmCrop } from './data.js';
 import type { FarmAsked } from './answer.js';
 import type { FarmSituation } from './render.js';
 import { decide, needed, veto, type FarmVeto } from './rules.js';
 import { besideHole, growing, has, hasWater, parseCellName, pondCell } from './view.js';
 
-/** Who chose the step: the model, the rules (v2, unsure), a wait for a v1 unsure answer, the rules for a banned answer, a dry wait made a pond. */
-export type FarmSource = 'model' | 'rules' | 'low-confidence' | 'banned' | 'dry';
+/**
+ * Who chose the step: the model, the rules (v2, unsure), a wait for a v1 unsure answer, the rules for a banned answer,
+ * a dry wait made a pond, a find_water with water in view that isn't a water problem (6.2b: seeds, or the rules).
+ */
+export type FarmSource = 'model' | 'rules' | 'low-confidence' | 'banned' | 'dry' | 'water-near';
 
 export interface FarmStepInput {
     s: FarmSituation;
@@ -67,6 +70,19 @@ export function decideFarmStep(i: FarmStepInput): FarmStepDecision {
         if (rule.action !== 'wait' && !i.isBanned(rule.action, rule.target)) ({ action, target, item } = rule);
         else [action, target, item] = ['wait', NONE, NONE];
         source = 'banned';
+    }
+    // 6.2b: find_water with water in the view isn't a water problem (the play run's 408 trips to the same water):
+    // with no seed to plant it's the crop's seed that's missing; else the rules' answer, or a wait
+    if (action === 'find_water' && hasWater(s.grid)) {
+        source = 'water-near';
+        if (!SEEDS.some(x => has(s, x))) {
+            const seed = CROP_OF[i.crop === 'any' ? 'wheat' : i.crop].seed;
+            return { kind: 'act', action, target, item, use: seed, source, ruled, ...(said ? { said } : {}), ...(banned ? { banned } : {}),
+                missing: seed, veto: null };
+        }
+        const rule = decide(s);
+        if (rule.action !== 'find_water' && (rule.action === 'wait' || !i.isBanned(rule.action, rule.target))) ({ action, target, item } = rule);
+        else [action, target, item] = ['wait', NONE, NONE];
     }
     const base = { target, item, ruled, ...(said ? { said } : {}), ...(banned ? { banned } : {}) };
 

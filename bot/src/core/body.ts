@@ -6,6 +6,7 @@ import pathfinderPkg from 'mineflayer-pathfinder';
 import pvpPkg from 'mineflayer-pvp';
 import { Motion } from './motion.js';
 import { keepStations } from './keep.js';
+import type { Channel } from '../types/commands.js';
 
 const { pathfinder, Movements } = pathfinderPkg;
 
@@ -52,7 +53,20 @@ export interface BodyOptions { host: string; port: number; username: string; ver
 
 export type BodyState = 'offline' | 'connecting' | 'in-game';
 
-/** Body events: 'state' (BodyState), 'spawn', 'death', 'chat' (username, message), 'end' (reason). */
+/** The bot's message events (mineflayer's 'chat' and 'whisper': /msg andy …, /tell andy …). */
+export interface MessageSource {
+    username: string;
+    on(event: 'chat' | 'whisper', fn: (username: string, message: string) => void): unknown;
+}
+
+/** forwardMessages: open chat and whispers from other players go to emit (andy's own are dropped). */
+export function forwardMessages(bot: MessageSource, emit: (event: Channel, username: string, message: string) => void): void {
+    for (const event of ['chat', 'whisper'] as const) {
+        bot.on(event, (username: string, message: string) => { if (username !== bot.username) emit(event, username, message); });
+    }
+}
+
+/** Body events: 'state' (BodyState), 'spawn', 'death', 'chat' and 'whisper' (username, message), 'end' (reason). */
 export class Body extends EventEmitter {
     bot: mineflayer.Bot | null = null;
     motion: Motion | null = null;
@@ -93,7 +107,7 @@ export class Body extends EventEmitter {
             this.emit('spawn');
         });
         bot.on('death', () => { this.emit('death'); });
-        bot.on('chat', (username: string, message: string) => { if (username !== bot.username) this.emit('chat', username, message); });
+        forwardMessages(bot, (event, username, message) => this.emit(event, username, message));
         bot.on('kicked', (reason: unknown) => this.log(`${this.opts.username} kicked: ${typeof reason === 'string' ? reason : JSON.stringify(reason)}`));
         bot.on('error', (e: Error) => this.log(`${this.opts.username} connection error: ${e.message}`));
         bot.once('end', (reason: string) => {
@@ -120,6 +134,13 @@ export class Body extends EventEmitter {
     say(text: string): void {
         if (!this.bot || !this.inGame) return;
         for (const line of text.split('\n').filter(Boolean)) this.bot.chat(line);
+        this.emit('said', text);
+    }
+
+    /** whisper: a private reply to one player (/tell; the harness also relays it as bot-output). */
+    whisper(to: string, text: string): void {
+        if (!this.bot || !this.inGame) return;
+        for (const line of text.split('\n').filter(Boolean)) this.bot.whisper(to, line);
         this.emit('said', text);
     }
 }

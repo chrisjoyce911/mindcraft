@@ -309,6 +309,24 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
       dig collected some (`bot/test/gather.act.test.ts`); the twice-in-a-row count restarts with that fix. Report
       `bots/andy/logs/game-tests/bot-rebuild-6.1-2026-11-12.md`. Scope: the next 6.1 attempt runs the 16 `full`
       scenarios twice plus `chores2-no-trees` and `chores2-first-day` once each (5.6's note; not tagged `full`).
+- [x] 6.2b The user's play findings (play 2026-11-12 17:00–17:20 AEST): whispers, chores on at play start, farm crop
+      "any" loop, gather search widening. **Whispers:** `Body` forwards mineflayer's `whisper` like `chat`; a whisperer
+      is answered by `/tell` (`command/reply.ts`; the route follows the last player message, so the job's later
+      messages go the same way; the old bot answered whispers in open chat). **Chores at start:** `settings.chores`
+      defaults on (only `false` turns it off); the harness's `forgetAgent` writes `{"on":false,"by":"test-harness"}`,
+      heeded only by a harness launch (`ANDY_TEST_HARNESS=1` from `tools/test-world/lib/bot.js`); the play launcher is
+      committed as `tools/play/new-bot.mjs` (README; `PLAY_WORLD=test`). **Farm any:** `resolveCrop` before the loop
+      (the starter kit's seed; the state keeps `Crop any`), seeds through the gather skill run inline, back to where the
+      farm started after the kit, no seed and nothing growing ends `no seeds` with a clear message, a `find_water` with
+      water in view is a missing seed (or the rules' answer), and the same answer on the same state 3× with nothing
+      changing ends `stuck`. **Gather:** every `gatherItem` target searches rings 49 → 97 → 193 (then "none within 96
+      blocks"), grass a reach failed on is skipped, a plant (no collision box) is walked near instead of looked at
+      (live: every grass was "out of reach"), the reach timeout scales with distance; `/msg` goes through tester, not
+      RCON (`needsPlayer`). Tests: bot 520/520 (new `reply`, `farm.any`, gather widening, chores-at-start), root
+      tool tests green except the 5 old-bot "off by default" ones the local `settings.js` turns on. Live (test world,
+      board slot): `whisper-come`, `gather-seeds-far`, `farm-any-no-seeds` (seeds 1 craft via the skill, 4 plants, 0
+      water trips) PASS; regressions `gather-logs`, `craft-furnace`, `farm-water`, `farm-no-water` PASS; the play
+      launcher on the test world after a harness run: `chores state: on`.
 - [x] 6.2 First day from scratch through the first night with chores v2 and the skill models (or their rules): alive,
       home chest set, base placed, no dead end (the same failed answer three times in a row).
       Attempt 2026-11-12 14:25–16:04 AEST: scenario `chores2-first-night` (no base chest/sign, chores on 1260 s,

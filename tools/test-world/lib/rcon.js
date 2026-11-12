@@ -143,7 +143,8 @@ export class Rcon extends EventEmitter {
 }
 
 // Commands that only make sense run by tester: relative to its position or
-// itself. Everything else can go over RCON.
+// itself, or a private message (/msg, /tell, /w: from RCON the sender would be
+// "Rcon", not tester). Everything else can go over RCON.
 export function needsPlayer(cmd) {
-    return /(^|\s)[~^]|@s\b/.test(String(cmd));
+    return /(^|\s)[~^]|@s\b/.test(String(cmd)) || /^\/?(msg|tell|w)\s/.test(String(cmd).trim());
 }

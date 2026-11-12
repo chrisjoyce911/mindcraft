@@ -19,8 +19,8 @@ export const REASON_TABLE: readonly { test: RegExp; reason: ChoreReason | ((m: R
     // full
     { test: /^full$|inventory is full|no free slot/i, reason: 'full' },
     // nothing found: collectBlocks ("No stone nearby to collect."), the mine job's ran-out ("no coal after 300 steps",
-    // "plan: …" when the mine is used up), the farm job's no water / nothing to do, give_up
-    { test: /^no_source$|nearby to collect|^no \w+ after \d+ steps$|^plan: |^no water$|^nothing to do$|could not find|no \w+ near/i, reason: 'no_source' },
+    // "plan: …" when the mine is used up), the farm job's no water / no seeds / nothing to do, give_up
+    { test: /^no_source$|nearby to collect|^no \w+ after \d+ steps$|^plan: |^no water$|^no seeds$|^nothing to do$|could not find|no \w+ near/i, reason: 'no_source' },
     { test: /^no_spot$/, reason: 'no_spot' },
     { test: /^timeout$|max[- ]steps|^count not reached in time$/i, reason: 'timeout' },
     // hurt with nothing to eat (the mine job)

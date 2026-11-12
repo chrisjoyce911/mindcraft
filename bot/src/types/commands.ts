@@ -7,3 +7,9 @@ export type Command =
     | { kind: 'inventory' }
     | { kind: 'reply'; text: string }
     | { kind: 'ignore' };
+
+/** How a player's message reached andy: open chat or a whisper (/msg, /tell). */
+export type Channel = 'chat' | 'whisper';
+
+/** Where andy's replies go: open chat, or a whisper back to the player who whispered. */
+export type ReplyRoute = { kind: 'chat' } | { kind: 'whisper'; to: string };

@@ -9,20 +9,67 @@ import type { GoToOptions } from '../core/motion.js';
 import { hold } from './equip.js';
 import { floorDrop } from './floor.js';
 import { wait } from './settle.js';
+import { SEARCHES, type Search } from '../types/skills.js';
+import { inSearch, type XZ } from '../sensors/skills.js';
 
 export const COLLECT_RANGE = 64;
 export const DIG_TIMEOUT_MS = 20000;
 export const REACH_TIMEOUT_MS = 30000;
 export const PICKUP_RANGE = 8;
+/** A plant (no collision box) is dug from this near. */
+export const PLANT_REACH = 3;
 export const PICKUP_TIMEOUT_MS = 5000;
 
+/**
+ * Rings (6.2b): the search widens 49 → 97 → 193 (the square's side, as the skills' search) around where the gather
+ * started, moving out only when the current ring has no usable block; i is kept across collects (a gather of several
+ * grass blocks never starts at 49 again).
+ */
+export interface Rings { origin: XZ; i: number }
+export const rings = (origin: XZ): Rings => ({ origin: { x: origin.x, z: origin.z }, i: 0 });
+/** The widest ring's reach from its middle (blocks), for the messages. */
+export const RINGS_REACH = (SEARCHES[SEARCHES.length - 1]! - 1) / 2;
+/** findBlocks' cap: the matching blocks found, nearest first; the square filter comes after it. */
+export const RING_FIND_MAX = 256;
+
+/** ringSearch: the matching blocks in the ring's square (findBlocks reaches its corners), unsorted. */
+export function inRing(a: Act, names: readonly string[], origin: XZ, search: Search): Vec3Like[] {
+    const half = (search - 1) / 2;
+    const point = { x: origin.x, y: a.bot.entity.position.y, z: origin.z };
+    return a.bot.findBlocks(names, point, Math.ceil(half * Math.SQRT2) + 1, RING_FIND_MAX).filter(p => inSearch(origin, p, search));
+}
+
+/** findRinged: the first block (by pick, from the nearest) in the current ring or a wider one; the ring is kept. */
+export function findRinged(a: Act, names: readonly string[], r: Rings, pick: (sorted: Vec3Like[]) => Vec3Like | undefined): Vec3Like | undefined {
+    const me = a.bot.entity.position;
+    for (let i = r.i; i < SEARCHES.length; i++) {
+        const found = pick(inRing(a, names, r.origin, SEARCHES[i]!).sort((p, q) => dist(me, p) - dist(me, q)));
+        if (found) { r.i = i; return found; }
+    }
+    r.i = SEARCHES.length - 1;
+    return undefined;
+}
+
+/** reachMs: the reach timeout for a block d away: REACH_TIMEOUT_MS, longer for a far one (a 90-block walk). */
+export const reachMs = (d: number): number => Math.max(REACH_TIMEOUT_MS, Math.round(d * 500));
+
 export interface CollectOptions {
+    /** Search rings 49 → 97 → 193 around their origin instead of the one COLLECT_RANGE find (6.2b gather). */
+    rings?: Rings;
+    /** More block names taken with blockType (wheat seeds: tall grass with the short grass). */
+    kin?: readonly string[];
     /** Positions never to collect (unripe wheat). */
     exclude?: readonly Vec3Like[];
     /** A further test of a candidate block (wheat: ripe only). */
     accept?: (b: ActBlock, p: Vec3Like) => boolean;
 }
-export interface CollectResult { collected: number; message: string; cancelled: boolean }
+export interface CollectResult {
+    collected: number; message: string; cancelled: boolean;
+    /** No usable block was left in range (6.2b: a caller tells "none" from "couldn't reach that one"). */
+    none?: boolean;
+    /** Blocks a reach or dig failed on (a caller excludes them next time). */
+    failed?: Vec3Like[];
+}
 
 const LIQUIDS = new Set(['water', 'lava']);
 const ORE_NAMES = new Set(['coal', 'diamond', 'emerald', 'iron', 'gold', 'lapis_lazuli', 'redstone']);
@@ -88,7 +135,7 @@ export async function pickupNearby(a: Act, signal: AbortSignal, range = PICKUP_R
 /** collectBlocks collects num blocks of blockType (and its kin, blockTypes). */
 export async function collectBlocks(a: Act, blockType: string, num: number, signal: AbortSignal, opts: CollectOptions = {}): Promise<CollectResult> {
     if (!(num >= 1)) return { collected: 0, message: `Invalid number of blocks to collect: ${num}.`, cancelled: false };
-    const types = blockTypes(blockType);
+    const types = [...blockTypes(blockType), ...(opts.kin ?? [])];
     const liquid = LIQUIDS.has(blockType);
     const failed: Vec3Like[] = [...(opts.exclude ?? [])];
     const at = (x: number, y: number, z: number) => a.bot.blockAt(x, y, z);
@@ -97,19 +144,21 @@ export async function collectBlocks(a: Act, blockType: string, num: number, sign
     for (let i = 0; i < num; i++) {
         if (signal.aborted) break;
         const me = a.bot.entity.position;
-        const block = a.bot.findBlocks(types, me, COLLECT_RANGE, 256)
-            .filter(p => !failed.some(f => same(f, p)))
-            .sort((p, q) => dist(me, p) - dist(me, q))
-            .find(p => {
-                const b = a.bot.blockAt(p.x, p.y, p.z);
-                if (!b || !types.includes(b.name)) return false;
-                if (floorDrop(at, me, p)) return false;
-                if (opts.accept && !opts.accept(b, p)) return false;
-                if (liquid) return b.metadata === 0;
-                return !nextToLiquid(a, p);
-            });
+        const usable = (p: Vec3Like) => {
+            if (failed.some(f => same(f, p))) return false;
+            const b = a.bot.blockAt(p.x, p.y, p.z);
+            if (!b || !types.includes(b.name)) return false;
+            if (floorDrop(at, me, p)) return false;
+            if (opts.accept && !opts.accept(b, p)) return false;
+            if (liquid) return b.metadata === 0;
+            return !nextToLiquid(a, p);
+        };
+        const block = opts.rings
+            ? findRinged(a, types, opts.rings, sorted => sorted.find(usable))
+            : a.bot.findBlocks(types, me, COLLECT_RANGE, 256).sort((p, q) => dist(me, p) - dist(me, q)).find(usable);
         if (!block) {
-            note = collected === 0 ? `No ${blockType} nearby to collect.` : `No more ${blockType} nearby to collect.`;
+            const within = opts.rings ? ` within ${RINGS_REACH} blocks` : '';
+            note = collected === 0 ? `No ${blockType} nearby to collect${within}.` : `No more ${blockType} nearby to collect${within}.`;
             break;
         }
         if (liquid) {
@@ -118,7 +167,11 @@ export async function collectBlocks(a: Act, blockType: string, num: number, sign
             await hold(a.bot, a.bot.bestTool(block));
             if (!a.bot.canHarvest(block)) return { collected, message: `Don't have right tools to harvest ${blockType}.`, cancelled: false };
         }
-        const reach = await a.motion.goTo(a.goals.lookAt(block), signal, { timeoutMs: REACH_TIMEOUT_MS });
+        // a plant (short grass, crops: no collision box) can't be looked at by the pathfinder's raycast, so the look-at
+        // goal is never met (6.2b live: every grass "out of reach"): walk near it instead (the old getSeeds' goNear 3)
+        const plant = at(block.x, block.y, block.z)?.boundingBox === 'empty';
+        const goal = plant ? a.goals.near(block, PLANT_REACH) : a.goals.lookAt(block);
+        const reach = await a.motion.goTo(goal, signal, { timeoutMs: reachMs(dist(me, block)) });
         if (signal.aborted || (!reach.ok && reach.reason === 'cancelled')) break;
         if (!reach.ok) { failed.push(block); continue; }
         if (liquid) {
@@ -133,5 +186,6 @@ export async function collectBlocks(a: Act, blockType: string, num: number, sign
         await pickupNearby(a, signal);
     }
     const done = `Collected ${collected} ${blockType}.`;
-    return { collected, message: note ? `${note} ${done}` : done, cancelled: signal.aborted };
+    const tried = failed.slice((opts.exclude ?? []).length);
+    return { collected, message: note ? `${note} ${done}` : done, cancelled: signal.aborted, ...(note ? { none: true } : {}), ...(tried.length ? { failed: tried } : {}) };
 }

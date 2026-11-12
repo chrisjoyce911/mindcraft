@@ -88,6 +88,31 @@ export function starterKit(crop: FarmCrop): StarterNeed[] {
     return [{ item: 'hoe', count: 1 }, { item: seed, count: 4, any: SEEDS }];
 }
 
+/**
+ * resolveCrop (6.2b): the crop a farm of "any" grows, decided before the loop: the crop andy carries the most seed
+ * for (ties in CROP_INFO order), else wheat (its seeds come from grass). The goal's produce still counts any crop.
+ */
+export function resolveCrop(crop: FarmCrop, inv: Inv): Crop {
+    if (crop !== 'any') return crop;
+    let best: CropInfo | null = null;
+    for (const c of CROP_INFO) if ((inv[c.seed] || 0) > 0 && (!best || (inv[c.seed] || 0) > (inv[best.seed] || 0))) best = c;
+    return best?.crop ?? 'wheat';
+}
+
+/** The text andy says when no seed can be had and nothing grows to harvest (6.2b). */
+export const NO_SEEDS = "I couldn't find any grass for wheat seeds within 96 blocks — give me seeds or take me to some grass.";
+export const noSeedsSay = (seed: string): string =>
+    seed === 'wheat_seeds' ? NO_SEEDS : `I have no ${seed.replace(/_/g, ' ')} to plant and couldn't get any — give me some.`;
+
+/** The text andy says when the same answer comes 3 times on the same state and nothing changes (6.2b dead end). */
+export function deadEndSay(action: FarmAction): string {
+    return action === 'find_water'
+        ? 'I keep going for water and nothing changes, so I\'m stopping. Give me seeds or take me to farmland.'
+        : `I keep trying to ${action.replace(/_/g, ' ')} here and nothing changes; stopping.`;
+}
+/** The same answer on the same state this many times with no progress ends the farm (6.2b; the 6.2 gate's dead end). */
+export const DEAD_END_REPEATS = 3;
+
 /** The text andy says when there is no water to farm with. */
 export const NO_WATER = 'No water near here — take me to water or give me a water bucket.';
 

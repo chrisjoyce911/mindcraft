@@ -59,6 +59,15 @@ export class Tester extends EventEmitter {
         bot.on('chat', (username, message) => {
             if (username === this.agent) this.emit('andy', message, this.now());
         });
+        // 6.2b: andy's whisper back (/tell tester …) arrives as player chat, so the messagestr lines above skip it;
+        // kept as a server line ("andy whispers to you: …") so a cmd step's replies and serverReply checks see it
+        bot.on('whisper', (username, message) => {
+            if (username !== this.agent) return;
+            const text = `${username} whispers to you: ${message}`;
+            this.lines.push({ t: this.now(), text, position: 'whisper' });
+            if (this.lines.length > 500) this.lines.splice(0, this.lines.length - 500);
+            this.emit('server', text);
+        });
     }
 
     require() {

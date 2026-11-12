@@ -59,3 +59,100 @@ test('gatherItem: an abort during the wait ends it at once', async () => {
     assert.equal(r.cancelled, true);
     assert.ok(Date.now() - t0 < 1000);
 });
+
+// ---- 6.2b: the gather search widens 49 → 97 → 193 for every target ----
+
+function openWorld() {
+    const w = world({ items: [] });
+    w.drops = { short_grass: 'wheat_seeds', tall_grass: 'wheat_seeds' };
+    return w;
+}
+const digs = (w: World) => w.calls.filter(c => c.what === 'dig').map(c => c.arg);
+const seeds = (w: World) => w.items.filter(i => i.name === 'wheat_seeds').reduce((n, i) => n + i.count, 0);
+
+test('gather widening: grass only ~40 blocks off (outside ring 49) is found in ring 97', async () => {
+    const w = openWorld();
+    w.blocks['40,64,0'] = { name: 'short_grass', boundingBox: 'empty' };
+    const r = await gatherItem(w.act, 'wheat_seeds', 1, new AbortController().signal, 100);
+    assert.equal(r.ok, true);
+    assert.deepEqual(digs(w), ['40,64,0']);
+    assert.equal(seeds(w), 1);
+});
+
+test('gather widening: grass only ~90 blocks off is found in ring 193 (beyond the old 64)', async () => {
+    const w = openWorld();
+    w.blocks['90,64,-30'] = { name: 'tall_grass', boundingBox: 'empty' };
+    const r = await gatherItem(w.act, 'wheat_seeds', 1, new AbortController().signal, 100);
+    assert.equal(r.ok, true);
+    assert.deepEqual(digs(w), ['90,64,-30']);
+});
+
+test('gather widening: the nearer of short and tall grass; the ring is kept between blocks', async () => {
+    const w = openWorld();
+    w.blocks['60,64,0'] = { name: 'tall_grass', boundingBox: 'empty' };
+    w.blocks['70,64,0'] = { name: 'short_grass', boundingBox: 'empty' };
+    w.blocks['5,64,0'] = { name: 'short_grass', boundingBox: 'empty' };
+    const r = await gatherItem(w.act, 'wheat_seeds', 3, new AbortController().signal, 100);
+    assert.equal(r.ok, true);
+    assert.deepEqual(digs(w), ['5,64,0', '60,64,0', '70,64,0']);
+    assert.equal(seeds(w), 3);
+});
+
+test('gather widening: no grass anywhere: the message names 96 blocks, nothing dug', async () => {
+    const w = openWorld();
+    w.blocks['120,64,0'] = { name: 'short_grass', boundingBox: 'empty' }; // outside the widest square
+    const r = await gatherItem(w.act, 'wheat_seeds', 2, new AbortController().signal, 100);
+    assert.equal(r.ok, false);
+    assert.equal(r.message, 'No grass nearby (none within 96 blocks).');
+    assert.deepEqual(digs(w), []);
+});
+
+test('gather widening: a log 80 blocks off (beyond the old LOG_RANGE 64) is found', async () => {
+    const w = world({ items: [] });
+    w.blocks['80,64,10'] = { name: 'birch_log', boundingBox: 'block' };
+    const r = await gatherItem(w.act, 'log', 1, new AbortController().signal, 100);
+    assert.equal(r.ok, true);
+    assert.deepEqual(digs(w), ['80,64,10']);
+    assert.equal(r.message, 'Collected 1 birch_log.');
+});
+
+test('gather widening: no trees: the message names 96 blocks', async () => {
+    const w = world({ items: [] });
+    const r = await gatherItem(w.act, 'log', 1, new AbortController().signal, 100);
+    assert.deepEqual(r, { ok: false, message: 'No trees nearby (none within 96 blocks).', cancelled: false });
+});
+
+test('gather widening: ores and other blocks widen too (iron ore 70 off)', async () => {
+    const w = world({ items: [] });
+    w.drops = { iron_ore: 'raw_iron' };
+    w.blocks['0,64,70'] = { name: 'iron_ore', boundingBox: 'block' };
+    const r = await gatherItem(w.act, 'raw_iron', 1, new AbortController().signal, 100);
+    assert.equal(r.ok, true);
+    assert.deepEqual(digs(w), ['0,64,70']);
+    const none = world({ items: [] });
+    const n = await gatherItem(none.act, 'raw_iron', 1, new AbortController().signal, 100);
+    assert.match(n.message, /No iron_ore nearby to collect within 96 blocks/);
+});
+
+test('gather widening: grass andy can\'t reach is left out and the next one tried', async () => {
+    const w = openWorld();
+    w.blocks['3,64,0'] = { name: 'short_grass', boundingBox: 'empty' };
+    w.blocks['8,64,0'] = { name: 'short_grass', boundingBox: 'empty' };
+    let n = 0;
+    const goTo = w.act.motion.goTo;
+    w.act.motion.goTo = async (g, sig, o) => (n++ === 0 ? { ok: false, reason: 'stuck' } : goTo(g, sig, o));
+    const r = await gatherItem(w.act, 'wheat_seeds', 1, new AbortController().signal, 100);
+    assert.equal(r.ok, true);
+    assert.deepEqual(digs(w), ['8,64,0']);
+});
+
+test('collect: a plant (no collision box) is walked near, a solid block looked at (6.2b live: grass never "in sight")', async () => {
+    const w = openWorld();
+    w.blocks['40,64,0'] = { name: 'short_grass', boundingBox: 'empty' };
+    await gatherItem(w.act, 'wheat_seeds', 1, new AbortController().signal, 100);
+    assert.deepEqual(w.calls.find(c => c.what === 'goTo')?.arg, { near: 40, range: 3 });
+    const t = world({ items: [] });
+    t.blocks['10,64,0'] = { name: 'oak_log', boundingBox: 'block' };
+    await gatherItem(t.act, 'log', 1, new AbortController().signal, 100);
+    assert.deepEqual(t.calls.find(c => c.what === 'goTo')?.arg, { lookAt: '10,64,0' });
+});

@@ -20,9 +20,9 @@
 // deposit the progress is checkpointed to disk.
 import type { JobStepper, StepResult, Vec3Like } from '../types/index.js';
 import {
-    NO_WATER, PRODUCE, decideFarmStep, depositList, farmKeep, farmValuables, growing, has, hasWater, pack, produceOf,
-    questions, questionsV2, readFarmAnswer, starterKit, state, stateV2, wantUnload,
-    type FarmAction, type FarmCrop, type FarmSituation, type FarmView, type Inv,
+    DEAD_END_REPEATS, NO_WATER, noSeedsSay, PRODUCE, deadEndSay, decideFarmStep, isSeed, resolveCrop, depositList, farmKeep, farmValuables, growing, has, hasWater, pack, produceOf,
+    SEEDS, questions, questionsV2, readFarmAnswer, starterKit, state, stateV2, wantUnload,
+    type Crop, type FarmAction, type FarmCrop, type FarmSituation, type FarmView, type Inv,
 } from '../models/farm/index.js';
 import { homeDistance } from '../sensors/pack.js';
 import type { Stack } from '../home/chest.js';
@@ -107,12 +107,14 @@ export interface FarmRunContext {
     now?: () => number;
 }
 
-export type FarmEndReason = 'count reached' | 'time up' | 'no hoe' | 'no answer' | 'no water' | 'nothing to do' | 'stuck' | 'max steps' | 'not in game';
+export type FarmEndReason = 'count reached' | 'time up' | 'no hoe' | 'no seeds' | 'no answer' | 'no water' | 'nothing to do' | 'stuck' | 'max steps' | 'not in game';
 /** How a run ended: ok (the count is harvested) or not, why, and what andy says. */
 export interface FarmEnd { ok: boolean; reason: FarmEndReason; say?: string; counters: FarmCounters }
 export type FarmStep = { how: 'more' } | { how: 'end'; end: FarmEnd };
 
 const MORE: FarmStep = { how: 'more' };
+/** Any seed in the pack. */
+const SEEDS_CARRIED = (inv: Inv): boolean => SEEDS.some(x => (inv[x] || 0) > 0);
 /** What andy says when a farm job starts with the farm task off (the old farmWithLayaModel's line). */
 export const FARM_OFF = 'The Laya farm task is off (settings.decision_models.tasks.farm).';
 const FULL_NO_HOME = "My pack is full and I don't know a home chest (remember one as home_chest).";
@@ -141,6 +143,14 @@ export class FarmRun {
     private lastProduce: number | null = null;
     /** 'action target' → the step its ban ends. */
     private readonly banned = new Map<string, number>();
+    /**
+     * The crop farmed (6.2b): the asked one, or for "any" the one resolveCrop picks before the loop, for the starter
+     * kit (the seed got before the first step); the asked goal still counts the harvest, says the done text and is the
+     * state's Crop line.
+     */
+    private crop: Crop;
+    /** The last non-wait answer, its state, the pack and the harvest then, and how often in a row (the dead end). */
+    private repeat: { sig: string; n: number } | null = null;
 
     constructor(private readonly c: FarmRunContext) {
         this.opts = { ...FARM_DEFAULTS, ...c.settings() };
@@ -148,6 +158,18 @@ export class FarmRun {
         // timed farming is bounded by max_steps; a count or "until stopped" goes on
         this.maxSteps = c.until !== undefined ? this.opts.max_steps : this.opts.max_steps_open;
         this.counters.harvested = c.progress.harvested ?? 0;
+        this.crop = c.crop === 'any' ? 'wheat' : c.crop;
+    }
+
+    /**
+     * deadEnd (6.2b): the same answer on the same state, with the pack and the harvest unchanged, DEAD_END_REPEATS
+     * times in a row: nothing changes, so the job ends (the play run's 408 find_water trips).
+     */
+    private deadEnd(w: FarmWorld, action: FarmAction, target: string, st: string): boolean {
+        const inv = Object.entries(w.inventory()).filter(([, n]) => n > 0).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => `${k}:${n}`).join(',');
+        const sig = `${action} ${target}\n${st}\n${inv}\n${this.counters.harvested}`;
+        this.repeat = this.repeat?.sig === sig ? { sig, n: this.repeat.n + 1 } : { sig, n: 1 };
+        return this.repeat.n >= DEAD_END_REPEATS;
     }
 
     private logStep(line: FarmLine): void { if (this.opts.log_steps) { try { this.c.log(line); } catch { /* never stops farming */ } } }
@@ -238,21 +260,31 @@ export class FarmRun {
         return ok;
     }
 
-    /** setup: the starter kit (a hoe and something to plant: the crop's seed when one is asked for). */
+    /** setup: the crop for "any", then the starter kit (a hoe and something to plant: the crop's seed). */
     private async setup(w: FarmWorld, signal: AbortSignal): Promise<FarmStep | null> {
         const s = w.read();
-        for (const need of starterKit(this.c.crop)) {
+        const start = w.position();
+        this.crop = resolveCrop(this.c.crop, w.inventory());
+        if (this.c.crop === 'any') this.c.note(`farm: crop any → ${this.crop}`);
+        for (const need of starterKit(this.crop)) {
             if ((need.any ?? [need.item]).some(i => has(s, i))) continue;
             const ok = await this.getItem(w, need.item, need.count, signal);
             if (signal.aborted) return MORE;
             if (!ok) {
-                const msg = `I couldn't get a ${need.item} to farm with.`;
                 // without a hoe there's nothing to till or plant: stop rather than wait
-                if (need.item === 'hoe') return this.finish(false, 'no hoe', msg);
-                this.say(msg);
+                if (need.item === 'hoe') return this.finish(false, 'no hoe', `I couldn't get a ${need.item} to farm with.`);
+                // no seed and nothing growing to harvest one from: say why and stop (not 400 trips to the water)
+                if (isSeed(need.item) && !growing(s.grid)) return this.finish(false, 'no seeds', noSeedsSay(need.item));
+                this.say(`I couldn't get a ${need.item} to farm with.`);
             }
         }
-        this.origin = w.position();
+        // the kit may have taken andy away (seeds from grass up to 96 blocks off): the farm is where he was asked
+        const here = w.position();
+        if (start && here && Math.hypot(here.x - start.x, here.z - start.z) > 4) {
+            await w.goTo(start, signal).catch(() => false);
+            if (signal.aborted) return MORE;
+        }
+        this.origin = start ?? w.position();
         this.lastProduce = this.produce(w); // what andy carries at the start isn't harvested
         return null;
     }
@@ -276,6 +308,8 @@ export class FarmRun {
     }
 
     private async body(w: FarmWorld, signal: AbortSignal): Promise<FarmStep> {
+        // the state's Crop line and the step keep the asked crop (the farm prompt's contract: "Crop any" lets the model
+        // plant what andy carries); the resolved crop is for the starter kit
         const o = this.opts, crop = this.c.crop;
         // drops picked up since the last step
         this.credit(w);
@@ -338,6 +372,10 @@ export class FarmRun {
         if (d.banned) entry.banned = d.banned;
         Object.assign(entry, { action: d.action, target: d.target, item: d.item, source: d.source });
 
+        if (d.kind !== 'wait' && this.deadEnd(w, d.action, d.target, st)) {
+            this.line(entry, 'failed');
+            return this.finish(false, 'stuck', deadEndSay(d.action));
+        }
         if (d.kind === 'find_water') {
             const r = await this.findWater(w, entry, signal);
             if (r === 'none') return this.finish(false, 'no water', NO_WATER);
@@ -358,6 +396,11 @@ export class FarmRun {
             if (signal.aborted) return MORE;
             if (!ok) {
                 this.counters.failed++;
+                // a seed that can't be had with nothing growing: say why and stop
+                if (isSeed(d.missing) && !SEEDS_CARRIED(w.inventory()) && !growing(s.grid)) {
+                    this.line(entry, 'failed');
+                    return this.finish(false, 'no seeds', noSeedsSay(d.missing));
+                }
                 // a water bucket for a dry place that can't be had: find water
                 if (d.missing === 'water_bucket' && !hasWater(s.grid)) {
                     const r = await this.findWater(w, entry, signal);

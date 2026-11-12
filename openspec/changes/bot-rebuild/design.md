@@ -216,6 +216,12 @@ harness (`forgetAgent` deletes `memory.json` and writes `laya-chores.json` as `{
 | `laya-mines.json` | mine memory list | `skills.js` | same |
 | `laya-job.json` | the job stack | fix-round4 (new) | same file, typed: `{savedAt, entries:[{spec, origin, progress, status}]}` |
 
+**Chores at the start (6.2b):** `settings.chores` defaults on (only `chores: false` turns it off). The harness's
+`forgetAgent` writes `{"on":false,"by":"test-harness"}`, and only the harness's launch (`ANDY_TEST_HARNESS=1`, set by
+`tools/test-world/lib/bot.js`) heeds that mark (and keeps it on its saves). Every other start (`tools/play/new-bot.mjs`,
+the normal start after the cut-over) takes `on` from the settings instead; a file a player wrote ("take a break", no
+mark) is kept as it says. The old bot ignores the extra key.
+
 All writes are atomic (temp + rename). On start, a stack saved less than 10 min ago is restored **paused** and the
 director resumes it (fix-round4's behaviour, generalised to every job type via typed `progress`); older, andy says
 which job was lost.

@@ -3197,6 +3197,190 @@
           "cmd": "/time set day"
         }
       ]
+    },
+    {
+      "name": "whisper-come",
+      "tags": [
+        "rebuild",
+        "follow"
+      ],
+      "timeout": 60000,
+      "grace": 2000,
+      "requires": [
+        "command"
+      ],
+      "description": "Rebuild 6.2b: tester stands 10 blocks east of andy and whispers \"/msg andy come here\" (not open chat). andy hears the whisper like chat (command model: come → goToPlayer), answers by whisper (tester gets \"andy whispers to you: On my way.\") and walks over, ending within 3 blocks; the job's \"You have reached tester.\" comes back by whisper too. (The cmd step sends /msg as tester: needsPlayer, from RCON the sender would be \"Rcon\".)",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 10
+          }
+        }
+      ],
+      "action": [
+        {
+          "cmd": "/msg {andy} come here",
+          "replyMs": 15000
+        }
+      ],
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "^andy whispers to you: On my way",
+          "note": "the reply came back as a whisper"
+        },
+        {
+          "type": "serverReply",
+          "match": "^andy whispers to you: You have reached tester",
+          "note": "the job's later message goes the same way"
+        },
+        {
+          "type": "reply",
+          "match": "You have reached {tester}"
+        },
+        {
+          "type": "near",
+          "max": 3
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "gather-seeds-far",
+      "tags": [
+        "rebuild",
+        "craft"
+      ],
+      "timeout": 300000,
+      "grace": 20000,
+      "description": "Rebuild 6.2b: the gather search widens 49 → 97 → 193. At the base pad, every short and tall grass within 24 blocks (the first ring) is removed; andy with nothing is asked !layaGather(\"wheat_seeds\", 2): the craft gather finds grass in a wider ring and gets 2 seeds (before 6.2b: one 64-block search, then \"No grass nearby\").",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace tall_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace tall_grass"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaGather(\"wheat_seeds\", 2)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "wheat_seeds",
+          "min": 2
+        },
+        {
+          "type": "idle"
+        }
+      ]
+    },
+    {
+      "name": "farm-any-no-seeds",
+      "tags": [
+        "rebuild",
+        "farm",
+        "slow"
+      ],
+      "timeout": 600000,
+      "grace": 20000,
+      "requires": [
+        "farm"
+      ],
+      "description": "Rebuild 6.2b, the play run's farm: andy by the river mouth with only a wooden hoe, every short and tall grass within 24 blocks removed, !layaFarm(\"any\"). \"any\" resolves to wheat before the loop, the seeds come through the gather skill (its search widens past the cleared ring) and andy plants; never the play run's loop of find_water trips to the same water. Runs 300 s, then stops.",
+      "setup": [
+        {
+          "site": "farm"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_hoe"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace tall_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace tall_grass"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaFarm(\"any\")"
+        },
+        {
+          "wait": 300000
+        }
+      ],
+      "checks": [
+        {
+          "type": "log",
+          "task": "farm",
+          "match": {
+            "outcome": "crafted",
+            "item": "wheat_seeds"
+          },
+          "note": "seeds got through the gather skill"
+        },
+        {
+          "type": "log",
+          "task": "farm",
+          "match": {
+            "action": "plant",
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "log",
+          "task": "farm",
+          "match": {
+            "outcome": "went-to-water"
+          },
+          "note": "never the play run's water trips",
+          "max": 0
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
     }
   ]
 }

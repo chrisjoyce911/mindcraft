@@ -71,7 +71,7 @@ test('connection refused is an error naming the port', async () => {
 });
 
 test('commands relative to tester need tester', () => {
-    for (const c of ['/summon husk ~5 ~ ~', 'tp @s 1 2 3', '/fill ^ ^ ^1 ^ ^ ^2 air', '/gamemode creative @s']) assert.ok(needsPlayer(c), c);
+    for (const c of ['/summon husk ~5 ~ ~', 'tp @s 1 2 3', '/fill ^ ^ ^1 ^ ^ ^2 air', '/gamemode creative @s', '/msg andy come here', 'tell andy hi', '/w andy x']) assert.ok(needsPlayer(c), c);
     for (const c of ['/time set day', '/tp andy 1 64 2', '/give @a bread', '/setblock 1 2 3 chest', '/summon husk 10 64 5']) assert.ok(!needsPlayer(c), c);
     assert.equal(plain('§cRed§r'), 'Red');
 });

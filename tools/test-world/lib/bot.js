@@ -51,6 +51,8 @@ export function botCommand(config, { profiles = DEFAULT_PROFILES, local = {}, PA
         cwd: config.repoRoot,
         env: {
             SETTINGS_JSON: JSON.stringify(settings), MINECRAFT_PORT: String(settings.port), MINDSERVER_PORT: String(settings.mindserver_port),
+            // 6.2b: the harness's launch; the new bot heeds the harness's chores off (laya-chores.json by: test-harness) only then
+            ANDY_TEST_HARNESS: '1',
             PATH: [path.dirname(config.node), PATH].filter(Boolean).join(':'),
         },
         settings,

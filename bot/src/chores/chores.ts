@@ -53,8 +53,10 @@ export interface ChoresDeps {
     stateFile: string;
     /** bots/<name>/logs/laya-chores.jsonl (the ask and run lines). */
     runsFile: string;
-    /** settings.chores (on when the state file doesn't say). */
+    /** settings.chores (on when the state file doesn't say, or only the test harness said). */
     settingOn: boolean;
+    /** This start is the test harness's launch (ANDY_TEST_HARNESS=1): the harness's off is heeded. */
+    harness?: boolean;
     settings(): ChoresSettings;
     /** The chores model client when the task is on, else null. */
     client(): ModelDecider | null;
@@ -88,13 +90,13 @@ export class Chores {
 
     constructor(private readonly d: ChoresDeps) {
         this.now = d.now ?? Date.now;
-        this.state = loadChoresState(d.stateFile, d.settingOn);
+        this.state = loadChoresState(d.stateFile, d.settingOn, { harness: !!d.harness });
     }
 
     get on(): boolean { return this.state.on; }
 
     /** reload: the state from the file again (the harness's start-agent after a world reset wrote {"on":false}). */
-    reload(): void { this.state = loadChoresState(this.d.stateFile, this.d.settingOn); }
+    reload(): void { this.state = loadChoresState(this.d.stateFile, this.d.settingOn, { harness: !!this.d.harness }); }
 
     /** setOn: chores on or off, saved at once. */
     setOn(on: boolean): void {

@@ -11,7 +11,7 @@ import { JobStack } from '../src/director/stack.js';
 import {
     JobSaver, MAX_AGE_MS, jobWords, legacyJobWords, loadJobs, planRestore, readJobs, restoreMessage, saveJobs, waitsFor, type LoadedJobs,
 } from '../src/home/jobfile.js';
-import { loadChoresState, saveChoresState } from '../src/home/chores.js';
+import { choresSettingOn, loadChoresState, saveChoresState } from '../src/home/chores.js';
 import { MAX_MINES, mineBook, mineStore, nearestMine, upsertMine, type MineRecord } from '../src/home/mines.js';
 import { sleep } from '../src/core/abort.js';
 import type { JobRunner } from '../src/director/jobs.js';
@@ -244,6 +244,36 @@ test('chores state file: default from the setting, round trip, the harness\'s {"
     fs.writeFileSync(p, 'garbage');
     assert.equal(loadChoresState(p, false).on, false);
     assert.deepEqual(fs.readdirSync(path.dirname(p)), ['laya-chores.json'], 'no temp file left');
+});
+
+test('chores at start (6.2b): the harness\'s marked off counts only on a harness launch; settings.chores defaults on', () => {
+    const p = tmp('laya-chores.json');
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    // the setting: on unless the user's settings say false
+    assert.equal(choresSettingOn({}), true, 'no chores key: on');
+    assert.equal(choresSettingOn({ chores: true }), true);
+    assert.equal(choresSettingOn({ chores: false }), false, 'only false turns it off');
+    // no file: the setting
+    assert.equal(loadChoresState(p, choresSettingOn({})).on, true);
+    assert.equal(loadChoresState(p, choresSettingOn({ chores: false })).on, false);
+    // the harness's forgetAgent file
+    fs.writeFileSync(p, JSON.stringify({ on: false, by: 'test-harness' }));
+    assert.equal(loadChoresState(p, true).on, true, 'a play / normal start: the harness\'s off is ignored');
+    assert.equal(loadChoresState(p, false).on, false, 'a play start with chores: false in settings');
+    assert.equal(loadChoresState(p, true, { harness: true }).on, false, 'a harness launch heeds it');
+    // a harness launch keeps the mark on its saves (the runner's !layaChores), a play start drops it
+    const h = loadChoresState(p, true, { harness: true });
+    h.on = true; saveChoresState(p, h);
+    assert.equal(JSON.parse(fs.readFileSync(p, 'utf8')).by, 'test-harness');
+    h.on = false; saveChoresState(p, h);
+    assert.equal(loadChoresState(p, true).on, true, 'the runner\'s off at a test\'s end is still the harness\'s');
+    const play = loadChoresState(p, true);
+    assert.equal(play.by, undefined);
+    // a player's "take a break" (no mark) is kept on any start
+    play.on = false; saveChoresState(p, play);
+    assert.equal(JSON.parse(fs.readFileSync(p, 'utf8')).by, undefined);
+    assert.equal(loadChoresState(p, true).on, false, 'the player\'s off is remembered');
+    assert.equal(loadChoresState(p, true, { harness: true }).on, false);
 });
 
 // ---- mine memory (laya_mine_loop "mine memory") ----

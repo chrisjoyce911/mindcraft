@@ -16,11 +16,13 @@ import { promptOf } from './models/director/index.js';
 import { actBot, realGoals } from './actuators/bot.js';
 import { Director, type DecisionSink, type Models } from './director/loop.js';
 import type { Timing } from './director/activities.js';
-import type { Command } from './types/index.js';
+import type { Channel, Command } from './types/index.js';
+import { Replies } from './command/reply.js';
 import { JsonlLog, defendLine, directorLine, eatLine } from './log/jsonl.js';
 import { PlaceStore } from './home/places.js';
 import { JobSaver, RESTORE_MAX_MS, RESTORE_MIN_MS, loadJobs, planRestore, readJobs, waitsFor } from './home/jobfile.js';
 import { Chores, choresOf } from './chores/chores.js';
+import { choresSettingOn } from './home/chores.js';
 import { ChoreDriver } from './chores/driver.js';
 import { placedBy } from './chores/sense.js';
 import { HOME_PLACE } from './home/chest.js';
@@ -195,7 +197,9 @@ async function main() {
         placed: (item, p) => chores.placed(item, p, 'me'),
     };
 
-    const say = (text: string) => { body.say(text); harness.output(text); };
+    // 6.2b: a whisperer is answered by whisper, open chat in open chat (command/reply.ts)
+    const replies = new Replies({ say: text => body.say(text), whisper: (to, text) => body.whisper(to, text) });
+    const say = (text: string) => { replies.send(text); harness.output(text); };
 
     // 4.3: the player's job survives a restart (bots/<name>/laya-job.json); the chores state reads in today's
     // format (nothing turns chores on yet: 5.6)
@@ -207,7 +211,9 @@ async function main() {
     const chores = new Chores({
         stateFile: path.join(botDir, 'laya-chores.json'),
         runsFile: jsonl.file('chores'),
-        settingOn: !!settings.chores,
+        // 6.2b: on unless the user's settings say chores: false; the harness's off counts only on a harness launch
+        settingOn: choresSettingOn(settings),
+        harness: process.env.ANDY_TEST_HARNESS === '1',
         settings: () => choresOf(settings),
         client: () => (enabled('chores') ? laya : null),
         served: () => laya.promptFor('chores'),
@@ -223,11 +229,12 @@ async function main() {
     log(`[laya] chores state: ${chores.on ? 'on' : 'off'}; Last ${JSON.stringify(chores.last())}`);
     const driver = new ChoreDriver({ chores, free: () => lease.isFree, note: text => log(`[laya] ${text}`) });
 
-    const handle = (from: string, message: string) => {
+    const handle = (from: string, message: string, channel: Channel = 'chat') => {
         if (!message || from === name) return;
         if (onlyChatWith.length && !onlyChatWith.includes(from)) return;
-        log(`${name} received message from ${from} : ${message}`);
+        log(`${name} received ${channel === 'whisper' ? 'whisper' : 'message'} from ${from} : ${message}`);
         lastSpeaker = from;
+        replies.heard(from, channel);
         // the legacy !commands at the boundary; plain chat goes to the command model (4.1)
         if (containsLegacyCommand(message)) {
             const cmd = parseLegacy(message, from);
@@ -337,7 +344,7 @@ async function main() {
         state: () => (body.bot && body.inGame ? fullState(body.bot, name, activity(), places()) : null),
         facts,
         settings: () => settings,
-        message: handle,
+        message: (from, m) => handle(from, m, 'chat'),
         // start-agent: as the old bot's fresh agent process, the saved places and the chores state are read again (the
         // harness's reset deletes the places and writes chores off)
         start: () => { stopping = false; placeStore.reload(); chores.reload(); body.connect(); },
@@ -345,7 +352,8 @@ async function main() {
     }, log);
 
     body.on('state', () => harness.statusChanged());
-    body.on('chat', (from: string, message: string) => handle(from, message));
+    body.on('chat', (from: string, message: string) => handle(from, message, 'chat'));
+    body.on('whisper', (from: string, message: string) => handle(from, message, 'whisper'));
     body.on('spawn', () => {
         if (body.bot && !sensors) {
             sensors = new Sensors(sensorBot(body.bot), { places, moving: () => body.motion?.moving ?? false });
