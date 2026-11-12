@@ -295,8 +295,12 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
       Run 2026-11-12 12:25–12:46 AEST (916a68e, training held, one process PID 82700): a 14/16, b 15/16, zero process
       exits (one fresh spawn, 9 reconnects, uptimeS monotonic); every laya line an old shape. Open for the served craft
       model only: craft-furnace fails in both (the phase 5 known failure: craft-t178 answers gather log 1 p 0.94);
-      mine-iron-staircase failed in a (pickaxe re-craft: the model answers `gather none 2`, the rule's log gather found
-      no log) and passed in b. Report `bots/andy/logs/game-tests/bot-rebuild-6.1-2026-11-12.md`.
+      mine-iron-staircase failed in a and passed in b. In a, for the pickaxe re-craft the model answers `gather none 2`
+      (rules `gather log 1`, 0 logs in 30 s); the rules-only retry collected 1 oak_log but reported the gather failed (a
+      late inventory update), so the job ended. Fixed after review: `gatherItem` waits up to 3 s for the count when the
+      dig collected some (`bot/test/gather.act.test.ts`); the twice-in-a-row count restarts with that fix. Report
+      `bots/andy/logs/game-tests/bot-rebuild-6.1-2026-11-12.md`. Scope: the next 6.1 attempt runs the 16 `full`
+      scenarios twice plus `chores2-no-trees` and `chores2-first-day` once each (5.6's note; not tagged `full`).
 - [ ] 6.2 First day from scratch through the first night with chores v2 and the skill models (or their rules): alive,
       home chest set, base placed, no dead end (the same failed answer three times in a row).
 - [ ] 6.3 Measure as 1.3; write the before/after report.
