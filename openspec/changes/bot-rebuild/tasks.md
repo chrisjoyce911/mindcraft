@@ -251,9 +251,26 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
   `gather log` with cobblestone and a table (p 0.84; for laya-go, not this change).
   Left for 5.6: chores calls the jobs (purpose chore, chest counts), the real base centre, the director's Job words
   for the new kinds, and the gather skill recording stumps (chores state `stumps`) for replanting.
-- [ ] 5.6 chores v2 (skills-spec v1 §1): Carry/Chest/Made/Kit, Last from the run lines; answers map 1:1 to skill jobs
+- [x] 5.6 chores v2 (skills-spec v1 §1): Carry/Chest/Made/Kit, Last from the run lines; answers map 1:1 to skill jobs
       or rules actuators (cook, store, sleep, ask, rest). Chores v1.1 stays available as the stopgap until v2 is
       served.
+  Done (2026-11-12): `bot/src/models/chores/` ports laya-go games/chores/v2 (state byte for byte, rules v2 with its
+  rule names, Harmful, the typed answer, goals.ts with every amount); golden request and 300 laya-go situations
+  (`test/fixtures/laya-chores-v2/`). Chores v1.1 stays in the old bot; the new bot asks the chores model only when its
+  task is on **and** golaya serves `chores` at prompt v2, else rules v2 (why `rules` / `not-v2`); nothing is served yet.
+  `bot/src/chores/`: sense (chooseCentre ported into home/centre.ts and used by the place skill; Chest = the home
+  chest less the kit, refreshed on every chest open through `Act.chestSeen`; lit on place's torch grid), Last from
+  laya-chores.jsonl run lines (tail, at start and on every ask; a `forget` line from the harness's world reset drops
+  older runs), the closed reason map (craft's chore gather now ends `missing_<kind>`), answer → job for all 44 pairs,
+  and the driver (director onIdle; only after the 4.3 restore; the old !stop hold and 3 s player gap). New job kinds
+  cook, unload, kit, sleep (actuators/sleep.ts), rest (with ask: "I need …" once per item per 5 min), cobble; craft
+  bed and craft into the kit; farm `goal: {minutes}`; mine `until: 'day'`. Chore leases are `action:chore:<skill>_<target>`;
+  chores are never saved to laya-job.json; `!layaChores("off")` withdraws the running chore (no run line).
+  npm test 486/486. Live (rules v2): chores-idle-start, chores-command-interrupt, chores-defend-player and the new
+  chores2-no-trees 4/4 twice in a row, chores2-first-day pass (table, wooden and stone tools, furnace, cook, torches,
+  two kit tools, iron at night until day), the 5.5 regression set 9/9, kill -9 (no job file; the cooldown survives)
+  and chores off by hand. Report `bots/andy/logs/game-tests/bot-rebuild-5.6-2026-11-12.md`.
+  **For 6.1:** the new bot's suite needs `chores2-no-trees` and `chores2-first-day` (the old two use v1.1 words).
 - [x] 5.7 Correction path: `andy_logs` (or a small tool) turns a `laya-<model>.jsonl` line into a correction case in
       the format laya-go's controller `/job` takes.
       Done: `bot/src/log/correction.ts` (`node bot/dist/src/log/correction.js --task <task> --right Q=answer,...
