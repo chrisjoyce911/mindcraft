@@ -2229,9 +2229,9 @@
         },
         {
           "type": "actionSeen",
-          "match": "Idle",
+          "match": "Idle|director:eat",
           "final": true,
-          "note": "the lease is free afterwards"
+          "note": "the lease is free afterwards: the defend is over (a fight costs hunger, so the director may already be eating: eat-idle)"
         },
         {
           "type": "stat",
