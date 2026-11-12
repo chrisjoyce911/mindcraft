@@ -280,6 +280,15 @@ it.", resume-paused, followPlayer, 3.1 from tester. Report `bots/andy/logs/game-
 
 Done means for each: its scenarios pass, its unit tests (ported from `test/laya_<task>*.test.js`) pass, its log
 matches the fixture. Port every fix the old bot gets meanwhile.
+Gate passed 2026-11-12 (11:47 AEST, HEAD 3648152 + the defend-fight check fix, no `bot/` change), with one known
+served-model failure: `bot` npm test 486/486, harness 38/38; mine, farm, hunt, skills, chores (+ chores2-first-day) and
+the phase 3–4 regression set pass twice each (training held); every gate line in the 12 laya logs has the old key
+list and order; kill -9 mid-mine resumes the same mine; `!stop` mid-mine/mid-farm settles. **craft-furnace fails** (3/3):
+the served craft model answers `gather log` for "Have cobblestone x8 crafting_table x1 / Chest none" (p 0.81–0.84,
+since the 08:15/08:58 craft promotions). The correction (5.7 case, line 1324) is in laya-go's craft data (b6de06e);
+craft-t180 wasn't better (deleted, 335 vs 328), so it is pending. Accepted by the user (option b). Re-run craft-furnace
+after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
+`bots/andy/logs/game-tests/bot-rebuild-phase5-2026-11-12.md`.
 
 ## 6. Cut-over
 - [ ] 6.1 Full suite 16/16 on the new bot, twice in a row, zero process exits.
