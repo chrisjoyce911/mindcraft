@@ -234,6 +234,36 @@ test('centre: a table already there (within 49×49), else the player on the surf
     assert.deepEqual(chooseCentre(seen({ saved: { kind: 'player', pos: { x: 3, y: 64, z: 3 } }, speaker: surface })), { home: 'player', pos: { x: 3, y: 64, z: 3 } }, 'a saved centre is kept');
 });
 
+test('centre (6.2a): a found chest or table is adopted only near the base, never one underground far away', () => {
+    const chest = (x: number, y: number, z: number) => ({ kind: 'chest' as const, pos: { x, y, z } });
+    // a fresh start (no saved centre): within 49×49 of andy and ±16 of him
+    assert.equal(chooseCentre(seen({ nearby: [chest(5, 64, 5)] })).home, 'chest');
+    assert.equal(chooseCentre(seen({ nearby: [chest(5, 80, 5)] })).home, 'chest', '16 up');
+    assert.equal(chooseCentre(seen({ nearby: [chest(5, 40, 5)] })).home, 'self', '24 below him');
+    // a saved centre: only in its base area (21×21, ±16), nearest the centre
+    const saved = { kind: 'self' as const, pos: { x: 100, y: 64, z: 100 } };
+    assert.deepEqual(chooseCentre(seen({ saved, nearby: [chest(105, 63, 98)] })).save?.pos, { x: 105, y: 63, z: 98 }, 'in the base area');
+    assert.deepEqual(chooseCentre(seen({ saved, nearby: [chest(100, 30, 100)] })), { home: 'self', pos: { x: 100, y: 64, z: 100 } }, 'under the base');
+    assert.deepEqual(chooseCentre(seen({ saved, nearby: [chest(0, 64, 0)] })).pos, { x: 100, y: 64, z: 100 }, 'by andy, far from the base');
+    assert.deepEqual(chooseCentre(seen({ saved, nearby: [chest(109, 64, 100), chest(102, 64, 100)] })).save?.pos, { x: 102, y: 64, z: 100 }, 'nearest the centre');
+});
+
+test('centre (6.2a): a dug table home leaves chores_centre at its spot, and a chest far below is not adopted', async () => {
+    const dir = tmp();
+    const w = world({ items: [{ name: 'oak_log', count: 2 }] });
+    const me = w.facts.pos;
+    const home = { x: Math.floor(me.x) + 3, y: Math.floor(me.y), z: Math.floor(me.z) + 3 };
+    w.blocks[`${home.x},${home.y},${home.z}`] = { name: 'air' } as never;
+    w.blocks[`${home.x},${home.y - 30},${home.z}`] = { name: 'chest' } as never;
+    const t = choresOn(dir, w);
+    t.places.home_table = [home.x, home.y, home.z];
+    await t.c.next();
+    assert.equal(t.places.home_table, undefined, 'the gone table is forgotten');
+    assert.deepEqual(t.places.chores_centre, [home.x, home.y, home.z], 'the base stays at its spot');
+    assert.equal(t.places.home_chest, undefined, 'the chest 30 below is not the home');
+    assert.ok(!t.said.some(s => /as home/.test(s)), t.said.join(' | '));
+});
+
 test('centre: the first chest or table he places becomes the home; a chest in the base for a table home; beds', () => {
     const none = { homeBed: null, playerBed: null, homeChest: null, homeTable: null, centre: null };
     assert.deepEqual(homeOnPlace('chest', { x: 2, y: 64, z: 2 }, 'me', none), [{ place: 'home_chest', pos: { x: 2, y: 64, z: 2 } }, { place: 'chores_centre', pos: null }]);

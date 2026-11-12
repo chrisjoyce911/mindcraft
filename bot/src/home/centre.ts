@@ -3,8 +3,9 @@
 //   1. the home bed (home_bed: the bed he placed for himself, or last slept in)
 //   2. the saved home (home_chest, or home_table when the home is a table)
 //   3. a chest or table a player placed (the most recent) → saved as home
-//   4. the nearest chest, barrel or table within the 49×49 work area → saved as home
-//   5. a saved chores_centre (kept until a home exists)
+//   4. the nearest chest, barrel or table: with a saved chores_centre, only in its base area (21×21, ±16); else
+//      within the 49×49 work area of andy and ±16 of him (6.2a: never one underground far away) → saved as home
+//   5. a saved chores_centre (kept until a home exists; a lost table or bed home leaves its spot here, 6.2a)
 //   6. the player who last spoke, within 32, on the surface → chores_centre
 //   7. his own position → chores_centre
 // 5.6 replaces 5.5's baseCentre stand-in: the place skill uses the same centre (baseCentre: the saved places alone).
@@ -30,7 +31,7 @@ export interface CentreSeen {
     homeTable: P3 | null;
     /** Chests and tables players placed, most recent last (still standing). */
     playerPlaced: readonly { kind: StationKind; pos: Vec3Like }[];
-    /** Chests and tables within the work area of andy (only looked for when there is no home). */
+    /** Chests and tables around the saved centre (else andy) (only looked for when there is no home). */
     nearby: readonly { kind: StationKind; pos: Vec3Like }[];
     speaker: Speaker | null;
     /** The saved chores_centre and what it was saved from. */
@@ -66,7 +67,9 @@ export function chooseCentre(w: CentreSeen): Centre {
         return { home: placed.kind, pos: p, save: { place: placeOf(placed.kind), pos: p, say: `I'll use your ${word(placed.kind)} at ${p.x} ${p.y} ${p.z} as home.` } };
     }
     const self = at(w.self);
-    const near = w.nearby.filter(b => inColumns(self, b.pos, WORK)).sort((a, b) => d2(a.pos, self) - d2(b.pos, self))[0];
+    const from = w.saved ? at(w.saved.pos) : self;
+    const inArea = (p: Vec3Like) => (w.saved ? inBaseArea(from, p) : inColumns(self, p, WORK) && Math.abs(Math.floor(p.y) - self.y) <= BASE_HEIGHT);
+    const near = w.nearby.filter(b => inArea(b.pos)).sort((a, b) => d2(a.pos, from) - d2(b.pos, from))[0];
     if (near) {
         const p = at(near.pos);
         return { home: near.kind, pos: p, save: { place: placeOf(near.kind), pos: p, say: `I'll use the ${word(near.kind)} at ${p.x} ${p.y} ${p.z} as home.` } };

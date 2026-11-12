@@ -1,14 +1,15 @@
-// Chores rules v2 and Harmful (laya-go games/chores/v2 Decide, Harmful; skills-spec v1 §1 "Rules v2"), a straight
-// port: chores v1.1's priority order with every step explicit, the first that applies decides. ok(k, t): the pair
+// Chores rules v2.1 and Harmful (laya-go games/chores/v2 Decide, Harmful; skills-spec v1 §1 "Rules v2"), a straight
+// port. v2.1 (2026-11-12, user: chest first, no unarmoured night mining): the chest step comes right after food-low
+// and never starts a log trip at dusk; night mining needs a sword or armour. The rest is chores v1.1's priority order with every step explicit, the first that applies decides. ok(k, t): the pair
 // has no failed Last entry younger than 5 minutes and its actuator is present (place: Can place, cook: Can smelt). A
 // need found on the way (the first noted wins) is answered as ask <item> when nothing else applies.
 import type { Words } from '../skill/index.js';
 import { CHORES_COOLDOWN, CHORE_ANIMALS, TIERS, isChorePair, type Tier } from '../../types/chores.js';
 import { have, type ChoresSituation } from './render.js';
 
-export const CHORES_RULES = ['unload', 'night-sleep', 'night-mine', 'night-rest', 'food-low-farm', 'food-low-hunt', 'light-low', 'light-low-place',
+export const CHORES_RULES = ['unload', 'night-sleep', 'night-mine', 'night-rest', 'food-low-farm', 'food-low-hunt', 'chest', 'light-low', 'light-low-place',
     'saplings-gather', 'saplings-place', 'farm-ready', 'table', 'wood-tools', 'farm-seeds', 'farm-hoe', 'farm-start', 'stone-cobble',
-    'stone-tools', 'furnace', 'food-hunt', 'food-cook', 'light', 'light-place', 'chest', 'beds-place', 'beds-craft', 'beds-wool',
+    'stone-tools', 'furnace', 'food-hunt', 'food-cook', 'light', 'light-place', 'beds-place', 'beds-craft', 'beds-wool',
     'kit-tools', 'kit-cobble', 'kit-store', 'kit-torches', 'stock-logs', 'stock-cobble', 'sword', 'logs', 'torch-mine-coal',
     'ask-logs', 'ask-cobble', 'ask-coal', 'ask-wool', 'ask-food', 'rest'] as const;
 export type ChoresRule = (typeof CHORES_RULES)[number];
@@ -18,6 +19,9 @@ export const OUTDOOR = ['hunt', 'gather', 'farm'] as const;
 
 const tier = (t: Tier) => TIERS.indexOf(t);
 const hasTier = (t: Tier, at: Tier) => tier(t) >= tier(at);
+
+/** armed: a sword (wooden or better) or any armour piece worn: the only way he may mine at night (v2.go Armed). */
+export const armed = (s: ChoresSituation): boolean => hasTier(s.sword, 'wooden') || s.armor;
 
 /** ok: (k, t) may run: not failed in the last 5 minutes, and its actuator present (v2.go ok). */
 export function choreOk(s: ChoresSituation, k: string, t: string): boolean {
@@ -37,7 +41,7 @@ export function kitTier(s: ChoresSituation): Tier {
     return t;
 }
 
-/** choresRules: rules v2, the words and the rule that decided (v2.go Decide). */
+/** choresRules: rules v2.1, the words and the rule that decided (v2.go Decide). */
 /**
  * What the rules answer: the words, the rule that decided (v2.go's rule names), and for gather logs the step that
  * needed the logs (from: table, wood-tools, …; the goal's amount, goals.ts). from is not part of the spec's answer.
@@ -79,14 +83,25 @@ export function choresRules(s: ChoresSituation): ChoresRuled {
 
     if (tryRun('store', 'unload', 'unload', s.free <= 3 && s.chest)) return done();
     if (s.time === 'night') {
-        if (tryRun('sleep', 'none', 'night-sleep', s.bedMine) || tryRun('mine', 'iron', 'night-mine', hasTier(s.pickaxe, 'stone'))
-            || tryRun('mine', 'coal', 'night-mine', pick && !hasTier(s.pickaxe, 'stone'))) return done();
+        const arm = armed(s);
+        if (tryRun('sleep', 'none', 'night-sleep', s.bedMine) || tryRun('mine', 'iron', 'night-mine', arm && hasTier(s.pickaxe, 'stone'))
+            || tryRun('mine', 'coal', 'night-mine', arm && pick && !hasTier(s.pickaxe, 'stone'))) return done();
         return { words: { Skill: 'rest', Target: 'none' }, rule: 'night-rest' };
     }
     const food = have(s, 'food'), raw = have(s, 'raw'), torches = have(s, 'torches');
     if (food < 8 && hasTier(s.axe, 'wooden')) {
         if (tryRun('farm', 'tend', 'food-low-farm', s.farm && s.ready) || tryRun('hunt', 'food', 'food-low-hunt', animalsWithin(s, 193))) return done();
         note('food', choreOk(s, 'hunt', 'food') && !animalsWithin(s, 193));
+    }
+    // the home chest before lighting the base; its log trip never starts at dusk
+    if (s.table && !s.chest && s.canPlace) {
+        if (s.made.chest >= 1) {
+            if (tryRun('place', 'chest', 'chest', true)) return done();
+        } else if (wood >= 2) {
+            if (tryRun('craft', 'chest', 'chest', true)) return done();
+        } else if (s.time !== 'dusk') {
+            if (logs('chest')) return done();
+        }
     }
     const unlitDusk = !s.lit && s.time === 'dusk';
     if (pick && (torches < 8 || unlitDusk)) {
@@ -124,9 +139,6 @@ export function choresRules(s: ChoresSituation): ChoresRuled {
     }
     if (tryRun('hunt', 'food', 'food-hunt', food < 32 && animalsWithin(s, 97)) || tryRun('cook', 'none', 'food-cook', raw >= 1 && s.furnace)) return done();
     if ((torches < 16 && torch('light')) || tryRun('place', 'torch', 'light-place', !s.lit && torches >= 8)) return done();
-    if (!s.chest && s.canPlace) {
-        if (station('chest', s.made.chest, wood >= 2, 'chest')) return done();
-    }
     if ((!s.bedMine || !s.bedPlayer) && s.canPlace) {
         const needWool = (s.bedMine ? 0 : 3) + (s.bedPlayer ? 0 : 3);
         if (s.made.bed >= 1) {
@@ -166,12 +178,13 @@ export function choresRules(s: ChoresSituation): ChoresRuled {
 
 /**
  * choresHarmful: a pair that isn't valid, failed in the last 5 minutes or has no actuator, out on the surface at
- * night (hunt, gather, farm, mine cobble), or placing with nothing to place (v2.go Harmful).
+ * night (hunt, gather, farm, mine cobble), mining at night unarmed (v2.1), or placing with nothing to place (v2.go Harmful).
  */
 export function choresHarmful(s: ChoresSituation, got: Words): boolean {
     const k = got.Skill ?? '', t = got.Target ?? '';
     if (!isChorePair(k, t) || !choreOk(s, k, t)) return true;
     if (s.time === 'night' && ((OUTDOOR as readonly string[]).includes(k) || (k === 'mine' && t === 'cobble'))) return true;
+    if (s.time === 'night' && k === 'mine' && !armed(s)) return true;
     if (k === 'place') {
         const station = ({ crafting_table: s.made.table, furnace: s.made.furnace, chest: s.made.chest, bed: s.made.bed } as Record<string, number>)[t];
         return (station !== undefined && station === 0) || (t === 'torch' && have(s, 'torches') === 0) || (t === 'saplings' && have(s, 'saplings') === 0);

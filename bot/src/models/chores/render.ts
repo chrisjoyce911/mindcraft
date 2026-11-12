@@ -4,7 +4,7 @@
 //   Time day Home chest Biome forest
 //   Base table yes furnace no chest yes lit no beds mine no player no
 //   Farm yes ready no
-//   Tools axe stone pickaxe wooden sword none hoe none shovel none shears no
+//   Tools axe stone pickaxe wooden sword none hoe none shovel none shears no armor no
 //   Carry wood 3 sticks 2 cobble 12 coal 0 iron 0 torches 0 food 4 raw 2 wool 0 seeds 0 saplings 1 free 20
 //   Chest wood 40 sticks 0 cobble 60 coal 12 iron 0 torches 0 food 6 raw 0 wool 0 seeds 8 saplings 0
 //   Made table 0 furnace 0 chest 0 bed 0
@@ -29,6 +29,8 @@ export interface ChoresSituation {
     table: boolean; furnace: boolean; chest: boolean; lit: boolean; bedMine: boolean; bedPlayer: boolean;
     farm: boolean; ready: boolean;
     axe: Tier; pickaxe: Tier; sword: Tier; hoe: Tier; shovel: Tier; shears: boolean;
+    /** any armour piece worn (v2.1) */
+    armor: boolean;
     carry: Counts; inChest: Counts; free: number;
     /** Stations carried, waiting to be placed: table, furnace, chest, bed. */
     made: { table: number; furnace: number; chest: number; bed: number };
@@ -82,7 +84,7 @@ export function choresState(s: ChoresSituation): string {
         `Time ${s.time} Home ${s.home} Biome ${s.biome}`,
         `Base table ${yn(s.table)} furnace ${yn(s.furnace)} chest ${yn(s.chest)} lit ${yn(s.lit)} beds mine ${yn(s.bedMine)} player ${yn(s.bedPlayer)}`,
         `Farm ${yn(s.farm)} ready ${yn(s.ready)}`,
-        `Tools axe ${s.axe} pickaxe ${s.pickaxe} sword ${s.sword} hoe ${s.hoe} shovel ${s.shovel} shears ${yn(s.shears)}`,
+        `Tools axe ${s.axe} pickaxe ${s.pickaxe} sword ${s.sword} hoe ${s.hoe} shovel ${s.shovel} shears ${yn(s.shears)} armor ${yn(s.armor)}`,
         `Carry ${counts(s.carry)} free ${s.free}`,
         `Chest ${counts(s.inChest)}`,
         `Made table ${s.made.table} furnace ${s.made.furnace} chest ${s.made.chest} bed ${s.made.bed}`,

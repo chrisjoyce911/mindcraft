@@ -5,6 +5,7 @@ import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
 import type { Outcome, Vec3Like } from '../types/index.js';
 import type { GoToOptions } from '../core/motion.js';
+import { ARMOR_SLOTS } from '../sensors/pack.js';
 
 export interface ActEntity { id: number; name?: string | undefined; type?: string | undefined; username?: string | undefined; position: Vec3Like; height?: number; isValid?: boolean;
     /** The entity's metadata (mineflayer's array; 1.21: 16 a baby, a sheep's 17 has 0x10 when sheared). */
@@ -55,6 +56,8 @@ export interface ActBot {
     items(): ActItem[];
     /** Empty inventory slots (optional in fakes). */
     emptySlots?(): number;
+    /** The armour worn (slots 5–8: helmet, chestplate, leggings, boots), by name (optional in fakes). */
+    worn?(): string[];
     equip(item: ActItem, hand: Hand): Promise<void>;
     /** Eat or drink the held item (mineflayer consume(); it can't be cancelled). */
     consume(): Promise<void>;
@@ -172,6 +175,7 @@ export function actBot(bot: Bot): ActBot {
         get heldItem() { return bot.heldItem; },
         items: () => bot.inventory.items(),
         emptySlots: () => bot.inventory.emptySlotCount(),
+        worn: () => ARMOR_SLOTS.map(i => bot.inventory.slots[i]?.name).filter((n): n is string => !!n),
         equip: async (item, hand) => {
             const it = bot.inventory.items().find(i => i.name === item.name);
             if (!it) throw new Error(`no ${item.name}`);

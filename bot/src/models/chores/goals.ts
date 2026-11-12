@@ -2,8 +2,9 @@
 // Pure: the situation, the answer and the rules' answer for the same situation.
 //
 //   hunt food     goal Food (Have) 32; Have food + 8 when Food < 8                   ("goal Food ≥ 32 (8 more when Food < 8)")
-//   gather logs   Have wood 64 when stocking (stock-logs), else the step's need: table 4, wood-tools 3, chest / beds /
-//                 kit 2, the others 1 (the wood each step's rule waits for)      ("Have wood 64 when stocking, else the step's need")
+//   gather logs   Have wood 64 when stocking (stock-logs), else the step's need: table 4 (6 while there is no home
+//                 chest: the chest's 2 in the same trip, v2.1), wood-tools 3, chest / beds / kit 2, the others 1 (the
+//                 wood each step's rule waits for)      ("Have wood 64 when stocking, else the step's need")
 //   gather seeds  16; wool 3 per missing bed; saplings: Have + those on the ground ("seeds 16; wool 3 per missing bed; saplings: those on the ground")
 //   mine cobble   the step's need (stone: 6 for the tools + 8 for the furnace; kit: 9) or 64 when stocking, as more to mine
 //   mine coal     8;  mine iron: until day at night, else 8                       ("coal: 8; iron: … until day at night, else 8")
@@ -24,6 +25,8 @@ export const HUNGRY_MORE = 8;
 export const STOCK = 64;
 export const LOGS_FOR: Readonly<Record<string, number>> = { table: 4, 'wood-tools': 3, chest: 2, 'beds-craft': 2, 'kit-tools': 2 };
 export const LOGS_OTHER = 1;
+/** The table step's logs while there is no home chest: the table's 4 and the chest's 2 in one trip (v2.1). */
+export const LOGS_TABLE_AND_CHEST = 6;
 export const SEEDS_GOAL = 16;
 export const WOOL_PER_BED = 3;
 export const COBBLE_TOOLS = 6;
@@ -76,7 +79,8 @@ export function choresGoal(s: ChoresSituation, a: ChoresAnswer, rules: ChoresRul
         }
         case 'gather': switch (a.target) {
             case 'logs': {
-                const goal = !same || rules.rule === 'stock-logs' ? STOCK : LOGS_FOR[rules.from ?? ''] ?? LOGS_OTHER;
+                const step = rules.from === 'table' && !s.chest ? LOGS_TABLE_AND_CHEST : LOGS_FOR[rules.from ?? ''] ?? LOGS_OTHER;
+                const goal = !same || rules.rule === 'stock-logs' ? STOCK : step;
                 return { kind: 'have', goal, chest: s.inChest.wood };
             }
             case 'seeds': return { kind: 'have', goal: SEEDS_GOAL, chest: s.inChest.seeds };

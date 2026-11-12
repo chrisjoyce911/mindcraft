@@ -2157,8 +2157,8 @@
         "rebuild",
         "night"
       ],
-      "timeout": 1600000,
-      "description": "Rebuild 6.2, the first day and night from a fresh world (not tagged chores: the harness would turn chores on straight after the reset and andy would adopt the base chest before the setup removes it): a reset, the base pad's chest and sign removed (158 70 162, 159 70 162: nothing to adopt), andy with nothing, the daylight cycle on from sunrise, chores on for one whole Minecraft day and night (24000 ticks = 1200 s, waits 1260 s for lag), then /time query day. Checks: alive (no last_death_position, health ≥ 1), the night passed (day ≥ 1), home chest set (a home_chest place and a place chest run done), base placed (place crafting_table and furnace done, an ask with Base table yes furnace yes chest yes), no dead end (never the same chores run failed 3 times in a row; an interrupted run is the director taking the body and is skipped). The log checks count only entries since the before snapshot (after the setup).",
+      "timeout": 1900000,
+      "description": "Rebuild 6.2 (6.2a: the chest by the end of the next morning), the first day, night and next morning from a fresh world (not tagged chores: the harness would turn chores on straight after the reset and andy would adopt the base chest before the setup removes it): a reset, the base pad's chest and sign removed (158 70 162, 159 70 162: nothing to adopt), andy with nothing, the daylight cycle on from sunrise, chores on for a whole Minecraft day and night and the next morning (to the next noon: 30000 ticks = 1500 s, waits 1560 s for lag), then /time query day and daytime (for the report). Checks (through the next morning): alive (no last_death_position, health ≥ 1), the night passed (day ≥ 1), home chest set by the end of the next morning (a home_chest place and a place chest run done), base placed (place crafting_table and furnace done, an ask with Base table yes furnace yes chest yes), no dead end (never the same chores run failed 3 times in a row; an interrupted run is the director taking the body and is skipped). The log checks count only entries since the before snapshot (after the setup).",
       "setup": [
         {
           "reset": true
@@ -2204,10 +2204,13 @@
           "andy": "!layaChores(\"on\")"
         },
         {
-          "wait": 1260000
+          "wait": 1560000
         },
         {
           "cmd": "/time query day"
+        },
+        {
+          "cmd": "/time query daytime"
         },
         {
           "snapshot": "dawn"
@@ -2228,8 +2231,8 @@
         },
         {
           "type": "serverReply",
-          "match": "The time is [1-9]",
-          "note": "the night passed (day ≥ 1)"
+          "match": "The time is [1-9]$",
+          "note": "the night passed (day ≥ 1; $ so the daytime reply never matches)"
         },
         {
           "type": "place",

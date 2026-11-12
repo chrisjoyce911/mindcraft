@@ -318,6 +318,10 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
       (rules v2: chest after light; dusk wood 0–1 → logs → night rules), c dug his own table and furnace on a reused
       mine's walk (fixed: stations kept from digging, core/keep.ts), d died (zombies, night-mine). No dead end in any.
       Blocked on chores rules v2 (laya-go). Report `bots/andy/logs/game-tests/bot-rebuild-6.2-2026-11-12.md`.
+      6.2a (user 2026-11-12: "both"): chores rules v2.1 in laya-go (f27830d on local `minecraft`) and the bot port:
+      the chest step right after food-low (no log trip for it at dusk), night mining only armed (sword or armour; new
+      `armor` on the Tools line), Harmful adds mining at night unarmed; a found chest/table is adopted only near the base
+      (a lost table/bed home keeps its spot as chores_centre); the scenario's chest may wait to the next noon (wait 1560 s).
 - [ ] 6.3 Measure as 1.3; write the before/after report.
 - [ ] 6.4 User accepts; `ANDY_BOT` default → new.
 

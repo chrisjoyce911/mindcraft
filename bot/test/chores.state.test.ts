@@ -21,7 +21,7 @@ const json = (v: unknown) => JSON.parse(JSON.stringify(v));
 interface GoResult { Skill: string; Target: string; Done: boolean; Reason: string; Age: number }
 interface GoSituation {
     Time: string; Home: string; Biome: string; Table: boolean; Furnace: boolean; Chest: boolean; Lit: boolean; BedMine: boolean; BedPlayer: boolean;
-    Farm: boolean; Ready: boolean; Axe: string; Pickaxe: string; Sword: string; Hoe: string; Shovel: string; Shears: boolean;
+    Farm: boolean; Ready: boolean; Axe: string; Pickaxe: string; Sword: string; Hoe: string; Shovel: string; Shears: boolean; Armor: boolean;
     Carry: number[]; InChest: number[]; Free: number; Made: number[]; KitPickaxe: string; KitAxe: string; KitShovel: string; KitSword: string;
     KitFood: number; KitTorches: number; Trees: number; Stone: number; CoalOre: number; IronOre: number; Grass: number; Water: number;
     Animal: number[]; Ground: number; CanPlace: boolean; CanSmelt: boolean; Last: GoResult[] | null;
@@ -30,7 +30,7 @@ const counts = (a: number[]): Counts => Object.fromEntries(HAVE_KINDS.map((k, i)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const conv = (g: GoSituation): ChoresSituation => ({
     time: g.Time, home: g.Home, biome: g.Biome, table: g.Table, furnace: g.Furnace, chest: g.Chest, lit: g.Lit, bedMine: g.BedMine, bedPlayer: g.BedPlayer,
-    farm: g.Farm, ready: g.Ready, axe: g.Axe, pickaxe: g.Pickaxe, sword: g.Sword, hoe: g.Hoe, shovel: g.Shovel, shears: g.Shears,
+    farm: g.Farm, ready: g.Ready, axe: g.Axe, pickaxe: g.Pickaxe, sword: g.Sword, hoe: g.Hoe, shovel: g.Shovel, shears: g.Shears, armor: g.Armor,
     carry: counts(g.Carry), inChest: counts(g.InChest), free: g.Free,
     made: { table: g.Made[0]!, furnace: g.Made[1]!, chest: g.Made[2]!, bed: g.Made[3]! },
     kitPickaxe: g.KitPickaxe, kitAxe: g.KitAxe, kitShovel: g.KitShovel, kitSword: g.KitSword, kitFood: g.KitFood, kitTorches: g.KitTorches,
@@ -47,7 +47,7 @@ const run = (skill: ChoreSkill, target: ChoreTarget, done: boolean, age: number,
 /** sample: skills-spec §1's state (v2_test.go sample). */
 export const SAMPLE: ChoresSituation = {
     time: 'day', home: 'chest', biome: 'forest', table: true, furnace: false, chest: true, lit: false, bedMine: false, bedPlayer: false,
-    farm: true, ready: false, axe: 'stone', pickaxe: 'wooden', sword: 'none', hoe: 'none', shovel: 'none', shears: false,
+    farm: true, ready: false, axe: 'stone', pickaxe: 'wooden', sword: 'none', hoe: 'none', shovel: 'none', shears: false, armor: false,
     carry: counts([3, 2, 12, 0, 0, 0, 4, 2, 0, 0, 1]), inChest: counts([40, 0, 60, 12, 0, 0, 6, 0, 0, 8, 0]), free: 20,
     made: { table: 0, furnace: 0, chest: 0, bed: 0 },
     kitPickaxe: 'stone', kitAxe: 'stone', kitShovel: 'none', kitSword: 'stone', kitFood: 3, kitTorches: 16,
@@ -109,7 +109,7 @@ test('laya-go TestState: values outside the spec are refused', () => {
 test('laya-go TestDecide cases', () => {
     const later: ChoresSituation = {
         time: 'day', home: 'chest', biome: 'plains', table: true, furnace: true, chest: true, lit: true, bedMine: true, bedPlayer: true,
-        farm: true, ready: false, axe: 'stone', pickaxe: 'stone', sword: 'stone', hoe: 'wooden', shovel: 'none', shears: false,
+        farm: true, ready: false, axe: 'stone', pickaxe: 'stone', sword: 'stone', hoe: 'wooden', shovel: 'none', shears: false, armor: false,
         carry: counts([70, 4, 70, 3, 0, 30, 40, 0, 0, 4, 0]), inChest: zero(), free: 25, made: { table: 0, furnace: 0, chest: 0, bed: 0 },
         kitPickaxe: 'stone', kitAxe: 'stone', kitShovel: 'stone', kitSword: 'stone', kitFood: 8, kitTorches: 16,
         trees: 49, stone: 49, coal: 49, iron: 0, grass: 49, water: 49, animals: { cow: 49, pig: 49, sheep: 49, chicken: 97, rabbit: 0 }, ground: 0,
@@ -143,12 +143,52 @@ test('laya-go TestDecide cases', () => {
         edit?.(s);
         assert.deepEqual(choresRules(s).words, { Skill: skill, Target: target }, name);
     }
+    // v2.1: the chest before torches, no log trip for it at dusk; night mining only when armed
+    const noChest = (s: ChoresSituation) => { s.chest = false; s.carry.wood = 0; s.carry.torches = 0; };
+    const night = (s: ChoresSituation) => { s.time = 'night'; s.bedMine = false; s.sword = 'none'; };
+    const v21: [string, (s: ChoresSituation) => void, string, string, string][] = [
+        ['(a) chest no, wood 0, day, torches 0: logs for the chest', noChest, 'gather', 'logs', 'logs'],
+        ['(b) the same at dusk, unlit, torches 10: place torch', s => { noChest(s); s.time = 'dusk'; s.lit = false; s.carry.torches = 10; }, 'place', 'torch', 'light-low-place'],
+        ['(c) dusk, wood 2: craft chest', s => { noChest(s); s.time = 'dusk'; s.carry.wood = 2; }, 'craft', 'chest', 'chest'],
+        ['(d) a chest made, torches 0: place it first', s => { noChest(s); s.made.chest = 1; }, 'place', 'chest', 'chest'],
+        ['(e) night, stone pickaxe, unarmed: rest', night, 'rest', 'none', 'night-rest'],
+        ['(f) night, wooden sword: mine iron', s => { night(s); s.sword = 'wooden'; }, 'mine', 'iron', 'night-mine'],
+        ['(g) night, armour, no sword: mine iron', s => { night(s); s.armor = true; }, 'mine', 'iron', 'night-mine'],
+        ['(h) night, wooden pickaxe, unarmed: rest', s => { night(s); s.pickaxe = 'wooden'; }, 'rest', 'none', 'night-rest'],
+        ['night, wooden pickaxe, armour: mine coal', s => { night(s); s.pickaxe = 'wooden'; s.armor = true; }, 'mine', 'coal', 'night-mine'],
+        ['dusk, chest no, wood 0, lit: no log trip for the chest', s => { noChest(s); s.time = 'dusk'; s.carry.torches = 20; }, 'gather', 'logs', 'stock-logs'],
+        ['no table: the table first', s => { noChest(s); s.table = false; s.carry.wood = 5; s.carry.torches = 20; }, 'craft', 'crafting_table', 'table'],
+    ];
+    for (const [name, edit, skill, target, rule] of v21) {
+        const s = copy(later);
+        edit(s);
+        const r = choresRules(s);
+        assert.deepEqual([r.words, r.rule], [{ Skill: skill, Target: target }, rule], name);
+    }
+    const a = copy(later); noChest(a);
+    assert.equal(choresRules(a).from, 'chest', "(a)'s logs are the chest's");
+    assert.deepEqual(choresGoal(a, readChores(choresRules(a).words)!, choresRules(a)), { kind: 'have', goal: 2, chest: 0 }, "the chest's logs: 2");
+});
+
+test('laya-go TestHarmfulNightMine: mining at night unarmed is harmful (v2.1)', () => {
+    const s = copy(SAMPLE);
+    s.time = 'night'; s.pickaxe = 'stone'; s.sword = 'none';
+    assert.ok(choresHarmful(s, { Skill: 'mine', Target: 'iron' }), 'unarmed iron');
+    assert.ok(choresHarmful(s, { Skill: 'mine', Target: 'coal' }), 'unarmed coal');
+    s.sword = 'wooden';
+    assert.ok(!choresHarmful(s, { Skill: 'mine', Target: 'iron' }), 'a sword');
+    s.sword = 'none'; s.armor = true;
+    assert.ok(!choresHarmful(s, { Skill: 'mine', Target: 'iron' }), 'armour');
+    s.time = 'day'; s.armor = false;
+    assert.ok(!choresHarmful(s, { Skill: 'mine', Target: 'iron' }), 'day');
 });
 
 test('Harmful: outdoor at night, place with nothing, a recent failure', () => {
     const s = copy(SAMPLE);
     s.time = 'night';
     for (const w of [['hunt', 'food'], ['gather', 'logs'], ['farm', 'tend'], ['mine', 'cobble']]) assert.ok(choresHarmful(s, { Skill: w[0]!, Target: w[1]! }), w.join(' '));
+    assert.ok(choresHarmful(s, { Skill: 'mine', Target: 'iron' }), 'unarmed (v2.1)');
+    s.armor = true;
     assert.ok(!choresHarmful(s, { Skill: 'mine', Target: 'iron' }));
     const d = copy(SAMPLE);
     assert.ok(choresHarmful(d, { Skill: 'place', Target: 'furnace' }), 'no furnace carried');

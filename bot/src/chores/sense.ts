@@ -16,6 +16,7 @@ import {
     searchOf, timeWord,
 } from '../sensors/chores.js';
 import { isLog } from '../sensors/skills.js';
+import { armorPoints } from '../sensors/vitals.js';
 import { STONES, surfaceStone } from '../jobs/chores.js';
 import type { ChoresSituation } from '../models/chores/index.js';
 
@@ -66,25 +67,31 @@ function findIn(a: Act, names: readonly string[], c: Vec3Like, size: number, n: 
     return found.filter(p => inColumns(c, p, size) && (dy === null || Math.abs(p.y - Math.floor(c.y)) <= dy) && (!keep || keep(p))).slice(0, n);
 }
 
-/** homeFacts: the saved home places still standing (a gone bed or table is forgotten; an unloaded one kept). */
+/**
+ * homeFacts: the saved home places still standing (a gone bed or table is forgotten; an unloaded one kept). lost: the
+ * spot of a home bed or home table just forgotten (the bed's first), so the base stays where it was (6.2a).
+ */
 function homeFacts(a: Act, places: PlaceBook) {
+    let lost: Vec3Like | null = null;
     const check = (name: string, ok: (block: string) => boolean) => {
         const h = places.recall(name);
         if (!h) return null;
         const b = a.bot.blockAt(Math.floor(h[0]), Math.floor(h[1]), Math.floor(h[2]));
         if (!b || ok(b.name)) return h;
         places.forget(name);
+        if (name !== 'player_bed') lost ??= floorV({ x: h[0], y: h[1], z: h[2] });
         return null;
     };
     const chest = places.recall(HOME_PLACE);
     const cb = chest ? a.bot.blockAt(Math.floor(chest[0]), Math.floor(chest[1]), Math.floor(chest[2])) : null;
-    return {
+    const facts = {
         homeBed: check('home_bed', n => n.endsWith('_bed')),
         playerBed: check('player_bed', n => n.endsWith('_bed')),
         homeTable: check('home_table', n => n === 'crafting_table'),
         // a gone home chest is the director's to forget: here it is just not there
         homeChest: chest && (!cb || isChest(cb)) ? chest : null,
     };
+    return { ...facts, lost: lost as Vec3Like | null };
 }
 
 function speakerOf(a: Act, name: string | null): Speaker | null {
@@ -109,13 +116,22 @@ export function centreOf(a: Act, d: SenseDeps): Centre & { homeBed: boolean; pla
         const b = a.bot.blockAt(p.pos.x, p.pos.y, p.pos.z);
         return !b || (p.kind === 'table' ? b.name === 'crafting_table' : isChest(b));
     });
-    const noHome = !h.homeBed && !h.homeChest && !h.homeTable && !placed.length;
-    const nearby = noHome ? [
-        ...findIn(a, TABLES, self, WORK, 4).map(pos => ({ kind: 'table' as const, pos })),
-        ...findIn(a, CHESTS, self, WORK, 4).map(pos => ({ kind: 'chest' as const, pos })),
-    ] : [];
-    const saved = d.places.recall('chores_centre');
     const st = d.state();
+    // a lost table or bed home leaves its spot as the centre (the base stays where it was)
+    if (h.lost && !d.places.recall('chores_centre')) {
+        d.places.remember('chores_centre', h.lost);
+        st.centreKind = 'self';
+        d.save();
+    }
+    const noHome = !h.homeBed && !h.homeChest && !h.homeTable && !placed.length;
+    const saved = d.places.recall('chores_centre');
+    // with a saved centre, look in its base area; else in andy's work area (chooseCentre filters by height too)
+    const around = saved ? floorV({ x: saved[0], y: saved[1], z: saved[2] }) : self;
+    const [size, dy] = saved ? [BASE, BASE_HEIGHT] : [WORK, BASE_HEIGHT];
+    const nearby = noHome ? [
+        ...findIn(a, TABLES, around, size, 4, dy).map(pos => ({ kind: 'table' as const, pos })),
+        ...findIn(a, CHESTS, around, size, 4, dy).map(pos => ({ kind: 'chest' as const, pos })),
+    ] : [];
     const c = chooseCentre({
         homeBed: h.homeBed, homeChest: h.homeChest, homeTable: h.homeTable, playerPlaced: placed, nearby,
         speaker: speakerOf(a, d.speaker()),
@@ -193,7 +209,7 @@ export function senseChores(a: Act, d: SenseDeps, last: LastRun[]): { situation:
         table: inBaseFound(TABLES), furnace: inBaseFound(FURNACES), chest: !!c.homeChest || inBaseFound(CHESTS),
         lit: litOf((x, y, z) => a.bot.blockAt(x, y, z), centre), bedMine: c.homeBed, bedPlayer: c.playerBed,
         farm: farm.farm, ready: farm.ready,
-        ...tools, shears: items.some(i => i.name === 'shears'),
+        ...tools, shears: items.some(i => i.name === 'shears'), armor: armorPoints(a.bot.worn?.() ?? []) > 0,
         carry: haveCounts(items, isFood), inChest: haveCounts(c.homeChest ? unreserved(chestItems, reserved) : [], isFood),
         free: Math.max(0, Math.min(CHORES_MAX.free, a.bot.emptySlots?.() ?? 0)),
         made: madeCounts(items),
