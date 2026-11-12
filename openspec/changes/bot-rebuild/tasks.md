@@ -309,7 +309,7 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
       dig collected some (`bot/test/gather.act.test.ts`); the twice-in-a-row count restarts with that fix. Report
       `bots/andy/logs/game-tests/bot-rebuild-6.1-2026-11-12.md`. Scope: the next 6.1 attempt runs the 16 `full`
       scenarios twice plus `chores2-no-trees` and `chores2-first-day` once each (5.6's note; not tagged `full`).
-- [ ] 6.2 First day from scratch through the first night with chores v2 and the skill models (or their rules): alive,
+- [x] 6.2 First day from scratch through the first night with chores v2 and the skill models (or their rules): alive,
       home chest set, base placed, no dead end (the same failed answer three times in a row).
       Attempt 2026-11-12 14:25–16:04 AEST: scenario `chores2-first-night` (no base chest/sign, chores on 1260 s,
       day ≥ 1, no `last_death_position`, home_chest, place chest/table/furnace done, `Base table yes furnace yes chest
@@ -322,6 +322,8 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
       the chest step right after food-low (no log trip for it at dusk), night mining only armed (sword or armour; new
       `armor` on the Tools line), Harmful adds mining at night unarmed; a found chest/table is adopted only near the base
       (a lost table/bed home keeps its spot as chores_centre); the scenario's chest may wait to the next noon (wait 1560 s).
+      Passed 2/2 in a row 2026-11-12 17:41 and 18:08 AEST (chest placed ~1.5 min in, every night ask night-rest, no
+      deaths). Report `bots/andy/logs/game-tests/bot-rebuild-6.2a-2026-11-12.md`.
 - [ ] 6.3 Measure as 1.3; write the before/after report.
 - [ ] 6.4 User accepts; `ANDY_BOT` default → new.
 
