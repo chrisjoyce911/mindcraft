@@ -5,18 +5,24 @@ import mineflayer from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import pvpPkg from 'mineflayer-pvp';
 import { Motion } from './motion.js';
+import { keepStations } from './keep.js';
 
 const { pathfinder, Movements } = pathfinderPkg;
 
 /** MAX_SAFE_DROP: the safe movements never drop further than this (the old skills.MAX_SAFE_DROP). */
 export const SAFE_MAX_DROP = 3;
 
+/** stationMovements: the pathfinder's default moves, the stations kept. */
+export function stationMovements(bot: mineflayer.Bot): unknown {
+    return keepStations(new Movements(bot) as unknown as { blocksCantBreak: Set<number> }, bot.registry);
+}
+
 /**
  * safeMovements: pathfinder moves that never drop more than SAFE_MAX_DROP blocks, jump gaps or wade through fluid
  * (mining, collecting ore; the old skills.safeMovements).
  */
 export function safeMovements(bot: mineflayer.Bot): unknown {
-    const m = new Movements(bot) as unknown as Record<string, unknown>;
+    const m = keepStations(new Movements(bot) as unknown as Record<string, unknown> & { blocksCantBreak: Set<number> }, bot.registry);
     m.liquidCost = 100;
     m.dontCreateFlow = true;
     m.allowParkour = false;
@@ -29,7 +35,7 @@ export const FARM_AVOID = ['farmland', 'wheat', 'carrots', 'potatoes', 'beetroot
 
 /** farmMovements: no parkour, no sprint, no digging, farmland and crops avoided (the old farm_actions.js movements). */
 export function farmMovements(bot: mineflayer.Bot): unknown {
-    const m = new Movements(bot) as unknown as Record<string, unknown> & { blocksToAvoid: Set<number> };
+    const m = keepStations(new Movements(bot) as unknown as Record<string, unknown> & { blocksToAvoid: Set<number>; blocksCantBreak: Set<number> }, bot.registry);
     m.allowParkour = false;
     m.allowSprinting = false;
     m.canDig = false;
@@ -80,6 +86,7 @@ export class Body extends EventEmitter {
             if (this.firstSpawnMs === null) this.firstSpawnMs = Date.now() - this.startedAt;
             const pf = bot.pathfinder as unknown as { thinkTimeout: number };
             pf.thinkTimeout = 5000;
+            (bot.pathfinder as unknown as { setMovements(m: unknown): void }).setMovements(stationMovements(bot));
             this.motion = new Motion(bot as unknown as ConstructorParameters<typeof Motion>[0], undefined, () => safeMovements(bot), () => farmMovements(bot));
             this.setState('in-game');
             this.log(`${this.opts.username} spawned.`);

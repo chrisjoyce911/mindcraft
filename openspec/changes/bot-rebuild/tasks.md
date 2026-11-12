@@ -311,6 +311,13 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
       scenarios twice plus `chores2-no-trees` and `chores2-first-day` once each (5.6's note; not tagged `full`).
 - [ ] 6.2 First day from scratch through the first night with chores v2 and the skill models (or their rules): alive,
       home chest set, base placed, no dead end (the same failed answer three times in a row).
+      Attempt 2026-11-12 14:25–16:04 AEST: scenario `chores2-first-night` (no base chest/sign, chores on 1260 s,
+      day ≥ 1, no `last_death_position`, home_chest, place chest/table/furnace done, `Base table yes furnace yes chest
+      yes`, `repeat` max 2 except interrupted; log checks `since: "before"`; not tagged `chores`, the runner would turn
+      chores on before the setup). 0/4: a died (creeper, dawn, underground after night-mine), b/c/d no chest by dawn
+      (rules v2: chest after light; dusk wood 0–1 → logs → night rules), c dug his own table and furnace on a reused
+      mine's walk (fixed: stations kept from digging, core/keep.ts), d died (zombies, night-mine). No dead end in any.
+      Blocked on chores rules v2 (laya-go). Report `bots/andy/logs/game-tests/bot-rebuild-6.2-2026-11-12.md`.
 - [ ] 6.3 Measure as 1.3; write the before/after report.
 - [ ] 6.4 User accepts; `ANDY_BOT` default → new.
 

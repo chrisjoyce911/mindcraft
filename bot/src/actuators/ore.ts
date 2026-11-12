@@ -8,6 +8,7 @@ import { floorDrop, hollowUnder, MAX_SAFE_DROP, pickUpDrop } from '../models/min
 import type { Act, ActEntity } from './bot.js';
 import { digAt } from './collect.js';
 import { hold } from './equip.js';
+import { keepBlock } from '../core/keep.js';
 import { wait } from './settle.js';
 
 export const ORE_TIMEOUT_MS = 30000;
@@ -68,6 +69,7 @@ export async function collectOreAt(a: Act, o: Vec3Like, names: readonly string[]
 export async function digBlock(a: Act, p: Vec3Like, signal: AbortSignal): Promise<boolean> {
     const b = a.bot.blockAt(p.x, p.y, p.z);
     if (!b || b.boundingBox === 'empty') return true;
+    if (keepBlock(b.name)) return false; // a base station is never dug (core/keep.ts)
     await hold(a.bot, a.bot.bestTool(p));
     const o = await digAt(a, p, signal);
     return o.ok;

@@ -2151,6 +2151,170 @@
       ]
     },
     {
+      "name": "chores2-first-night",
+      "tags": [
+        "slow",
+        "rebuild",
+        "night"
+      ],
+      "timeout": 1600000,
+      "description": "Rebuild 6.2, the first day and night from a fresh world (not tagged chores: the harness would turn chores on straight after the reset and andy would adopt the base chest before the setup removes it): a reset, the base pad's chest and sign removed (158 70 162, 159 70 162: nothing to adopt), andy with nothing, the daylight cycle on from sunrise, chores on for one whole Minecraft day and night (24000 ticks = 1200 s, waits 1260 s for lag), then /time query day. Checks: alive (no last_death_position, health ≥ 1), the night passed (day ≥ 1), home chest set (a home_chest place and a place chest run done), base placed (place crafting_table and furnace done, an ask with Base table yes furnace yes chest yes), no dead end (never the same chores run failed 3 times in a row; an interrupted run is the director taking the body and is skipped). The log checks count only entries since the before snapshot (after the setup).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/time set 0"
+        },
+        {
+          "cmd": "/gamerule doDaylightCycle true"
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/setblock 158 70 162 air"
+        },
+        {
+          "cmd": "/setblock 159 70 162 air"
+        },
+        {
+          "cmd": "/kill @e[type=item]"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "wait": 1260000
+        },
+        {
+          "cmd": "/time query day"
+        },
+        {
+          "snapshot": "dawn"
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "place",
+          "name": "last_death_position",
+          "none": true,
+          "note": "alive: andy never died"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        },
+        {
+          "type": "serverReply",
+          "match": "The time is [1-9]",
+          "note": "the night passed (day ≥ 1)"
+        },
+        {
+          "type": "place",
+          "name": "home_chest",
+          "note": "home chest set"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "chest",
+            "result": "done"
+          },
+          "since": "before"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "crafting_table",
+            "result": "done"
+          },
+          "since": "before"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "furnace",
+            "result": "done"
+          },
+          "since": "before"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ask",
+            "state": "/Base table yes furnace yes chest yes/"
+          },
+          "note": "base placed",
+          "since": "before"
+        },
+        {
+          "type": "repeat",
+          "task": "chores",
+          "match": {
+            "event": "run"
+          },
+          "key": [
+            "skill",
+            "target"
+          ],
+          "result": "failed",
+          "max": 2,
+          "except": {
+            "reason": "interrupted"
+          },
+          "note": "no dead end",
+          "since": "before"
+        }
+      ],
+      "cleanup": [
+        {
+          "cmd": "/gamerule doDaylightCycle false"
+        },
+        {
+          "cmd": "/time set 1000"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "defend-fight",
       "tags": [
         "rebuild",

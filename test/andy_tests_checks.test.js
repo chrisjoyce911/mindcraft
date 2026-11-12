@@ -106,3 +106,67 @@ test('place: andy remembers the place at exactly that block', () => {
     assert.equal(evaluate({ type: 'place', name: 'home_chest', at: '1 2 3' }, { final: {} }).ok, false);
     assert.equal(describeCheck({ type: 'place', name: 'home_chest', at: '1 2 3' }), 'andy remembers home_chest at 1 2 3');
 });
+
+test('place: anywhere, or not at all', () => {
+    const ctx = { final: { places: { home_chest: [163.5, 70, 169], spawn: [0, 64, 0] } } };
+    assert.equal(evaluate({ type: 'place', name: 'home_chest' }, ctx).ok, true);
+    assert.match(evaluate({ type: 'place', name: 'home_chest' }, ctx).reason, /home_chest at 163 70 169/);
+    assert.equal(evaluate({ type: 'place', name: 'home' }, ctx).ok, false);
+    assert.equal(evaluate({ type: 'place', name: 'last_death_position', none: true }, ctx).ok, true);
+    const died = { final: { places: { last_death_position: [10.2, 40, -3.7] } } };
+    assert.match(evaluate({ type: 'place', name: 'last_death_position', none: true }, died).reason, /last_death_position at 10 40 -4/);
+    assert.equal(evaluate({ type: 'place', name: 'last_death_position', none: true }, died).ok, false);
+    assert.equal(evaluate({ type: 'place', name: 'x', none: true }, { final: {} }).ok, false);
+    assert.equal(describeCheck({ type: 'place', name: 'home_chest' }), 'andy remembers home_chest');
+    assert.equal(describeCheck({ type: 'place', name: 'last_death_position', none: true }), 'andy does not remember last_death_position');
+});
+
+test('repeat: the same failed answer three times in a row', () => {
+    const run = (skill, target, result, time, reason) => ({ task: 'chores', event: 'run', skill, target, result, time, ...(reason ? { reason } : {}) });
+    const check = { type: 'repeat', task: 'chores', match: { event: 'run' }, key: ['skill', 'target'], result: 'failed', max: 2 };
+    const two = [run('craft', 'torch', 'failed', 't1'), { task: 'chores', event: 'ask' }, run('craft', 'torch', 'failed', 't2'), run('craft', 'torch', 'done', 't3'), run('craft', 'torch', 'failed', 't4')];
+    assert.equal(evaluate(check, { logs: two }).ok, true, JSON.stringify(evaluate(check, { logs: two })));
+    assert.match(evaluate(check, { logs: two }).reason, /longest: craft torch ×2/);
+    const three = [run('craft', 'torch', 'failed', 't1', 'stuck'), run('craft', 'torch', 'failed', 't2', 'stuck'), run('craft', 'torch', 'failed', 't3', 'stuck')];
+    const r = evaluate(check, { logs: three });
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /craft torch failed 3 times in a row \(t1, t2, t3\): stuck/);
+    // a different target breaks the run, so does a done
+    const mixed = [run('mine', 'iron', 'failed', 't1'), run('mine', 'coal', 'failed', 't2'), run('mine', 'iron', 'failed', 't3'), run('mine', 'iron', 'failed', 't4')];
+    assert.equal(evaluate(check, { logs: mixed }).ok, true);
+    // other tasks and non-run lines do not count
+    assert.equal(evaluate(check, { logs: three.map(e => ({ ...e, task: 'craft' })) }).ok, true);
+    assert.equal(evaluate({ ...check, max: 3 }, { logs: three }).ok, true);
+    assert.equal(evaluate({ ...check, result: '/fail/' }, { logs: three }).ok, false);
+    assert.equal(evaluate(check, { logs: [] }).ok, true);
+    // except: skipped entries neither count nor break a run
+    const cut = [run('hunt', 'food', 'failed', 't1', 'interrupted'), run('hunt', 'food', 'failed', 't2', 'interrupted'), run('hunt', 'food', 'failed', 't3', 'interrupted')];
+    assert.equal(evaluate({ ...check, except: { reason: 'interrupted' } }, { logs: cut }).ok, true);
+    assert.equal(evaluate(check, { logs: cut }).ok, false);
+    const through = [three[0], cut[0], three[1], three[2]];
+    assert.equal(evaluate({ ...check, except: { reason: 'interrupted' } }, { logs: through }).ok, false);
+    assert.match(describeCheck(check), /never has 3 failed entries in a row with the same skill\+target/);
+});
+
+test('log and repeat since a snapshot', () => {
+    const at = iso => ({ time: iso });
+    const ctx = {
+        snapshots: { before: { t: Date.parse('2026-11-12T04:00:10Z') } },
+        logs: [
+            { task: 'chores', event: 'ask', state: 'Base chest yes', ...at('2026-11-12T04:00:05Z') },
+            { task: 'chores', event: 'run', skill: 'craft', target: 'torch', result: 'failed', ...at('2026-11-12T04:00:06Z') },
+            { task: 'chores', event: 'run', skill: 'craft', target: 'torch', result: 'failed', ...at('2026-11-12T04:00:11Z') },
+            { task: 'chores', event: 'run', skill: 'craft', target: 'torch', result: 'failed', ...at('2026-11-12T04:00:12Z') },
+            { task: 'chores', event: 'ask', state: 'Base chest no', ...at('2026-11-12T04:00:13Z') },
+        ],
+    };
+    assert.equal(evaluate({ type: 'log', task: 'chores', match: { state: '/chest yes/' } }, ctx).ok, true);
+    const r = evaluate({ type: 'log', task: 'chores', match: { state: '/chest yes/' }, since: 'before' }, ctx);
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /since before: 0/);
+    const rep = { type: 'repeat', task: 'chores', match: { event: 'run' }, max: 2 };
+    assert.equal(evaluate(rep, ctx).ok, false);
+    assert.equal(evaluate({ ...rep, since: 'before' }, ctx).ok, true);
+    assert.match(evaluate({ ...rep, since: 'nope' }, ctx).reason, /no snapshot "nope"/);
+    assert.match(describeCheck({ type: 'log', task: 'chores', match: {}, since: 'before' }), /since before/);
+});
