@@ -13,6 +13,7 @@ import { farmWithLaya } from "../laya/farm.js";
 import { farmDeps } from "../laya/farm_actions.js";
 import { packDeps } from "../laya/pack_actions.js";
 import { huntUntil } from "../laya/hunt.js";
+import { logReachable, CollectTries, shortReason, LOG_TYPES, MAX_COLLECT_FAILURES } from "../laya/reach.js";
 import { kitIn } from "../laya/chores_state.js";
 import { mineStore } from "../laya/mine_memory.js";
 import { readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs, mkdirSync as mkdirSyncFs } from "fs";
@@ -456,7 +457,8 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         log(bot, `Invalid number of blocks to collect: ${num}.`);
         return false;
     }
-    let blocktypes = [blockType];
+    // 'log': any overworld log (the nearest reachable tree, whatever its wood)
+    let blocktypes = blockType === 'log' ? [...LOG_TYPES] : [blockType];
     if (blockType === 'coal' || blockType === 'diamond' || blockType === 'emerald' || blockType === 'iron' || blockType === 'gold' || blockType === 'lapis_lazuli' || blockType === 'redstone')
         blocktypes.push(blockType+'_ore');
     if (blockType.endsWith('ore'))
@@ -479,10 +481,24 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     // never the block under the feet with a drop of more than 3 under it
     // (a cave under a stone or ore floor): the bot would fall in
     const at = (x, y, z) => bot.blockAt(new Vec3(x, y, z));
-    for (let i=0; i<num; i++) {
+    // fix-gather-unreachable-logs: a block that failed is never chosen again
+    // in this call; only collected blocks count toward num; 5 failures in a
+    // row end it. Logs out of reach from the ground aren't candidates.
+    const tries = new CollectTries(MAX_COLLECT_FAILURES);
+    const logs = blocktypes.every(t => t.endsWith('_log'));
+    let outOfReach = 0;
+    for (let attempts = 0; collected < num && !tries.givenUp() && attempts < num + 2 * MAX_COLLECT_FAILURES; attempts++) {
         if (stopped(bot)) break;
+        outOfReach = 0;
         let blocks = world.getNearestBlocksWhere(bot, block => {
             if (!blocktypes.includes(block.name)) {
+                return false;
+            }
+            if (block.position && tries.skips(block.position)) {
+                return false;
+            }
+            if (logs && block.position && !logReachable(at, block.position)) {
+                outOfReach++;
                 return false;
             }
             // (findBlocks first asks with no position, by block type only)
@@ -505,7 +521,9 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         }, 64, 1);
 
         if (blocks.length === 0) {
-            if (collected === 0)
+            if (outOfReach || tries.failed.size)
+                log(bot, `No more ${blockType} nearby that I can reach.`);
+            else if (collected === 0)
                 log(bot, `No ${blockType} nearby to collect.`);
             else
                 log(bot, `No more ${blockType} nearby to collect.`);
@@ -541,8 +559,10 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 await bot.collectBlock.collect(block);
                 success = true;
             }
-            if (success)
+            if (success) {
                 collected++;
+                tries.ok();
+            }
             await autoLight(bot);
         }
         catch (err) {
@@ -554,6 +574,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 // an interrupt makes the dig or the path fail: stop, don't
                 // go for the next block
                 if (stopped(bot)) break;
+                tries.fail(block.position); // never this block again in this call
                 log(bot, `Failed to collect ${blockType}: ${err}.`);
                 continue;
             }
@@ -563,6 +584,9 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             break;  
     }
     log(bot, `Collected ${collected} ${blockType}.`);
+    // why it ended short, for the gather job's message (layaGatherBlocks)
+    bot._lastCollect = { collected, reason: collected >= num ? 'done'
+        : shortReason({ givenUp: tries.givenUp(), failedCount: tries.failed.size, skippedOutOfReach: outOfReach > 0 }) };
     return collected > 0;
 }
 
@@ -2285,7 +2309,14 @@ async function layaGatherBlocks(bot, g, n) {
     if (g === 'log') {
         const block = bot.findBlock({ matching: b => b.name.endsWith('_log'), maxDistance: 64 });
         if (!block) { log(bot, 'No trees nearby.'); return false; }
-        await collectBlock(bot, block.name, n);
+        // any wood: the nearest reachable log, not only the first tree's kind
+        bot._lastCollect = null;
+        await collectBlock(bot, 'log', n);
+        await pickupNearbyItems(bot);
+        const got = countOf(bot, g) - before;
+        if (got < n && bot._lastCollect?.reason === 'unreachable')
+            return got > 0 ? true : { ok: false, why: `no more logs I can reach here (I have ${countOf(bot, g)})` };
+        return got > 0;
     } else if (g === 'wheat') {
         const unripe = world.getNearestBlocksWhere(bot, b => b.name === 'wheat' && b.getProperties?.().age !== 7, 64).map(b => b.position);
         await collectBlock(bot, 'wheat', n, unripe);

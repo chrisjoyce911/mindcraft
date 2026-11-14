@@ -202,8 +202,10 @@ export async function runCraft(item, count, deps) {
         if (step.action === 'store') n = s.have[step.item] <= 64 || n >= 64 ? -1 : n; // 64 means all
         if (step.action === 'take' && chest) n = Math.min(n, chest[step.item] || n);
         const before = carried(deps.items(), step.item);
-        const ok = await deps.act[step.action](step.item, n);
-        logStep({ ...entry, outcome: ok ? 'did' : 'failed' });
+        // an act returns true/false, or {ok: false, why} to say why it failed
+        const res = await deps.act[step.action](step.item, n);
+        const ok = res && typeof res === 'object' && 'ok' in res ? !!res.ok : !!res;
+        logStep({ ...entry, outcome: ok ? 'did' : 'failed', ...(res?.why ? { why: res.why } : {}) });
         if (!ok) {
             // a failed extra step after the goal is carried doesn't undo it
             const now = situation(deps.items(), item, count, deps.near(), chest || {});
@@ -215,7 +217,7 @@ export async function runCraft(item, count, deps) {
                 chest = null;
                 continue;
             }
-            return { ok: false, reason: `${step.action} ${step.item} failed`, steps };
+            return { ok: false, reason: res?.why || `${step.action} ${step.item} failed`, steps };
         }
         if (chest && (step.action === 'store' || step.action === 'take')) {
             // what really moved (a take takes at least 8 of a material, a
