@@ -1,12 +1,12 @@
 #!/bin/zsh
-# Starts Mindcraft bots with Node 20.
-#   ./start-bot.sh         andy only (full andy-4)
-#   ./start-bot.sh micro   andy only (faster andy-4 micro)
-#   ./start-bot.sh duo     andy + bob together (full andy-4)
+# Starts andy — the NEW bot only (bot/, OpenSpec bot-rebuild). HARD RULE (user, 2026-11-14): all play and all work
+# happen in the new bot; the old bot (node main.js, src/) is never started. See CLAUDE.md.
+#   ./start-bot.sh                 your LAN world (Open to LAN)
+#   PLAY_WORLD=test ./start-bot.sh the local test world
 cd "$(dirname "$0")"
 export PATH=/opt/homebrew/opt/node@20/bin:$PATH
-case "$1" in
-  micro) exec node main.js --profiles ./profiles/andy-micro.json ;;
-  duo)   exec node main.js --profiles ./andy.json ./profiles/bob.json ;;
-  *)     exec node main.js --profiles ./andy.json ;;
-esac
+if [ ! -f bot/dist/src/main.js ]; then
+  echo "New bot not built: (cd bot && npm run build)" >&2
+  exit 1
+fi
+exec node tools/play/new-bot.mjs "$@"

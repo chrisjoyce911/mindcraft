@@ -343,7 +343,11 @@ after the next craft promotion (craft-t178, promoted 11:46, is untried). Report
       Passed 2/2 in a row 2026-11-12 17:41 and 18:08 AEST (chest placed ~1.5 min in, every night ask night-rest, no
       deaths). Report `bots/andy/logs/game-tests/bot-rebuild-6.2a-2026-11-12.md`.
 - [ ] 6.3 Measure as 1.3; write the before/after report.
-- [ ] 6.4 User accepts; `ANDY_BOT` default → new.
+- [x] 6.4 User accepts; `ANDY_BOT` default → new.
+      **Accepted 2026-11-14 AEST** as a hard rule (user: "all gameplay must be in the new bot, all work must be in the
+      new bot"; it can't be altered). `ANDY_BOT` defaults to new (`tools/test-world/lib/bot.js`; old only names
+      main.js for 6.3's measurement); `start-bot.sh` starts the new bot through `tools/play/new-bot.mjs`; `CLAUDE.md`
+      states the rule. 6.3's measurement is still open.
 
 Done means: 6.1–6.3 pass and the user says go.
 
