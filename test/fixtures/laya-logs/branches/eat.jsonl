@@ -1,0 +1,7 @@
+{"time":"2026-11-11T15:45:53.199Z","state":"Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\nbread x4 5 6.0\ngolden_apple x1 4 9.6 rare","outcome":"fallback","reason":"no-answer"}
+{"time":"2026-11-11T15:45:53.200Z","state":"Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\nbread x4 5 6.0\ngolden_apple x1 4 9.6 rare","eat":0.9,"food":"bread","p":0.3,"ms":2,"outcome":"fallback","reason":"low-confidence"}
+{"time":"2026-11-11T15:45:53.200Z","state":"Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\nbread x4 5 6.0\ngolden_apple x1 4 9.6 rare","eat":0.9,"food":"none","p":0.9,"ms":2,"outcome":"fallback","reason":"disagree"}
+{"time":"2026-11-11T15:45:53.200Z","state":"Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\nbread x4 5 6.0\ngolden_apple x1 4 9.6 rare","eat":0.9,"food":"golden_apple","p":0.9,"ms":2,"veto":"rare","outcome":"fallback","reason":"veto"}
+{"time":"2026-11-11T15:45:53.200Z","state":"Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\nbread x4 5 6.0\ngolden_apple x1 4 9.6 rare","eat":0.1,"food":"none","p":0.9,"ms":2,"outcome":"no-eat"}
+{"time":"2026-11-11T15:45:53.201Z","state":"Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\nbread x4 5 6.0\ngolden_apple x1 4 9.6 rare","eat":0.9,"food":"bread","p":0.9,"ms":2,"outcome":"ate"}
+{"time":"2026-11-11T15:45:53.201Z","state":"Eat.\nHealth 14 Food 12 Saturation 0.0 Danger no\nbread x4 5 6.0\ngolden_apple x1 4 9.6 rare","eat":0.9,"food":"bread","p":0.9,"ms":2,"outcome":"eat-failed"}

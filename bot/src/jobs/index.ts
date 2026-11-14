@@ -1,0 +1,67 @@
+// The jobs (4.2: follow, come, stay, give, store, home; 5.1: craft, gather; 5.2: mine; 5.3: farm; 5.4: hunt; 5.5: the
+// hunt, gather and place skills). makeRunner
+// builds a job's runner; null for the kinds that arrive later (eat as a job: not yet).
+import type { JobState, JobStepper } from '../types/index.js';
+import type { JobDeps, JobOf } from './deps.js';
+import { followRunner } from './follow.js';
+import { comeRunner } from './come.js';
+import { stayRunner } from './stay.js';
+import { giveRunner } from './give.js';
+import { storeRunner } from './store.js';
+import { homeRunner } from './home.js';
+import { craftRunner } from './craft.js';
+import { mineRunner } from './mine.js';
+import { farmRunner } from './farm.js';
+import { huntRunner } from './hunt.js';
+import { huntFoodRunner } from './huntFood.js';
+import { gatherSkillRunner } from './gatherSkill.js';
+import { placeRunner } from './place.js';
+import { bedRunner, cobbleRunner, cookRunner, intoKitRunner, kitRunner, restRunner, sleepRunner, unloadRunner } from './chores.js';
+
+export * from './deps.js';
+export { summary, newCounters, followRunner, type FollowCounters, type FollowStepper } from './follow.js';
+export { craftRunner, craftStep, makeItem, type CraftWorld, type CraftProgress, type CraftRunContext } from './craft.js';
+export { jobFailedMessage } from './message.js';
+export { mineRunner, MineRun, mineSummary, newMineCounters, type MineWorld, type MineProgress, type MineRunContext, type MineCounters, type MineEnd, type MineStep } from './mine.js';
+export { mineWorld, homeFinder, makeOrCraft } from './mineWorld.js';
+export { farmRunner, FarmRun, farmSummary, newFarmCounters, FARM_OFF, type FarmWorld, type FarmProgress, type FarmRunContext, type FarmCounters, type FarmEnd, type FarmStep } from './farm.js';
+export { farmWorld } from './farmWorld.js';
+export { huntRunner, huntStep, maxTries, type HuntWorld, type HuntProgress, type HuntRunContext } from './hunt.js';
+export { huntWorld } from './huntWorld.js';
+export { huntFoodRunner, huntFoodStep, type HuntFoodWorld, type HuntFoodProgress } from './huntFood.js';
+export { gatherSkillRunner, gatherSkillStep, gatherSteps, type GatherSkillWorld, type GatherSkillProgress } from './gatherSkill.js';
+export { placeRunner, placeStep, type PlaceWorld } from './place.js';
+export { skillWorld } from './skillWorld.js';
+export * from './chores.js';
+export { STUCK_REPEATS, SEED_STEPS_PER_ITEM, STEPS_PER_ITEM, maxSkillSteps } from './skill.js';
+
+export function makeRunner(job: JobState, deps: JobDeps): JobStepper | null {
+    const s = job.spec;
+    switch (s.kind) {
+        case 'follow': return followRunner(job as JobOf<'follow'>, deps);
+        case 'come': return comeRunner(job as JobOf<'come'>, deps);
+        case 'stay': return stayRunner(job as JobOf<'stay'>, deps);
+        case 'give': return giveRunner(job as JobOf<'give'>, deps);
+        case 'store': return storeRunner(job as JobOf<'store'>, deps);
+        case 'home': return homeRunner(job as JobOf<'home'>, deps);
+        case 'craft': {
+            const j = job as JobOf<'craft'>;
+            if (j.spec.item === 'bed') return bedRunner(j, deps);
+            return j.spec.into === 'kit' ? intoKitRunner(j, deps) : craftRunner(j, deps);
+        }
+        case 'gather': return craftRunner(job as JobOf<'gather'>, deps);
+        case 'mine': return mineRunner(job as JobOf<'mine'>, deps);
+        case 'farm': return farmRunner(job as JobOf<'farm'>, deps);
+        case 'hunt': return huntRunner(job as JobOf<'hunt'>, deps);
+        case 'huntFood': return huntFoodRunner(job as JobOf<'huntFood'>, deps);
+        case 'gatherSkill': return gatherSkillRunner(job as JobOf<'gatherSkill'>, deps);
+        case 'place': return placeRunner(job as JobOf<'place'>, deps);
+        case 'cook': return cookRunner(job as JobOf<'cook'>, deps);
+        case 'unload': return unloadRunner(job as JobOf<'unload'>, deps);
+        case 'kit': return kitRunner(job as JobOf<'kit'>, deps);
+        case 'sleep': return sleepRunner(job as JobOf<'sleep'>, deps);
+        case 'rest': return restRunner(job as JobOf<'rest'>, deps);
+        case 'cobble': return cobbleRunner(job as JobOf<'cobble'>, deps);
+        default: return null;
+    }
+}

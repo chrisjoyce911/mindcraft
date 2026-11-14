@@ -2,7 +2,7 @@
 // game scenarios send them. Parsed into the same typed Command the command model produces; nothing
 // is evaluated. Kept: the 18 commands the command model emits (Q10). Grammar and argument checks
 // as src/agent/commands/index.js parseCommandMessage.
-import { ORES, CROPS, type Command, type Ore, type Crop } from '../types/index.js';
+import { ORES, CROPS, GATHER_GOALS, PLACE_ITEMS, type Command, type Ore, type Crop, type GatherGoal, type PlaceItem } from '../types/index.js';
 
 const commandRegex = /!(\w+)(?:\(((?:-?\d+(?:\.\d+)?|true|false|"[^"]*")(?:\s*,\s*(?:-?\d+(?:\.\d+)?|true|false|"[^"]*"))*)\))?/;
 const argRegex = /-?\d+(?:\.\d+)?|true|false|"[^"]*"/g;
@@ -60,6 +60,19 @@ export const LEGACY_COMMANDS: Record<string, Spec> = {
     putInChest: { params: [P('item_name', 'ItemName'), P('num', 'int', { domain: [1, Number.MAX_SAFE_INTEGER] })],
         build: a => ({ kind: 'job', job: { kind: 'store', item: s(a[0]), count: n(a[1]) } }) },
     consume: { params: [P('item_name', 'ItemName')], build: a => ({ kind: 'job', job: { kind: 'eat', item: s(a[0]) } }) },
+    // 5.5's skill jobs: harness and test entries only (chores, 5.6, is their real caller). layaGather stays the 5.1
+    // craft-model gather, so the gather skill's trigger is layaGatherSkill.
+    layaHunt: { params: [P('goal', 'int', { domain: [1, 1000] })], build: a => ({ kind: 'job', job: { kind: 'huntFood', goal: n(a[0]) } }) },
+    layaGatherSkill: { params: [P('target', 'string'), P('goal', 'int', { domain: [1, 1000] })], build: a => {
+        const t = s(a[0]);
+        if (!(GATHER_GOALS as readonly string[]).includes(t)) return `Error: unknown gather target ${t} (${GATHER_GOALS.join(', ')}).`;
+        return { kind: 'job', job: { kind: 'gatherSkill', target: t as GatherGoal, goal: n(a[1]) } };
+    } },
+    layaPlace: { params: [P('item', 'string')], build: a => {
+        const t = s(a[0]);
+        if (!(PLACE_ITEMS as readonly string[]).includes(t)) return `Error: unknown place item ${t} (${PLACE_ITEMS.join(', ')}).`;
+        return { kind: 'job', job: { kind: 'place', item: t as PlaceItem } };
+    } },
 };
 
 export function containsLegacyCommand(message: string): boolean {

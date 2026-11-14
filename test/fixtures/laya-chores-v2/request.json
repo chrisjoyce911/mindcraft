@@ -1,0 +1,59 @@
+{
+  "questions": {
+    "Skill": {
+      "criteria": [
+        "hunt",
+        "farm",
+        "gather",
+        "mine",
+        "craft",
+        "place",
+        "cook",
+        "store",
+        "sleep",
+        "ask",
+        "rest"
+      ],
+      "instructions": "Which skill should I use next?",
+      "type": "choice"
+    },
+    "Target": {
+      "criteria": [
+        "food",
+        "logs",
+        "seeds",
+        "wool",
+        "saplings",
+        "cobble",
+        "coal",
+        "iron",
+        "start",
+        "tend",
+        "crafting_table",
+        "furnace",
+        "chest",
+        "bed",
+        "torch",
+        "wooden_axe",
+        "wooden_pickaxe",
+        "wooden_hoe",
+        "wooden_shovel",
+        "wooden_sword",
+        "stone_axe",
+        "stone_pickaxe",
+        "stone_shovel",
+        "stone_sword",
+        "iron_axe",
+        "iron_pickaxe",
+        "iron_shovel",
+        "iron_sword",
+        "unload",
+        "kit",
+        "none"
+      ],
+      "instructions": "On what?",
+      "type": "choice"
+    }
+  },
+  "state": "Chores.\nTime day Home chest Biome forest\nBase table yes furnace no chest yes lit no beds mine no player no\nFarm yes ready no\nTools axe stone pickaxe wooden sword none hoe none shovel none shears no armor no\nCarry wood 3 sticks 2 cobble 12 coal 0 iron 0 torches 0 food 4 raw 2 wool 0 seeds 0 saplings 1 free 20\nChest wood 40 sticks 0 cobble 60 coal 12 iron 0 torches 0 food 6 raw 0 wool 0 seeds 8 saplings 0\nMade table 0 furnace 0 chest 0 bed 0\nKit pickaxe stone axe stone shovel none sword stone food 3 torches 16\nNear trees 49 stone 49 coal 97 iron none grass 49 water 49\nAnimals cow 49 pig none sheep 97 chicken none rabbit none\nGround saplings 2\nCan place yes smelt yes\nLast craft stone_sword failed:missing_sticks 1 hunt food done 3"
+}

@@ -36,6 +36,18 @@ function snap(ctx, name) {
 
 const fmtPos = p => (p ? `${p.x} ${p.y} ${p.z}` : '?');
 
+// logsOf: the laya entries of a task (any task without one), only those
+// logged at or after snapshot c.since when given (e.g. "before": after the
+// setup, so a reset's or the setup's own entries don't count).
+function logsOf(c, ctx) {
+    let logs = (ctx.logs || []).filter(e => !c.task || e.task === c.task);
+    if (c.since != null) {
+        const t0 = snap(ctx, c.since).t;
+        logs = logs.filter(e => Date.parse(e.time) >= t0);
+    }
+    return logs;
+}
+
 export const CHECKS = {
     // {item, min, max, since ('before'), absolute}
     inventory(c, ctx) {
@@ -63,17 +75,18 @@ export const CHECKS = {
         if (c.none) return hit ? { ok: false, reason: `andy said "${hit}"` } : { ok: true, reason: `no /${c.match}/` };
         return hit ? { ok: true, reason: `"${hit}"` } : { ok: false, reason: `no reply /${c.match}/ (andy said: ${(ctx.chat || []).slice(-5).map(l => `"${l}"`).join(', ') || 'nothing'})` };
     },
-    // {task, match, min (1), max, before}: with before (a match), only the
-    // entries logged before the first entry matching it count, and that entry
-    // must exist (so "collect steps came before the first down step").
+    // {task, match, min (1), max, before, since}: with before (a match), only
+    // the entries logged before the first entry matching it count, and that
+    // entry must exist (so "collect steps came before the first down step");
+    // since: a snapshot label, only entries from then on count.
     log(c, ctx) {
-        let logs = (ctx.logs || []).filter(e => !c.task || e.task === c.task);
-        let upTo = '';
+        let logs = logsOf(c, ctx);
+        let upTo = c.since != null ? ` since ${c.since}` : '';
         if (c.before != null) {
             const i = logs.findIndex(e => matches(e, c.before));
             if (i < 0) return { ok: false, reason: `no laya-${c.task || '*'} entry matching ${JSON.stringify(c.before)} to count before` };
             logs = logs.slice(0, i);
-            upTo = ` before the first ${JSON.stringify(c.before)}`;
+            upTo += ` before the first ${JSON.stringify(c.before)}`;
         }
         const n = logs.filter(e => matches(e, c.match)).length;
         const want = { min: c.min ?? (c.max == null ? 1 : null), max: c.max };
@@ -133,15 +146,52 @@ export const CHECKS = {
         if (c.none) return hit ? { ok: false, reason: `the server said "${hit}"` } : { ok: true, reason: `server never said /${c.match}/` };
         return hit ? { ok: true, reason: `"${hit}"` } : { ok: false, reason: `server never said /${c.match}/ (said: ${(ctx.serverReplies || []).slice(-4).map(l => `"${l}"`).join(', ') || 'nothing'}). Are cheats on for tester?` };
     },
-    // {name, at: "x y z"}: andy remembers the place name at exactly at (at
-    // the end of the test), e.g. the home chest a chat message set
+    // {name, at: "x y z" (optional), none: true → andy must not remember it}:
+    // andy remembers the place name (at the end of the test), at exactly at
+    // when given, e.g. the home chest a chat message set; none: e.g. no
+    // last_death_position (andy never died)
     place(c, ctx) {
         const places = ctx.final?.places;
         if (!places) return { ok: false, reason: "andy's places were not read" };
         const p = places[c.name];
-        if (!Array.isArray(p)) return { ok: false, reason: `no place ${c.name} (places: ${Object.keys(places).join(', ') || 'none'})` };
-        const got = p.map(Math.floor).join(' ');
+        const has = Array.isArray(p);
+        const got = has ? p.map(Math.floor).join(' ') : null;
+        if (c.none) return has ? { ok: false, reason: `${c.name} at ${got}` } : { ok: true, reason: `no place ${c.name}` };
+        if (!has) return { ok: false, reason: `no place ${c.name} (places: ${Object.keys(places).join(', ') || 'none'})` };
+        if (c.at == null) return { ok: true, reason: `${c.name} at ${got}` };
         return got === c.at ? { ok: true, reason: `${c.name} at ${got}` } : { ok: false, reason: `${c.name} at ${got}, wanted ${c.at}` };
+    },
+    // {task, match, key: [fields] (["skill", "target"]), result: wanted value
+    // of `field` ("failed"), field ("result"), max (2)}: no dead end. Among the
+    // entries matching match, in order, fails when more than max in a row
+    // share the key and all have field = result (the same failed answer
+    // max + 1 times in a row). A result value may be "/regex/". except (a
+    // match): entries matching it are skipped (they neither count nor break
+    // a run), e.g. {reason: "interrupted"}: the director took the body, the
+    // answer did not fail. since: a snapshot label, as for log.
+    repeat(c, ctx) {
+        const key = c.key || ['skill', 'target'];
+        const field = c.field || 'result';
+        const want = c.result ?? 'failed';
+        const max = c.max ?? 2;
+        const get = (e, k) => k.split('.').reduce((o, q) => o?.[q], e);
+        const logs = logsOf(c, ctx).filter(e => matches(e, c.match) && !(c.except != null && matches(e, c.except)));
+        let run = [], worst = [];
+        for (const e of logs) {
+            const k = JSON.stringify(key.map(f => get(e, f) ?? null));
+            if (!matchValue(get(e, field), want)) { run = []; continue; }
+            if (run.length && run[0].k !== k) run = [];
+            run.push({ k, e });
+            if (run.length > worst.length) worst = run.slice();
+            if (run.length > max) {
+                const what = key.map(f => get(e, f)).join(' ');
+                const times = run.map(r => r.e.time || '?').join(', ');
+                const why = [...new Set(run.map(r => r.e.reason).filter(Boolean))].join(' | ');
+                return { ok: false, reason: `laya-${c.task || '*'} ${what} ${get(e, field)} ${run.length} times in a row (${times})${why ? `: ${why}` : ''}` };
+            }
+        }
+        const top = worst.length ? ` (longest: ${key.map(f => get(worst[0].e, f)).join(' ')} ×${worst.length})` : '';
+        return { ok: true, reason: `no ${max + 1} same ${want} answers in a row among ${logs.length} laya-${c.task || '*'} entries${top}` };
     },
     // {block (name or /regex/), near: "andy" (default) | "x y z", radius (6),
     // min (1), max}: blocks of that kind within radius at the end of the
@@ -176,14 +226,15 @@ export function describeCheck(c) {
     case 'chest': return `chest at ${c.at} ${c.delta ? 'gains' : 'holds'} ${c.item} ${range()}`;
     case 'idle': return 'andy finishes before the timeout';
     case 'reply': return c.none ? `andy never says /${c.match}/` : `andy says /${c.match}/`;
-    case 'log': return `laya-${c.task || '*'} log has ${c.min ?? 1}+ entries matching ${JSON.stringify(c.match ?? {})}${c.before != null ? ` before the first ${JSON.stringify(c.before)}` : ''}`;
+    case 'log': return `laya-${c.task || '*'} log has ${c.min ?? 1}+ entries matching ${JSON.stringify(c.match ?? {})}${c.since != null ? ` since ${c.since}` : ''}${c.before != null ? ` before the first ${JSON.stringify(c.before)}` : ''}`;
     case 'position': return `andy's ${c.axis || 'y'} ${c.during ? `(${c.during} during the test) ` : ''}changes by ${range()}`;
     case 'near': return `andy ends ${range(' blocks')} from tester`;
     case 'stat': return `andy's ${c.field} ${c.since ? `changes since ${c.since} by` : 'is'} ${range()}`;
     case 'noEntity': return `no ${c.entity} near andy at the end`;
     case 'actionSeen': return c.final ? `andy is doing /${c.match}/ at the end` : `andy's action /${c.match}/ is seen`;
     case 'serverReply': return c.none ? `the server never replies /${c.match}/` : `the server replies /${c.match}/`;
-    case 'place': return `andy remembers ${c.name} at ${c.at}`;
+    case 'place': return c.none ? `andy does not remember ${c.name}` : `andy remembers ${c.name}${c.at != null ? ` at ${c.at}` : ''}`;
+    case 'repeat': return `laya-${c.task || '*'}${c.since != null ? ` since ${c.since}` : ''} never has ${(c.max ?? 2) + 1} ${c.result ?? 'failed'} entries in a row with the same ${(c.key || ['skill', 'target']).join('+')}`;
     case 'block': return `${c.block} blocks within ${c.radius ?? 6} of ${c.near || 'andy'} at the end: ${range() || '≥ 1'}`;
     default: return JSON.stringify(c);
     }

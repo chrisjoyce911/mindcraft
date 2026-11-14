@@ -175,6 +175,15 @@ A single async loop in `director/loop.ts`:
 A player command replaces the top job (today's `replaceTop`); a safety activity pauses it; when the activity ends the
 director answers `resume` and the job continues from its `progress`.
 
+**Holds (the only "when to act" rules outside the models).** They limit how fast an answer is acted on; none picks a
+different activity. Each held answer is logged with `acted`.
+
+| Hold | Trigger | Holds | Timeout | Broken by |
+|---|---|---|---|---|
+| defend quiet (`acted: quiet`) | the defend activity ended `ignore` (the old LayaDefender's quiet after ignore) | the director's `defend` answer | `defend.quiet_ms` in settings (default 3000 ms) | a `hurt` event (a hit is news) |
+| restart hold (`acted: hold`) | a safety activity ended by itself (not stopped) | the same activity for the same answer, so the answer and the activity's own end check can't loop | 1 s (`RESTART_HOLD_MS`); the next tick acts | a `hurt` event |
+| eat-refused (`acted: eat-refused`) | the eat activity ended `no-eat` (the eat model refused) | the director's `eat` answer; nothing runs, a paused job is not resumed (open item in tasks.md 3.4) | 30 s (`EAT_REFUSED_HOLD_MS`) or food drops below the level it refused at | stop, death |
+
 ### 5.3 Modes are replaced by director decisions
 
 | Old mode | Replacement |
@@ -207,6 +216,12 @@ harness (`forgetAgent` deletes `memory.json` and writes `laya-chores.json` as `{
 | `laya-mines.json` | mine memory list | `skills.js` | same |
 | `laya-job.json` | the job stack | fix-round4 (new) | same file, typed: `{savedAt, entries:[{spec, origin, progress, status}]}` |
 
+**Chores at the start (6.2b):** `settings.chores` defaults on (only `chores: false` turns it off). The harness's
+`forgetAgent` writes `{"on":false,"by":"test-harness"}`, and only the harness's launch (`ANDY_TEST_HARNESS=1`, set by
+`tools/test-world/lib/bot.js`) heeds that mark (and keeps it on its saves). Every other start (`tools/play/new-bot.mjs`,
+the normal start after the cut-over) takes `on` from the settings instead; a file a player wrote ("take a break", no
+mark) is kept as it says. The old bot ignores the extra key.
+
 All writes are atomic (temp + rename). On start, a stack saved less than 10 min ago is restored **paused** and the
 director resumes it (fix-round4's behaviour, generalised to every job type via typed `progress`); older, andy says
 which job was lost.
@@ -228,7 +243,9 @@ old bot and the new for each file (same state text, same keys). The console log 
   sets.
 - **Batching:** the director, eat and defend questions are asked in one `/v1/decisions` request per tick when more than
   one is due (the API already takes several questions; separate tasks → parallel requests with one shared deadline).
-- Timeouts as settings today (300 ms most, craft 2 s).
+- Timeouts from measured latency (2026-11-12: p50 49–346 ms, max 417 ms idle; 2–4 s while the Studio trains): 5 s
+  per request when a task sets none; a task's `timeout_ms` below 2.5 s (the old 300 ms / 2 s settings) is raised to
+  2.5 s and logged once. Callers never block the tick on an answer.
 
 ## 7. Efficiency (measure before and after)
 
@@ -248,7 +265,7 @@ Measured with the same test world, same seed, LLM off, by `tools/andy-tests` plu
 
 - TypeScript 5, `strict`, `noUncheckedIndexedAccess`; ESM; Node 22. Build with `tsc` to `bot/dist` (no bundler);
   dev with `tsx`. Tests with `node --test` on compiled output (same runner as today) or `vitest` — see questions.
-- Dependencies kept: `mineflayer` (4.33.0 + our patch), `mineflayer-pathfinder` (+patch), `minecraft-data` (+patch),
+- Dependencies kept: `mineflayer` (4.39.0 + our patch; 4.33.0 until 3.4), `mineflayer-pathfinder` (+patch), `minecraft-data` (+patch),
   `prismarine-item`, `vec3`, `socket.io` (harness), `mineflayer-pvp` (+patch) only if the attack actuator keeps it.
   Dropped: all LLM SDKs, `ses`, `canvas`, `node-canvas-webgl`, `three`, `prismarine-viewer`, `express` (the minimal status page, Q7, is served by
   the harness's own HTTP server), `google-translate-api-x`, `cheerio`, `mineflayer-collectblock`, `mineflayer-auto-eat`,
@@ -257,6 +274,10 @@ Measured with the same test world, same seed, LLM off, by `tools/andy-tests` plu
 - (Phase 2 finding, 2026-11-11) The old bot actually runs mineflayer 4.39.0 + minecraft-data 3.119.0 (since 2026-11-09);
   the 4.33.0 patch doesn't apply there. minecraft-data 3.97 can't be pinned with today's prismarine packages. Node is 20
   (the test world launches node@20), not 22. See `bots/andy/logs/game-tests/bot-rebuild-baseline-2026-11-11.md`.
+- (3.4, 2026-11-12, Q4 resolved) `bot/` pins mineflayer 4.39.0 with minecraft-data 3.119.0. On 4.33 any damage kicked
+  the bot (`invalid_player_movement`); on 4.39 it stays connected. The regenerated `bot/patches/mineflayer+4.39.0.patch`
+  keeps only the tool-material fix (`incorrect_for_wooden_tool` → `mineable/pickaxe` in digTime) and the 500 ms place
+  timeout; 4.39 already has the water dig-time and use_item rotation fixes upstream.
 
 ## 9. Migration
 
@@ -274,7 +295,7 @@ tasks.md for phases and "done means".
 | Harness drift (MCP tools break) | harness contract spec + the existing `test/andy_tests_*` run against both bots |
 | TypeScript slows iteration with parallel tabs | old bot keeps getting fixes until cut-over; port fixes forward per phase |
 | Two codebases for a while | time-box: cut-over target after phase 5; old `src/` deleted in phase 7 |
-| mineflayer upgrade temptation | pin 4.33.0 + patches for the rebuild; upgrade is a separate change |
+| mineflayer upgrade temptation | pin 4.39.0 + a small patch for the rebuild (Q4, 3.4); a further upgrade is a separate change |
 
 ## 10a. Decisions (user, 2026-11-11: all recommendations in questions.md accepted)
 
@@ -282,7 +303,7 @@ tasks.md for phases and "done means".
 - `tsc` → `bot/dist`, with `tsx` for development.
 - `node --test` on the compiled output.
 - `bot/` has its own `package.json` until phase 7.
-- mineflayer stays pinned at 4.33.0 with today's patches.
+- mineflayer is pinned (4.33.0 with today's patches until 3.4; then 4.39.0 with a small regenerated patch, Q4).
 - prismarine-viewer is dropped.
 - `mineflayer-pvp` is kept at first.
 

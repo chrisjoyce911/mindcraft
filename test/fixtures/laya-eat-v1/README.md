@@ -1,3 +1,5 @@
 # laya-go eat prompt v1 golden request
 
 `request.json` is laya-go's `games/eat/prompt/testdata/v1_sample_request.json`, copied at laya-go commit `bd82a6a` (branch `minecraft`). It is the request for a bot with health 14, food 12, saturation 0, no danger, carrying 3 apples, 1 golden apple and 2 rotten flesh, in that order. If laya-go bumps the eat prompt version, copy the new golden request here and update `src/agent/laya/eat_state.js`.
+
+`decisions.jsonl`: 1000 situations from laya-go `games/eat/generate.Situations(7, 1000)` (seed 7) at laya-go commit `3a8fe4c` (branch `minecraft`), one row each: `state` (`prompt.State`), `questions` (`prompt.Questions`), and `rules.Decide`'s `eat`, `food` (the food word, `none` when not eating) and `rule`. All 9 rules are exercised. They were written by a throwaway Go program importing laya-go through a `replace` directive (laya-go's tree untouched). bot/test/eat.test.ts checks the new bot's renderer, questions and rules against every row. The request.json above still equals laya-go `3a8fe4c`'s sample (normalised JSON compare, 2026-11-12).

@@ -238,13 +238,14 @@ test('bot settings: the test world over settings.js, local overrides, node first
     assert.equal(c.env.MINECRAFT_PORT, '25566');
     assert.equal(c.env.MINDSERVER_PORT, '8091');
     assert.equal(c.env.PATH, '/opt/node20/bin:/usr/bin');
+    assert.equal(c.env.ANDY_TEST_HARNESS, '1', 'the harness launch says so (the new bot heeds its chores off only then)');
     assert.deepEqual(parseBotArgs(['--background', '-p', 'a.json', 'b.json']), { profiles: ['a.json', 'b.json'], background: true, stop: false, print: false });
     assert.deepEqual(parseBotArgs([]).profiles, ['./andy.json']);
     assert.throws(() => parseBotArgs(['--nope']), /unknown option/);
 });
 
-test('ANDY_BOT picks the bot: old (default) runs main.js, new runs the rebuilt bot', () => {
-    assert.equal(botEntry(undefined), 'main.js');
+test('ANDY_BOT picks the bot: new (default, user hard rule 2026-11-14) runs the rebuilt bot, old runs main.js', () => {
+    assert.equal(botEntry(undefined), NEW_BOT_ENTRY);
     assert.equal(botEntry('old'), 'main.js');
     assert.equal(botEntry('NEW'), NEW_BOT_ENTRY);
     assert.throws(() => botEntry('both'), /ANDY_BOT must be new or old/);

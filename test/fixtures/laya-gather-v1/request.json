@@ -1,0 +1,19 @@
+{
+  "questions": {
+    "Action": {
+      "criteria": [
+        "cut",
+        "shear",
+        "kill",
+        "approach",
+        "collect",
+        "search",
+        "done",
+        "give_up"
+      ],
+      "instructions": "What should I do next to gather?",
+      "type": "choice"
+    }
+  },
+  "state": "Gather.\nGoal logs 16 have 4\nSource tree 3 7 E\nDrops 3 2 N\nShears no Free 20\nSearch 49"
+}

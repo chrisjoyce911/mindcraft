@@ -104,6 +104,9 @@ export async function runStep(step, ctx) {
         case 'waitFor': {
             const r = await waitStep(step, ctx, () => stateTest(v, s.mind.state()), budget(60000));
             if (!r.ok) throw new StepFailed(waitFailure(r, `${JSON.stringify(v)} was still not true`) || `timed out waiting for ${JSON.stringify(v)}`);
+            // the state that met it is part of this step's timeline (it may have come in before the action began:
+            // a chore that starts at once during setup), so actionSeen sees what waitFor saw
+            { const st = s.mind.state(); if (st && s._onState) s._onState(st, s.now()); }
             break;
         }
         case 'waitReply': {
@@ -156,7 +159,10 @@ export async function runStep(step, ctx) {
             const r = await s.siteTp(o.name, { who: o.who || 'both' });
             if (r.skipped) { out.push(`skipped: ${r.reason}`); break; }
             out.push(`at ${r.at.x} ${r.at.y} ${r.at.z}`);
-            if ((o.who || 'both') !== 'tester') await ctx.anchor();
+            // the site block itself is the anchor: andy's floored position after the tp can be a block low (standing
+            // on farmland, 15/16 tall, a farm test left there) or a step off, and a farm patch built one block low sits
+            // level with the lake beside the farm site, which floods the wheat (bot-rebuild 5.3)
+            if ((o.who || 'both') !== 'tester') Object.assign(ctx.vars, { x: Math.floor(r.at.x), y: Math.floor(r.at.y), z: Math.floor(r.at.z) });
             break;
         }
         default: throw new Error(`unknown step ${JSON.stringify(step)}`);

@@ -2,11 +2,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLegacy, LEGACY_COMMANDS } from '../src/harness/legacy.js';
 
-test('the 18 command-model commands are the legacy set (Q10)', () => {
+test('the 18 command-model commands are the legacy set (Q10), plus the 5.5 skill triggers (harness only)', () => {
     assert.deepEqual(Object.keys(LEGACY_COMMANDS).sort(), [
         'attack', 'collectBlocks', 'consume', 'craftRecipe', 'followPlayer', 'givePlayer', 'goToPlayer', 'hunt', 'inventory',
-        'layaChores', 'layaCraft', 'layaFarm', 'layaGather', 'layaMine', 'putInChest', 'setHomeChest', 'stay', 'stop',
+        'layaChores', 'layaCraft', 'layaFarm', 'layaGather', 'layaGatherSkill', 'layaHunt', 'layaMine', 'layaPlace', 'putInChest', 'setHomeChest', 'stay', 'stop',
     ]);
+});
+
+test('5.5 skill triggers: layaHunt, layaGatherSkill, layaPlace (typed targets; unknown ones refused)', () => {
+    assert.deepEqual(parseLegacy('!layaHunt(4)'), { kind: 'job', job: { kind: 'huntFood', goal: 4 } });
+    assert.deepEqual(parseLegacy('!layaGatherSkill("logs", 8)'), { kind: 'job', job: { kind: 'gatherSkill', target: 'logs', goal: 8 } });
+    assert.deepEqual(parseLegacy('!layaPlace("furnace")'), { kind: 'job', job: { kind: 'place', item: 'furnace' } });
+    assert.match(String(parseLegacy('!layaGatherSkill("stone", 8)')), /unknown gather target stone/);
+    assert.match(String(parseLegacy('!layaPlace("anvil")')), /unknown place item anvil/);
+    // layaGather stays the 5.1 craft-model gather
+    assert.deepEqual(parseLegacy('!layaGather("oak_log", 4)'), { kind: 'job', job: { kind: 'gather', item: 'oak_log', count: 4 } });
 });
 
 test('the lines the game scenarios and andy_command send', () => {

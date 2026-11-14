@@ -251,6 +251,47 @@
       ]
     },
     {
+      "name": "gather-logs",
+      "tags": [
+        "rebuild",
+        "craft"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "Andy with only a wooden axe is asked in chat for 4 logs: the craft loop gathers them from the nearest tree (any wood) and picks them up.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_axe 1"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy get 4 logs"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "/_log$/",
+          "min": 4
+        },
+        {
+          "type": "idle"
+        }
+      ]
+    },
+    {
       "name": "home-chest-sign",
       "tags": [
         "full",
@@ -400,6 +441,250 @@
           "name": "home_chest",
           "at": "{x-3} {y} {z}",
           "note": "the chest itself must be saved: a reply alone doesn't count"
+        }
+      ]
+    },
+    {
+      "name": "come",
+      "tags": [
+        "rebuild",
+        "follow"
+      ],
+      "timeout": 60000,
+      "grace": 2000,
+      "requires": [
+        "command"
+      ],
+      "description": "Tester stands 10 blocks east of andy and chats \"andy come here\" (command model: come → goToPlayer, reply \"On my way.\"); andy walks over once and says \"You have reached tester.\", ending within 3 blocks.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 10
+          }
+        }
+      ],
+      "action": [
+        {
+          "say": "andy come here"
+        },
+        {
+          "waitFor": {
+            "action": "goToPlayer"
+          },
+          "timeout": 30000
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "On my way"
+        },
+        {
+          "type": "reply",
+          "match": "You have reached {tester}"
+        },
+        {
+          "type": "actionSeen",
+          "match": "goToPlayer"
+        },
+        {
+          "type": "near",
+          "max": 3
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "give",
+      "tags": [
+        "rebuild",
+        "follow"
+      ],
+      "timeout": 60000,
+      "grace": 2000,
+      "requires": [
+        "command"
+      ],
+      "description": "Andy holds 5 coal, tester 4 blocks east chats \"andy give me 3 coal\" (command model: give → givePlayer); andy tosses exactly 3 (never twice), keeps 2, says \"tester received coal.\", and tester's pack has 3 coal.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 4
+          }
+        },
+        {
+          "cmd": "/clear {andy} coal"
+        },
+        {
+          "cmd": "/clear {tester} coal"
+        },
+        {
+          "cmd": "/give {andy} coal 5"
+        },
+        {
+          "wait": 1500,
+          "note": "the before snapshot must see the 5 coal (andy's state lags the /give)"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy give me 3 coal"
+        },
+        {
+          "waitReply": "received coal|never received|only have|too close|do not have",
+          "timeout": 40000
+        },
+        {
+          "wait": 1500
+        },
+        {
+          "cmd": "/clear {tester} coal 0",
+          "note": "count 0 only counts: the server replies \"Found 3 matching item(s)\""
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "{tester} received coal"
+        },
+        {
+          "type": "actionSeen",
+          "match": "givePlayer"
+        },
+        {
+          "type": "inventory",
+          "item": "coal",
+          "min": -3,
+          "max": -3
+        },
+        {
+          "type": "serverReply",
+          "match": "Found 3 "
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/clear {andy} coal"
+        },
+        {
+          "cmd": "/clear {tester} coal"
+        }
+      ]
+    },
+    {
+      "name": "store",
+      "tags": [
+        "rebuild",
+        "home"
+      ],
+      "timeout": 90000,
+      "grace": 3000,
+      "requires": [
+        "command"
+      ],
+      "description": "A chest 3 blocks east of andy; andy holds 10 dirt, 20 cobblestone and a stone pickaxe. Tester chats \"andy store everything\" (command model: store, no item → one putInChest per stack, tools kept); the chest gains exactly 10 dirt and 20 cobblestone, andy says \"Successfully put\" and keeps the pickaxe. The chest is removed afterwards.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} air"
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} chest"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} dirt 10"
+        },
+        {
+          "cmd": "/give {andy} cobblestone 20"
+        },
+        {
+          "cmd": "/give {andy} stone_pickaxe"
+        },
+        {
+          "wait": 1500,
+          "note": "the before snapshot must see the given items"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy store everything"
+        },
+        {
+          "waitReply": "Successfully put 20 cobblestone|Could not|Nothing to store|do not have",
+          "timeout": 30000,
+          "note": "not waitFor action: both deposits can finish inside one state poll"
+        }
+      ],
+      "checks": [
+        {
+          "type": "chest",
+          "at": "{x+3} {y} {z}",
+          "item": "dirt",
+          "min": 10,
+          "max": 10,
+          "delta": true
+        },
+        {
+          "type": "chest",
+          "at": "{x+3} {y} {z}",
+          "item": "cobblestone",
+          "min": 20,
+          "max": 20,
+          "delta": true
+        },
+        {
+          "type": "reply",
+          "match": "Successfully put 10 dirt"
+        },
+        {
+          "type": "reply",
+          "match": "Successfully put 20 cobblestone"
+        },
+        {
+          "type": "inventory",
+          "item": "stone_pickaxe",
+          "min": 0,
+          "max": 0
+        },
+        {
+          "type": "inventory",
+          "item": "dirt",
+          "min": -10,
+          "max": -10
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/setblock {x+3} {y} {z} air"
         }
       ]
     },
@@ -855,7 +1140,7 @@
       "requires": [
         "mine"
       ],
-      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 2): he walks home and empties the cobblestone into the chest until it is full (27 stacks; he keeps 32 and the rest stays in his pack). Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
+      "description": "A home chest 3 blocks east set with !setHomeChest; andy's pack is filled with 31 stacks of cobblestone (2 slots free), then !layaMine(\"coal\", 20) (more than the coal in sight: the mine's collect-first rule takes ore in sight while the pack has room, so with 2 the job could end before any Unload; 5.2): he walks home and empties the cobblestone into the chest until it is full (27 stacks; he keeps 32 and the rest stays in his pack). Fails 30 s after andy's job ends if he hasn't unloaded (no waiting out the 10-minute wait).",
       "setup": [
         {
           "reset": true,
@@ -899,7 +1184,7 @@
       ],
       "action": [
         {
-          "andy": "!layaMine(\"coal\", 2)"
+          "andy": "!layaMine(\"coal\", 20)"
         },
         {
           "waitFor": {
@@ -1035,8 +1320,18 @@
         },
         {
           "type": "actionSeen",
-          "match": "followPlayer",
-          "final": true
+          "match": "followPlayer|director:eat",
+          "final": true,
+          "note": "following again at the end; a fight costs hunger, so the eat model may be eating mid-follow just then (6.1 run d: Food 17, eat bread at 13:24:11)"
+        },
+        {
+          "type": "log",
+          "task": "director",
+          "match": {
+            "event": "defend-done",
+            "answer": "resume"
+          },
+          "note": "the interrupted follow resumed after the defend (so director:eat at the end can't hide a follow that never came back)"
         },
         {
           "type": "stat",
@@ -1529,6 +1824,146 @@
       ]
     },
     {
+      "name": "chores2-no-trees",
+      "tags": [
+        "chores",
+        "rebuild"
+      ],
+      "timeout": 300000,
+      "description": "Chores v2 (the new bot, 5.6): every log within about 30 blocks of andy (the base's chest is his centre) is removed and he has no wood. He asks for a run and gets gather logs with Near trees 97 (or 193): the gather skill widens its search and he comes back with logs. The leaves go too (decaying leaves drop saplings, and saplings come first in the rules).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-34} {x-14} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-34} {x-14} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-13} {x-14} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z-13} {x-14} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z+8} {x-14} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-34} {y-10} {z+8} {x-14} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-34} {x+7} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-34} {x+7} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-13} {x+7} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z-13} {x+7} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z+8} {x+7} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x-13} {y-10} {z+8} {x+7} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-34} {x+28} {y+25} {z-14} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-34} {x+28} {y+25} {z-14} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-13} {x+28} {y+25} {z+7} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z-13} {x+28} {y+25} {z+7} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z+8} {x+28} {y+25} {z+28} air replace #minecraft:logs"
+        },
+        {
+          "cmd": "/fill {x+8} {y-10} {z+8} {x+28} {y+25} {z+28} air replace #minecraft:leaves"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..64]"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "waitLog": {
+            "task": "chores",
+            "match": {
+              "event": "ask",
+              "skill": "gather",
+              "target": "logs"
+            }
+          },
+          "timeout": 120000,
+          "idleFail": false
+        },
+        {
+          "waitFor": {
+            "item": "oak_log|birch_log|spruce_log|dark_oak_log|jungle_log|acacia_log|cherry_log|mangrove_log|pale_oak_log",
+            "min": 1
+          },
+          "timeout": 180000,
+          "idleFail": false
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ask",
+            "skill": "gather",
+            "target": "logs",
+            "state": "/Near trees (97|193)/"
+          }
+        },
+        {
+          "type": "inventory",
+          "item": "oak_log|birch_log|spruce_log|dark_oak_log|jungle_log|acacia_log|cherry_log|mangrove_log|pale_oak_log",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "chores-first-day",
       "tags": [
         "chores",
@@ -1614,6 +2049,1333 @@
         {
           "andy": "!layaChores(\"off\")"
         },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "chores2-first-day",
+      "tags": [
+        "chores",
+        "slow",
+        "rebuild"
+      ],
+      "timeout": 1500000,
+      "description": "Chores v2 (the new bot, 5.6): a fresh reset, andy with nothing, the daylight cycle on from sunrise: one Minecraft day (20 minutes) of chores. The report shows how far he got (laya-chores.jsonl run lines: table, tools, farm, furnace, torches, chest, beds, kit); the checks ask only for the first steps (a crafting table placed and a wooden pickaxe made).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/time set 0"
+        },
+        {
+          "cmd": "/gamerule doDaylightCycle true"
+        },
+        {
+          "cmd": "/difficulty easy"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "wait": 1200000
+        },
+        {
+          "snapshot": "day-end"
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "crafting_table",
+            "result": "done"
+          }
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "craft",
+            "target": "wooden_pickaxe",
+            "result": "done"
+          }
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "cmd": "/gamerule doDaylightCycle false"
+        },
+        {
+          "cmd": "/time set 1000"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "chores2-first-night",
+      "tags": [
+        "slow",
+        "rebuild",
+        "night"
+      ],
+      "timeout": 1900000,
+      "description": "Rebuild 6.2 (6.2a: the chest by the end of the next morning), the first day, night and next morning from a fresh world (not tagged chores: the harness would turn chores on straight after the reset and andy would adopt the base chest before the setup removes it): a reset, the base pad's chest and sign removed (158 70 162, 159 70 162: nothing to adopt), andy with nothing, the daylight cycle on from sunrise, chores on for a whole Minecraft day and night and the next morning (to the next noon: 30000 ticks = 1500 s, waits 1560 s for lag), then /time query day and daytime (for the report). Checks (through the next morning): alive (no last_death_position, health ≥ 1), the night passed (day ≥ 1), home chest set by the end of the next morning (a home_chest place and a place chest run done), base placed (place crafting_table and furnace done, an ask with Base table yes furnace yes chest yes), no dead end (never the same chores run failed 3 times in a row; an interrupted run is the director taking the body and is skipped). The log checks count only entries since the before snapshot (after the setup).",
+      "setup": [
+        {
+          "reset": true
+        },
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/time set 0"
+        },
+        {
+          "cmd": "/gamerule doDaylightCycle true"
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/setblock 158 70 162 air"
+        },
+        {
+          "cmd": "/setblock 159 70 162 air"
+        },
+        {
+          "cmd": "/kill @e[type=item]"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaChores(\"on\")"
+        },
+        {
+          "wait": 1560000
+        },
+        {
+          "cmd": "/time query day"
+        },
+        {
+          "cmd": "/time query daytime"
+        },
+        {
+          "snapshot": "dawn"
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "place",
+          "name": "last_death_position",
+          "none": true,
+          "note": "alive: andy never died"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        },
+        {
+          "type": "serverReply",
+          "match": "The time is [1-9]$",
+          "note": "the night passed (day ≥ 1; $ so the daytime reply never matches)"
+        },
+        {
+          "type": "place",
+          "name": "home_chest",
+          "note": "home chest set"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "chest",
+            "result": "done"
+          },
+          "since": "before"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "crafting_table",
+            "result": "done"
+          },
+          "since": "before"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "run",
+            "skill": "place",
+            "target": "furnace",
+            "result": "done"
+          },
+          "since": "before"
+        },
+        {
+          "type": "log",
+          "task": "chores",
+          "match": {
+            "event": "ask",
+            "state": "/Base table yes furnace yes chest yes/"
+          },
+          "note": "base placed",
+          "since": "before"
+        },
+        {
+          "type": "repeat",
+          "task": "chores",
+          "match": {
+            "event": "run"
+          },
+          "key": [
+            "skill",
+            "target"
+          ],
+          "result": "failed",
+          "max": 2,
+          "except": {
+            "reason": "interrupted"
+          },
+          "note": "no dead end",
+          "since": "before"
+        }
+      ],
+      "cleanup": [
+        {
+          "cmd": "/gamerule doDaylightCycle false"
+        },
+        {
+          "cmd": "/time set 1000"
+        },
+        {
+          "andy": "!layaChores(\"off\")"
+        },
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "defend-fight",
+      "tags": [
+        "rebuild",
+        "defend"
+      ],
+      "timeout": 150000,
+      "description": "The defend scenario without its follow job (the new bot has no follow job until 4.2): a husk 5 blocks east of andy hits him (/damage by the husk). The director answers defend, andy kills the husk and frees the body (Idle at the end). Sets difficulty easy.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "anchor": true
+        },
+        {
+          "cmd": "/summon husk {x+5} {y} {z}"
+        },
+        {
+          "waitFor": {
+            "entity": "husk"
+          },
+          "timeout": 10000,
+          "optional": true
+        },
+        {
+          "cmd": "/damage {andy} 2 minecraft:mob_attack by @e[type=husk,limit=1,sort=nearest]"
+        },
+        {
+          "waitFor": {
+            "entity": "husk",
+            "present": false
+          },
+          "timeout": 90000
+        },
+        {
+          "wait": 6000
+        },
+        {
+          "cmd": "/execute positioned {x} {y} {z} if entity @e[type=husk,distance=..48]",
+          "replyMs": 800
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Summoned"
+        },
+        {
+          "type": "noEntity",
+          "entity": "husk"
+        },
+        {
+          "type": "serverReply",
+          "match": "Test failed",
+          "note": "no husk within 48 blocks: it died, not just wandered out of andy's sight"
+        },
+        {
+          "type": "actionSeen",
+          "match": "director:defend",
+          "after": "start"
+        },
+        {
+          "type": "log",
+          "task": "defend",
+          "match": {
+            "action": "fight"
+          },
+          "min": 1
+        },
+        {
+          "type": "actionSeen",
+          "match": "Idle|director:eat",
+          "final": true,
+          "note": "the lease is free afterwards: the defend is over (a fight costs hunger, so the director may already be eating: eat-idle)"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=husk,distance=..64]"
+        }
+      ]
+    },
+    {
+      "name": "flee-creeper",
+      "tags": [
+        "rebuild",
+        "defend"
+      ],
+      "timeout": 120000,
+      "description": "A creeper is summoned 6 blocks from andy; nobody is hurt. Andy must not swing at it (defend only attackers; the defend rules flee a close creeper) and gets away from it (flee-creeper, or the defend model's creeper override) and survives. Sets difficulty easy.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/gamemode creative {tester}"
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/effect give {andy} instant_health 1 3"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "anchor": true
+        },
+        {
+          "cmd": "/summon creeper {x+6} {y} {z}"
+        },
+        {
+          "wait": 25000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Summoned"
+        },
+        {
+          "type": "log",
+          "task": "defend",
+          "match": {
+            "action": "/fight|shield/",
+            "target": "/creeper/"
+          },
+          "max": 0,
+          "note": "never swings at the creeper"
+        },
+        {
+          "type": "position",
+          "axis": "dist",
+          "during": "max",
+          "min": 3,
+          "note": "he got away from where he stood"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=creeper,distance=..64]"
+        }
+      ]
+    },
+    {
+      "name": "night-survival",
+      "tags": [
+        "rebuild",
+        "defend"
+      ],
+      "timeout": 240000,
+      "description": "Night (time 13000, the daylight cycle stays locked) with two zombies and a skeleton 12-14 blocks from andy, who has an iron sword and 8 bread. For 150 s he only fights mobs that attack him (or flees), eats when he must, and is alive at the end with his sword (a death would drop it). Sets difficulty easy.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/gamemode creative {tester}"
+        },
+        {
+          "cmd": "/difficulty easy"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/give {andy} bread 8"
+        },
+        {
+          "cmd": "/effect give {andy} instant_health 1 3"
+        },
+        {
+          "cmd": "/time set 13000"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "anchor": true
+        },
+        {
+          "cmd": "/summon zombie {x+12} {y} {z}"
+        },
+        {
+          "cmd": "/summon zombie {x} {y} {z+13}"
+        },
+        {
+          "cmd": "/summon skeleton {x-14} {y} {z}"
+        },
+        {
+          "wait": 150000
+        }
+      ],
+      "wait": false,
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "Summoned"
+        },
+        {
+          "type": "inventory",
+          "item": "iron_sword",
+          "min": 0,
+          "note": "still has his sword: he did not die"
+        },
+        {
+          "type": "stat",
+          "field": "health",
+          "min": 1
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/time set 1000"
+        },
+        {
+          "cmd": "/kill @e[type=zombie,distance=..96]"
+        },
+        {
+          "cmd": "/kill @e[type=skeleton,distance=..96]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..32]"
+        }
+      ]
+    },
+    {
+      "name": "hunt-beef",
+      "tags": [
+        "rebuild",
+        "hunt"
+      ],
+      "requires": [
+        "command"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "Five cows near andy (iron sword, nothing else); chat \"andy get 2 beef\". The command model routes it to hunt cow beef 2: andy kills cows one at a time and picks up the drops until he has 2 more beef, then frees the body.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z}"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z+2}"
+        },
+        {
+          "cmd": "/summon cow {x+6} {y} {z-2}"
+        },
+        {
+          "cmd": "/summon cow {x-4} {y} {z+3}"
+        },
+        {
+          "cmd": "/summon cow {x-5} {y} {z-3}"
+        },
+        {
+          "waitFor": {
+            "entity": "cow"
+          },
+          "timeout": 10000,
+          "optional": true
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "say": "andy get 2 beef"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "beef",
+          "min": 2
+        },
+        {
+          "type": "actionSeen",
+          "match": "hunt|attack",
+          "after": "start"
+        },
+        {
+          "type": "reply",
+          "match": "couldn't hunt",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy} beef"
+        }
+      ]
+    },
+    {
+      "name": "hunt-none-near",
+      "tags": [
+        "rebuild",
+        "hunt"
+      ],
+      "requires": [
+        "command"
+      ],
+      "timeout": 90000,
+      "description": "No cow within 64 blocks; chat \"andy get 2 beef\": the hunt finds none near and says the old line (\"I couldn't hunt for 2 beef: none near.\"), then andy is idle.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        }
+      ],
+      "action": [
+        {
+          "say": "andy get 2 beef"
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "couldn't hunt for 2 beef: none near"
+        },
+        {
+          "type": "inventory",
+          "item": "beef",
+          "max": 0
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "attack-legacy",
+      "tags": [
+        "rebuild",
+        "hunt"
+      ],
+      "timeout": 90000,
+      "description": "One pig 4 blocks east of andy (iron sword); !attack(\"pig\") kills it (one kill only) and andy ends idle.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=pig,distance=..64]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/summon pig {x+4} {y} {z}"
+        },
+        {
+          "waitFor": {
+            "entity": "pig"
+          },
+          "timeout": 10000,
+          "optional": true
+        }
+      ],
+      "action": [
+        {
+          "andy": "!attack(\"pig\")"
+        },
+        {
+          "waitFor": {
+            "entity": "pig",
+            "present": false
+          },
+          "timeout": 60000
+        },
+        {
+          "wait": 3000
+        },
+        {
+          "cmd": "/execute positioned {x} {y} {z} if entity @e[type=pig,distance=..48]",
+          "replyMs": 800
+        }
+      ],
+      "checks": [
+        {
+          "type": "reply",
+          "match": "Successfully killed pig"
+        },
+        {
+          "type": "noEntity",
+          "entity": "pig"
+        },
+        {
+          "type": "serverReply",
+          "match": "Test failed",
+          "note": "no pig within 48 blocks: it died"
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=pig,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        }
+      ]
+    },
+    {
+      "name": "skill-hunt-food",
+      "tags": [
+        "rebuild",
+        "hunt",
+        "skill"
+      ],
+      "timeout": 180000,
+      "grace": 20000,
+      "description": "5.5 hunt skill: five cows near andy (iron sword, nothing else); !layaHunt(4) runs the hunt skill job (rules v1 with the hunt task off): approach and attack the nearest cow, pick up the beef, until he has 4 food; laya-hunt.jsonl has the steps.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} iron_sword"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z}"
+        },
+        {
+          "cmd": "/summon cow {x+5} {y} {z+2}"
+        },
+        {
+          "cmd": "/summon cow {x+6} {y} {z-2}"
+        },
+        {
+          "cmd": "/summon cow {x-4} {y} {z+3}"
+        },
+        {
+          "cmd": "/summon cow {x-5} {y} {z-3}"
+        },
+        {
+          "waitFor": {
+            "entity": "cow"
+          },
+          "timeout": 10000,
+          "optional": true
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaHunt(4)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "beef",
+          "min": 4
+        },
+        {
+          "type": "actionSeen",
+          "match": "layaHunt",
+          "after": "start"
+        },
+        {
+          "type": "log",
+          "task": "hunt",
+          "match": {
+            "rule": "attack",
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "log",
+          "task": "hunt",
+          "match": {
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "reply",
+          "match": "couldn't hunt",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=cow,distance=..64]"
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy} beef"
+        }
+      ]
+    },
+    {
+      "name": "skill-gather-logs",
+      "tags": [
+        "rebuild",
+        "gather",
+        "skill"
+      ],
+      "timeout": 240000,
+      "grace": 20000,
+      "description": "5.5 gather skill: andy with a wooden axe at the base (forest edge); !layaGatherSkill(\"logs\", 6) runs the gather skill job (rules v1): approach the nearest tree (a log with leaves beside it), fell it whole, pick up, until he has 6 wood.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_axe 1"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaGatherSkill(\"logs\", 6)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "/_log$/",
+          "min": 6
+        },
+        {
+          "type": "log",
+          "task": "gather",
+          "match": {
+            "rule": "cut",
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "log",
+          "task": "gather",
+          "match": {
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "reply",
+          "match": "couldn't get",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/kill @e[type=item,distance=..24]"
+        }
+      ]
+    },
+    {
+      "name": "skill-place-furnace",
+      "tags": [
+        "rebuild",
+        "place",
+        "skill"
+      ],
+      "timeout": 120000,
+      "grace": 15000,
+      "description": "5.5 place skill: andy carries a furnace at the base; !layaPlace(\"furnace\") reads the 9×9 grid around the base centre, the place rules v1 pick a cell (next to a station first), and andy places it there: a furnace block near him, none carried.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace furnace"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} furnace 1"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaPlace(\"furnace\")"
+        }
+      ],
+      "checks": [
+        {
+          "type": "block",
+          "block": "furnace",
+          "near": "andy",
+          "radius": 8,
+          "min": 1
+        },
+        {
+          "type": "inventory",
+          "item": "furnace",
+          "absolute": true,
+          "max": 0
+        },
+        {
+          "type": "log",
+          "task": "place",
+          "match": {
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "reply",
+          "match": "couldn't place",
+          "none": true
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace furnace"
+        }
+      ]
+    },
+    {
+      "name": "skill-place-torch",
+      "tags": [
+        "rebuild",
+        "place",
+        "skill"
+      ],
+      "timeout": 120000,
+      "grace": 15000,
+      "description": "5.5 place skill at night: the torch grid is the 7×7 lit sample points (step 3, ±9) around the base centre; at midnight every floor point is dark, so the rules pick the nearest and andy puts one torch on the floor there.",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace torch"
+        },
+        {
+          "cmd": "/time set midnight"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} torch 4"
+        }
+      ],
+      "action": [
+        {
+          "snapshot": "start"
+        },
+        {
+          "andy": "!layaPlace(\"torch\")"
+        }
+      ],
+      "checks": [
+        {
+          "type": "block",
+          "block": "torch",
+          "near": "andy",
+          "radius": 12,
+          "min": 1
+        },
+        {
+          "type": "inventory",
+          "item": "torch",
+          "absolute": true,
+          "min": 3,
+          "max": 3
+        },
+        {
+          "type": "log",
+          "task": "place",
+          "match": {
+            "rule": "torch",
+            "outcome": "did"
+          }
+        },
+        {
+          "type": "idle"
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        },
+        {
+          "cmd": "/fill {x-12} {y-1} {z-12} {x+12} {y+2} {z+12} air replace torch"
+        },
+        {
+          "cmd": "/time set day"
+        }
+      ]
+    },
+    {
+      "name": "whisper-come",
+      "tags": [
+        "rebuild",
+        "follow"
+      ],
+      "timeout": 60000,
+      "grace": 2000,
+      "requires": [
+        "command"
+      ],
+      "description": "Rebuild 6.2b: tester stands 10 blocks east of andy and whispers \"/msg andy come here\" (not open chat). andy hears the whisper like chat (command model: come → goToPlayer), answers by whisper (tester gets \"andy whispers to you: On my way.\") and walks over, ending within 3 blocks; the job's \"You have reached tester.\" comes back by whisper too. (The cmd step sends /msg as tester: needsPlayer, from RCON the sender would be \"Rcon\".)",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 10
+          }
+        }
+      ],
+      "action": [
+        {
+          "cmd": "/msg {andy} come here",
+          "replyMs": 15000
+        }
+      ],
+      "checks": [
+        {
+          "type": "serverReply",
+          "match": "^andy whispers to you: On my way",
+          "note": "the reply came back as a whisper"
+        },
+        {
+          "type": "serverReply",
+          "match": "^andy whispers to you: You have reached tester",
+          "note": "the job's later message goes the same way"
+        },
+        {
+          "type": "reply",
+          "match": "You have reached {tester}"
+        },
+        {
+          "type": "near",
+          "max": 3
+        }
+      ],
+      "cleanup": [
+        {
+          "andy": "!stop",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "gather-seeds-far",
+      "tags": [
+        "rebuild",
+        "craft"
+      ],
+      "timeout": 300000,
+      "grace": 20000,
+      "description": "Rebuild 6.2b: the gather search widens 49 → 97 → 193. At the base pad, every short and tall grass within 24 blocks (the first ring) is removed; andy with nothing is asked !layaGather(\"wheat_seeds\", 2): the craft gather finds grass in a wider ring and gets 2 seeds (before 6.2b: one 64-block search, then \"No grass nearby\").",
+      "setup": [
+        {
+          "site": "base"
+        },
+        {
+          "tp": {
+            "dx": 2
+          }
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace tall_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace tall_grass"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaGather(\"wheat_seeds\", 2)"
+        }
+      ],
+      "checks": [
+        {
+          "type": "inventory",
+          "item": "wheat_seeds",
+          "min": 2
+        },
+        {
+          "type": "idle"
+        }
+      ]
+    },
+    {
+      "name": "farm-any-no-seeds",
+      "tags": [
+        "rebuild",
+        "farm",
+        "slow"
+      ],
+      "timeout": 600000,
+      "grace": 20000,
+      "requires": [
+        "farm"
+      ],
+      "description": "Rebuild 6.2b, the play run's farm: andy by the river mouth with only a wooden hoe, every short and tall grass within 24 blocks removed, !layaFarm(\"any\"). \"any\" resolves to wheat before the loop, the seeds come through the gather skill (its search widens past the cleared ring) and andy plants; never the play run's loop of find_water trips to the same water. Runs 300 s, then stops.",
+      "setup": [
+        {
+          "site": "farm"
+        },
+        {
+          "cmd": "/clear {andy}"
+        },
+        {
+          "cmd": "/give {andy} wooden_hoe"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y-6} {z-24} {x+24} {y+5} {z+24} air replace tall_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace short_grass"
+        },
+        {
+          "cmd": "/fill {x-24} {y+6} {z-24} {x+24} {y+17} {z+24} air replace tall_grass"
+        }
+      ],
+      "action": [
+        {
+          "andy": "!layaFarm(\"any\")"
+        },
+        {
+          "wait": 300000
+        }
+      ],
+      "checks": [
+        {
+          "type": "log",
+          "task": "farm",
+          "match": {
+            "outcome": "crafted",
+            "item": "wheat_seeds"
+          },
+          "note": "seeds got through the gather skill"
+        },
+        {
+          "type": "log",
+          "task": "farm",
+          "match": {
+            "action": "plant",
+            "outcome": "done"
+          }
+        },
+        {
+          "type": "log",
+          "task": "farm",
+          "match": {
+            "outcome": "went-to-water"
+          },
+          "note": "never the play run's water trips",
+          "max": 0
+        }
+      ],
+      "cleanup": [
         {
           "andy": "!stop",
           "optional": true

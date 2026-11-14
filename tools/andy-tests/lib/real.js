@@ -33,12 +33,16 @@ export function realDeps(config) {
         // the world before a reset (a home chest, a home bed, chest
         // contents): removed so the restarted agent starts with nothing
         // saved, and with chores off (on, he'd adopt a chest by the spawn as
-        // home at once); each test sets chores as its tags say.
+        // home at once); each test sets chores as its tags say. The file is
+        // marked by: 'test-harness' (6.2b): only a harness launch
+        // (ANDY_TEST_HARNESS=1) heeds it, so a play start keeps chores on.
         forgetAgent: async () => {
             const { rmSync, writeFileSync } = await import('fs');
             try { rmSync(`${config.botDir}/memory.json`, { force: true }); } catch { /* none */ }
             try { rmSync(`${config.botDir}/laya-job.json`, { force: true }); } catch { /* none */ }
-            try { writeFileSync(`${config.botDir}/laya-chores.json`, JSON.stringify({ on: false })); } catch { /* no bot dir */ }
+            try { writeFileSync(`${config.botDir}/laya-chores.json`, JSON.stringify({ on: false, by: 'test-harness' })); } catch { /* no bot dir */ }
+            // chores v2's Last line is rebuilt from laya-chores.jsonl's run lines: the old world's runs end here
+            try { (await import('fs')).appendFileSync(`${config.botDir}/logs/laya-chores.jsonl`, JSON.stringify({ time: new Date().toISOString(), event: 'forget' }) + '\n'); } catch { /* no log dir */ }
         },
         makeBot: async () => {
             const [{ Bot }, { realBotDeps }] = await Promise.all([import('../../test-world/lib/bot.js'), import('../../test-world/lib/real.js')]);

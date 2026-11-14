@@ -1,0 +1,221 @@
+// What the jobs need from the bot: the actuator context, the places, the follow settings and the logs.
+import type { JobSpec, JobState, JobStepper, ModelDecider, PlaceItem, Vec3Like } from '../types/index.js';
+import type { Act } from '../actuators/bot.js';
+import type { PlaceBook } from '../home/places.js';
+import type { CraftLine, FarmLine, FollowLine, MineLine, SkillLine, SkillLogTask } from '../log/jsonl.js';
+import type { FollowPrompt } from '../models/follow/index.js';
+import type { MineBook } from '../home/mines.js';
+import { PLAN_DEFAULTS, type PlanOptions } from '../models/mine/plan.js';
+
+/** decision_models.tasks.follow (the old follow.js DEFAULTS' keys); model null: the task is off. */
+export interface FollowSettings {
+    step_ms: number;
+    fallback_ms: number;
+    stuck_ms: number;
+    max_waits: number;
+    log_steps: boolean;
+    prompt: FollowPrompt;
+    model: ModelDecider | null;
+}
+export const FOLLOW_DEFAULTS: Omit<FollowSettings, 'model'> = {
+    step_ms: 250, fallback_ms: 4000, stuck_ms: 1500, max_waits: 2, log_steps: true, prompt: 'v1',
+};
+
+/** decision_models.tasks.craft (the old craft.js DEFAULTS' keys); enabled false: the task is off. model null: rules only. */
+export interface CraftSettings {
+    enabled: boolean;
+    min_confidence: number;
+    max_steps: number;
+    log_steps: boolean;
+    model: ModelDecider | null;
+}
+export const CRAFT_DEFAULTS: Omit<CraftSettings, 'model' | 'enabled'> = { min_confidence: 0.3, max_steps: 40, log_steps: true };
+
+export const MINE_PROMPTS = ['v1', 'v2', 'v2.1'] as const;
+/** The mine prompt: v1 (no plan), v2 (the plan), v2.1 (v2's prompt with v2.1's rules: the same here). */
+export type MinePrompt = (typeof MINE_PROMPTS)[number];
+
+/** decision_models.tasks.mine (the old mine.js DEFAULTS and the plan's keys); enabled false: the task is off. */
+export interface MineSettings extends PlanOptions {
+    enabled: boolean;
+    prompt: MinePrompt;
+    /** Steps before giving up (default: v1 300, v2 2000). */
+    max_steps: number | null;
+    max_failures: number;
+    log_steps: boolean;
+    torch_batch: number;
+    torch_low: number;
+    torch_retry_steps: number;
+    keep_blocks: number;
+    unload_retry_steps: number;
+    unload_fail_steps: number;
+    collect_range: number;
+    collect_budget: number;
+    collect_below: number;
+    collect_below_open: number;
+    walk_restart: number;
+    max_abandons: number;
+    max_unsafe_restarts: number;
+    torch_place_retry: number;
+    max_drop: number;
+    heal_health: number;
+    eat_to: number;
+    heal_wait_s: number;
+    floor_vetoes: number;
+    /** The mine model; null: the rules alone (every step a no-answer fallback, as with a model that's down). */
+    model: ModelDecider | null;
+}
+export const MINE_DEFAULTS: Omit<MineSettings, 'model' | 'enabled'> = {
+    ...PLAN_DEFAULTS, prompt: 'v2', max_steps: null,
+    max_failures: 4, log_steps: true, torch_batch: 4, torch_low: 4, torch_retry_steps: 50, keep_blocks: 32, unload_retry_steps: 50,
+    unload_fail_steps: 200, collect_range: 12, collect_budget: 24, collect_below: 4, collect_below_open: 8, walk_restart: 2, max_abandons: 8,
+    max_unsafe_restarts: 3, torch_place_retry: 3, max_drop: 3, heal_health: 8, eat_to: 18, heal_wait_s: 60, floor_vetoes: 2,
+};
+/** The mine settings' number keys (settings.js may set any). */
+export const MINE_NUMBER_KEYS = (Object.keys(MINE_DEFAULTS) as (keyof typeof MINE_DEFAULTS)[])
+    .filter(k => typeof MINE_DEFAULTS[k] === 'number') as Exclude<keyof typeof MINE_DEFAULTS, 'prompt' | 'max_steps' | 'log_steps'>[];
+
+export const FARM_PROMPTS = ['v1', 'v2', 'v2.1'] as const;
+/** The farm prompt: v1, v2 (crop, pack, Unload, pond and find_water), v2.1 (v2's prompt with v2.1's rules: the same here). */
+export type FarmPrompt = (typeof FARM_PROMPTS)[number];
+
+/** decision_models.tasks.farm (the old farm.js DEFAULTS' keys); enabled false: the task is off. */
+export interface FarmSettings {
+    enabled: boolean;
+    prompt: FarmPrompt;
+    /** Pause between steps (a wait: 4 ×; a low-confidence wait or a retry: 1 ×). */
+    step_ms: number;
+    /** Steps of timed farming (the minutes goal: 5.6). */
+    max_steps: number;
+    /** Steps of a count or open-ended goal (default: no limit). */
+    max_steps_open: number;
+    /** v1: no answers in a row before stopping. */
+    max_misses: number;
+    log_steps: boolean;
+    min_confidence: number;
+    /** Waits (or unsure answers) in a row with nothing growing before stopping. */
+    wait_limit: number;
+    /** How far to look for water. */
+    water_radius: number;
+    /** Seeds of each kind kept when unloading. */
+    keep_seeds: number;
+    unload_retry_steps: number;
+    /** A failed or vetoed action is banned on its cell for this many steps. */
+    ban_steps: number;
+    /** Failed or vetoed steps in a row before stopping. */
+    max_bad: number;
+    /** The farm model; null: no model (v2: the rules every step; v1: no answers, so it stops). */
+    model: ModelDecider | null;
+}
+export const FARM_DEFAULTS: Omit<FarmSettings, 'model' | 'enabled'> = {
+    prompt: 'v1', step_ms: 500, max_steps: 400, max_steps_open: Infinity, max_misses: 5, log_steps: true, min_confidence: 0.5,
+    wait_limit: 20, water_radius: 64, keep_seeds: 16, unload_retry_steps: 50, ban_steps: 20, max_bad: 6,
+};
+/** The farm settings' number keys (settings.js may set any). */
+export const FARM_NUMBER_KEYS = (Object.keys(FARM_DEFAULTS) as (keyof typeof FARM_DEFAULTS)[])
+    .filter(k => typeof FARM_DEFAULTS[k] === 'number') as Exclude<keyof typeof FARM_DEFAULTS, 'prompt' | 'log_steps'>[];
+
+/**
+ * The farm task's settings (decision_models.tasks.farm; the old farm.js DEFAULTS' keys). enabled false: the task is
+ * off (a farm job says so and ends). The served prompt version wins over the settings' prompt.
+ */
+export function farmOf(settings: Record<string, unknown>, model: FarmSettings['model'], served: string | undefined): FarmSettings {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.farm ?? {};
+    const out: FarmSettings = { ...FARM_DEFAULTS, enabled: t.enabled === true, log_steps: t.log_steps !== false, model };
+    for (const k of FARM_NUMBER_KEYS) {
+        const v = t[k];
+        if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = v;
+    }
+    const prompt = served ?? (typeof t.prompt === 'string' ? t.prompt : undefined);
+    if (prompt && (FARM_PROMPTS as readonly string[]).includes(prompt)) out.prompt = prompt as FarmPrompt;
+    return out;
+}
+
+/**
+ * decision_models.tasks.<hunt|gather|place> (5.5). Unlike craft, a skill job runs with its task off or missing:
+ * rules v1 decide every step (the spec's fallback); enabled true asks the model (model set).
+ */
+export interface SkillSettings {
+    enabled: boolean;
+    min_confidence: number;
+    log_steps: boolean;
+    /** The served model; null: rules v1 alone. */
+    model: ModelDecider | null;
+}
+export const SKILL_DEFAULTS: Omit<SkillSettings, 'model' | 'enabled'> = { min_confidence: 0.3, log_steps: true };
+
+/** skillOf: a skill task's settings from settings.js (missing: off, rules v1). */
+export function skillOf(settings: Record<string, unknown>, task: SkillLogTask, model: ModelDecider | null): SkillSettings {
+    const dm = settings.decision_models as { tasks?: Record<string, Record<string, unknown>> } | undefined;
+    const t = dm?.tasks?.[task] ?? {};
+    const mc = t.min_confidence;
+    return {
+        enabled: t.enabled === true,
+        min_confidence: typeof mc === 'number' && Number.isFinite(mc) && mc >= 0 ? mc : SKILL_DEFAULTS.min_confidence,
+        log_steps: t.log_steps !== false,
+        model: t.enabled === true ? model : null,
+    };
+}
+
+export interface JobDeps {
+    /** The actuator context, or null when not in game. */
+    act(): Act | null;
+    places: PlaceBook;
+    /** The follow task's settings now. */
+    follow(): FollowSettings;
+    /** Writes a laya-follow.jsonl line. */
+    followLog(line: FollowLine): void;
+    /** The craft task's settings now (missing: the task is off). */
+    craft?: () => CraftSettings;
+    /** Writes a laya-craft.jsonl line. */
+    craftLog?: (line: CraftLine) => void;
+    /** The mine task's settings now (missing: the task is off). */
+    mine?: () => MineSettings;
+    /** Writes a laya-mine.jsonl line. */
+    mineLog?: (line: MineLine) => void;
+    /** The farm task's settings now (missing: the task is off). */
+    farm?: () => FarmSettings;
+    /** Writes a laya-farm.jsonl line. */
+    farmLog?: (line: FarmLine) => void;
+    /** A skill task's settings now (5.5; missing: rules v1 alone). */
+    skill?: (task: SkillLogTask) => SkillSettings;
+    /** Writes a laya-<hunt|gather|place>.jsonl line. */
+    skillLog?: (task: SkillLogTask, line: SkillLine) => void;
+    /** The mine memory (bots/<name>/laya-mines.json). */
+    mines?: MineBook;
+    /** Says something in game (the old chat dep; the mine's start line). */
+    chat?: (text: string) => void;
+    /** The console. */
+    note(text: string): void;
+    /**
+     * checkpoint writes the jobs' progress to disk now, unthrottled: a job calls it right before an act that
+     * can't be undone (a toss, a deposit), so a kill -9 during the act never restores the job as if it hadn't run.
+     */
+    checkpoint?: () => void;
+    /** The place skill put an item at p (5.6: a bed, table or chest may become home). */
+    placed?: (item: PlaceItem, p: Vec3Like) => void;
+    /** A tree was felled at p (its lowest log): kept in the chores state's stumps (5.6). */
+    stump?: (p: Vec3Like) => void;
+    /** When andy last said he needs each item (the chores' ask: once per item per 5 minutes). */
+    needSaid?: Map<'logs' | 'cobble' | 'coal' | 'wool' | 'food', number>;
+    now?: () => number;
+}
+
+/** A job on the stack as a runner sees it, with its spec narrowed to one kind. */
+export type JobOf<K extends JobSpec['kind']> = JobState & { spec: Extract<JobSpec, { kind: K }> };
+
+export type RunnerOf<K extends JobSpec['kind']> = (job: JobOf<K>, deps: JobDeps) => JobStepper;
+
+/** pause waits ms; false as soon as the signal aborts (never rejects). */
+export function pause(ms: number, signal: AbortSignal): Promise<boolean> {
+    return new Promise(resolve => {
+        if (signal.aborted) return resolve(false);
+        const t = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve(true); }, ms);
+        const onAbort = () => { clearTimeout(t); resolve(false); };
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
+}
+
+/** The old messages ("Could not find tester."). */
+export const notFound = (player: string) => `Could not find ${player}.`;

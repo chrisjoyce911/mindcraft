@@ -147,7 +147,7 @@ test('every scenario starts at a site (after an optional world reset), and the f
     assert.equal(first(tests.find(t => t.name === 'farm-no-water')).site, 'dry');
     assert.equal(first(tests.find(t => t.name === 'mine-coal')).site, 'mine');
     assert.deepEqual(tests.filter(t => t.setup[0]?.reset).map(t => t.name), ['home-chest-sign', 'mine-coal', 'mine-iron-staircase', 'unload-home-chest',
-        'chores-no-trees', 'chores-first-day']);
+        'chores-no-trees', 'chores2-no-trees', 'chores-first-day', 'chores2-first-day', 'chores2-first-night']);
 });
 
 test('MCP world tools: start switches to the test world, reset restarts andy, bot start/stop', async () => {
